@@ -24,7 +24,7 @@ export class DPPFactory {
   }
 
   /**
-   * Validiert, ob alle EU-Pflichtfelder für die jeweilige Kategorie befüllt sind. [cite: 56]
+   * Validiert, ob alle EU-Pflichtfelder für die jeweilige Kategorie befüllt sind.
    */
   static isValid(data: ProductPassport): boolean {
     const hasBaseFields = !!(data.hersteller && data.modellname);

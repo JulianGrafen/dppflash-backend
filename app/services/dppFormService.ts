@@ -1,4 +1,4 @@
-import { MOCK_PRODUCTS } from '../lib/mock-data';
+import { v4 as uuidv4 } from 'uuid';
 import { ProductPassport } from '../types/dpp-types';
 
 /**
@@ -11,7 +11,7 @@ export class DPPFactory {
    */
   static createEmptyPassport(type: ProductPassport['type']): ProductPassport {
     const base = {
-      id: crypto.randomUUID(), // Eindeutige ID für den QR-Link [cite: 21]
+      id: uuidv4(), // Eindeutige ID für den QR-Link
       createdAt: new Date(),
       hersteller: '',
       modellname: '',
@@ -40,7 +40,3 @@ export class DPPFactory {
     }
   }
 }
-export const getProductById = (id: string): ProductPassport | undefined => {  
- 
-  return MOCK_PRODUCTS[id];
-};

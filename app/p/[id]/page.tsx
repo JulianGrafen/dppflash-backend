@@ -1,7 +1,7 @@
   import { getProductById } from '../../lib/mock-data';
 
 import { notFound } from 'next/navigation';
-import { ShieldCheck, Factory, Calendar, Info, MapPin, Zap, Shirt } from 'lucide-react'; // Nutze Lucide für klare Icons
+import { ShieldCheck, Factory, Calendar, Info, MapPin, Zap, Shirt } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -9,9 +9,18 @@ interface PageProps {
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
+  
+  // Debug logging
+  console.log(`🔍 Buscando produto com ID: ${id}`);
+  
   const product = getProductById(id);
+  
+  if (!product) {
+    console.error(`❌ Produto não encontrado: ${id}`);
+    return notFound();
+  }
 
-  if (!product) return notFound();
+  console.log(`✅ Produto encontrado: ${id}`);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-12">

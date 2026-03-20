@@ -1,9 +1,8 @@
-// components/dpp/DppCreator.tsx
 "use client";
 
 import { useState } from 'react';
-import { DPPFactory } from '../services/dppFormService';
-import { ProductPassport } from '../types/dpp-types';
+import { DPPFactory } from '../../services/dppFormService';
+import { ProductPassport } from '../../types/dpp-types';
 
 export default function DppCreator() {
   const [step, setStep] = useState<'select' | 'form' | 'result'>('select');

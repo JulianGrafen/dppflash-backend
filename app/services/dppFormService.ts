@@ -1,3 +1,4 @@
+import { MOCK_PRODUCTS } from '../lib/mock-data';
 import { ProductPassport } from '../types/dpp-types';
 
 /**
@@ -39,3 +40,7 @@ export class DPPFactory {
     }
   }
 }
+export const getProductById = (id: string): ProductPassport | undefined => {  
+ 
+  return MOCK_PRODUCTS[id];
+};

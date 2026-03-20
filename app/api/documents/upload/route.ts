@@ -1,4 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { saveProductToStore } from '@/app/lib/server-store';
+import { ProductPassport } from '@/app/types/dpp-types';
+
+/**
+ * Generiert eine kurze eindeutige ID
+ */
+function generateProductId(): string {
+  // Kombiniert Timestamp + zufällige Teile für eine lesbare ID
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 8);
+  return `prod_${timestamp}_${random}`.substring(0, 30);
+}
 
 /**
  * POST /api/documents/upload
@@ -7,14 +19,15 @@ import { NextRequest, NextResponse } from 'next/server';
  * 1. Speichern in Supabase Storage
  * 2. Lokale Extraktion (pdf-parse)
  * 3. AI-Strukturierung (OpenAI)
- * 4. Rückgabe strukturierter Daten für Human-in-the-Loop Validation
+ * 4. **Speichern aller Daten im Store**
+ * 5. Rückgabe strukturierter Daten mit Product-Link
  * 
  * Query-Parameter:
  * - tenantId: Mandanten-ID (erforderlich für Multi-Tenancy)
- * - productType: Optional, "BATTERY" oder "TEXTILE"
+ * - productType: Optional, "BATTERY", "TEXTILE", "ELECTRONICS", "FURNITURE", "CHEMICAL"
  * 
  * Rückgabe:
- * - 200: Erfolg mit extractedData für Validierungs-UI
+ * - 200: Erfolg mit extractedData + productId für direkten Link
  * - 400: Ungültige Eingabe (keine Datei, falscher Typ)
  * - 500: Server-Fehler (Speicher, AI-Fehler)
  */
@@ -77,18 +90,36 @@ export async function POST(request: NextRequest) {
     console.log('  hersteller:', extractedFields.hersteller);
     console.log('  modellname:', extractedFields.modellname);
 
+    // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
+    const productId = generateProductId();
+    const productPassport: ProductPassport = {
+      id: productId,
+      type: result.extractedData.productType,
+      createdAt: new Date(),
+      // Speichere ALLE extrahierten Felder, nicht nur ausgewählte
+      ...extractedFields,
+    } as any;
+
+    // Speichere das Produkt
+    saveProductToStore(productPassport);
+    console.log(`✅ Produkt gespeichert mit ID: ${productId}`);
+
+    // ===== RESPONSE MIT PRODUCT-LINK =====
     const responseData = {
+      productId, // ← WICHTIG: Geben Sie die ID zurück für direkten Link
+      productUrl: `/p/${productId}`, // ← Direkter Link zum Produktpass
       documentId: result.documentMetadata.id,
       fileName: result.documentMetadata.fileName,
       uploadedAt: result.documentMetadata.uploadedAt,
       extractedData: {
         productType: result.extractedData.productType,
-        hersteller: extractedFields.hersteller,
-        modellname: extractedFields.modellname,
+        // ALLE extrahierten Felder (gefiltert nach Produkttyp)
+        ...(extractedFields.hersteller && { hersteller: extractedFields.hersteller }),
+        ...(extractedFields.modellname && { modellname: extractedFields.modellname }),
+        // Battery-spezifische Felder
         ...(result.extractedData.productType === 'BATTERY' && {
-          kapazitaetKWh: extractedFields.kapazitaetKWh,
-          chemischesSystem: extractedFields.chemischesSystem,
-          // ESPR-spezifische Batterie-Felder
+          ...(extractedFields.kapazitaetKWh && { kapazitaetKWh: extractedFields.kapazitaetKWh }),
+          ...(extractedFields.chemischesSystem && { chemischesSystem: extractedFields.chemischesSystem }),
           ...(extractedFields.batterietyp && { batterietyp: extractedFields.batterietyp }),
           ...(extractedFields.produktionsdatum && { produktionsdatum: extractedFields.produktionsdatum }),
           ...(extractedFields.co2FussabdruckKgProKwh && { co2FussabdruckKgProKwh: extractedFields.co2FussabdruckKgProKwh }),
@@ -100,10 +131,22 @@ export async function POST(request: NextRequest) {
           ...(extractedFields.recyclinganteilNickel && { recyclinganteilNickel: extractedFields.recyclinganteilNickel }),
           ...(extractedFields.recyclingAnweisungen && { recyclingAnweisungen: extractedFields.recyclingAnweisungen }),
         }),
+        // Textile-spezifische Felder
         ...(result.extractedData.productType === 'TEXTILE' && {
-          materialZusammensetzung: extractedFields.materialZusammensetzung,
-          herkunftsland: extractedFields.herkunftsland,
+          ...(extractedFields.materialZusammensetzung && { materialZusammensetzung: extractedFields.materialZusammensetzung }),
+          ...(extractedFields.herkunftsland && { herkunftsland: extractedFields.herkunftsland }),
         }),
+        // Alle anderen Felder (für zukünftige Produkttypen)
+        // Filtern Sie Duplikate und interne Felder
+        ...Object.fromEntries(
+          Object.entries(extractedFields).filter(([key, value]) => {
+            const baseKeys = ['hersteller', 'modellname', 'id', 'type', 'createdAt'];
+            const batteryKeys = ['kapazitaetKWh', 'chemischesSystem', 'batterietyp', 'produktionsdatum', 'co2FussabdruckKgProKwh', 'erwarteteLebensdauerLadezyklen', 'reparierbarkeitsIndex', 'ersatzteileVerfuegbarkeitJahre', 'recyclinganteilKobalt', 'recyclinganteilLithium', 'recyclinganteilNickel', 'recyclingAnweisungen'];
+            const textileKeys = ['materialZusammensetzung', 'herkunftsland'];
+            const excludedKeys = [...baseKeys, ...batteryKeys, ...textileKeys];
+            return !excludedKeys.includes(key) && value !== undefined && value !== null && value !== '';
+          })
+        ),
       },
       confidence: result.extractedData.confidence,
       warnings: result.extractedData.warnings,
@@ -111,7 +154,7 @@ export async function POST(request: NextRequest) {
       message: result.message,
     };
 
-    console.log('📤 Final Response extractedData:', responseData.extractedData);
+    console.log('📤 Final Response:', { productId, product_url: responseData.productUrl });
 
     return NextResponse.json(
       responseData,

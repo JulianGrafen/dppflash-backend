@@ -15,20 +15,55 @@ export class MockLocalProvider implements AIProvider {
     pdfText: string,
     productTypeHint?: ProductPassport['type']
   ): Promise<AIExtractionOutput> {
-    const productType = productTypeHint || 'BATTERY';
+    // Wenn produktTypeHint vorhanden, nutze diesen direkt
+    if (productTypeHint) {
+      const productType = productTypeHint;
+      console.log('🎯 Produkttyp vorgegeben:', productType);
 
-    console.log('🔐 DSGVO-Modus: Lokale Extraktion (Daten verlassen Server NICHT)');
+      try {
+        switch (productType) {
+          case 'BATTERY':
+            return this.extractBatteryData(pdfText);
+          case 'TEXTILE':
+            return this.extractTextileData(pdfText);
+          case 'ELECTRONICS':
+            return this.extractElectronicsData(pdfText);
+          case 'FURNITURE':
+            return this.extractFurnitureData(pdfText);
+          case 'CHEMICAL':
+            return this.extractChemicalData(pdfText);
+          default:
+            return this.extractGenericData(pdfText, productType as string);
+        }
+      } catch (error) {
+        console.error('Produkttyp-spezifische Extraktion ERROR:', error);
+        return this.extractGenericData(pdfText, productType as string);
+      }
+    }
+
+    // Automatische Produkttyp-Erkennung
+    const detectedType = this.detectProductType(pdfText);
+    console.log('🔍 Automatisch erkannter Produkttyp:', detectedType);
 
     try {
-      if (productType === 'BATTERY') {
-        return this.extractBatteryData(pdfText);
-      } else {
-        return this.extractTextileData(pdfText);
+      switch (detectedType) {
+        case 'BATTERY':
+          return this.extractBatteryData(pdfText);
+        case 'TEXTILE':
+          return this.extractTextileData(pdfText);
+        case 'ELECTRONICS':
+          return this.extractElectronicsData(pdfText);
+        case 'FURNITURE':
+          return this.extractFurnitureData(pdfText);
+        case 'CHEMICAL':
+          return this.extractChemicalData(pdfText);
+        default:
+          return this.extractGenericData(pdfText, detectedType);
       }
     } catch (error) {
       console.error('Lokale Extraktion ERROR:', error);
       return {
-        productType,
+        productType: detectedType,
         confidence: 0,
         extractedFields: {},
         warnings: [
@@ -36,6 +71,67 @@ export class MockLocalProvider implements AIProvider {
         ],
       };
     }
+  }
+
+  private detectProductType(text: string): ProductPassport['type'] {
+    const lowerText = text.toLowerCase();
+
+    // Batterie-Keywords
+    const batteryKeywords = [
+      'batterie', 'battery', 'akku', 'kwh', 'kw', 'zelle', 'cell',
+      'lade', 'charge', 'lithium', 'nmc', 'lfp', 'lipo', 'energiespeicher'
+    ];
+
+    // Textil-Keywords
+    const textileKeywords = [
+      'textil', 'textile', 'stoff', 'fabric', 'kleidung', 'clothing',
+      'baumwolle', 'cotton', 'polyester', 'wolle', 'silk', 'seide',
+      'material', 'gewebe', 'faser', 'fiber'
+    ];
+
+    // Elektronik-Keywords
+    const electronicsKeywords = [
+      'elektronik', 'electronics', 'computer', 'prozessor', 'cpu', 'modul',
+      'platine', 'circuit', 'watt', 'volt', 'ampere', 'schaltung',
+      'sensor', 'display', 'bildschirm', 'power consumption'
+    ];
+
+    // Möbel-Keywords
+    const furnitureKeywords = [
+      'möbel', 'furniture', 'holz', 'wood', 'metall', 'metal', 'stuhl', 'chair',
+      'tisch', 'table', 'schrank', 'cabinet', 'sofa', 'couch', 'sessel',
+      'abmessung', 'dimensions', 'größe', 'gewicht', 'weight'
+    ];
+
+    // Chemikalien-Keywords
+    const chemicalKeywords = [
+      'chemie', 'chemical', 'substanz', 'substance', 'gefahrstoff', 'hazardous',
+      'toxisch', 'toxic', 'sicherheit', 'safety', 'ghs', 'entsorgung', 'disposal',
+      'zersetzung', 'decomposition'
+    ];
+
+    // Zähle Keyword-Vorkommen
+    const scores = {
+      BATTERY: batteryKeywords.filter(k => lowerText.includes(k)).length,
+      TEXTILE: textileKeywords.filter(k => lowerText.includes(k)).length,
+      ELECTRONICS: electronicsKeywords.filter(k => lowerText.includes(k)).length,
+      FURNITURE: furnitureKeywords.filter(k => lowerText.includes(k)).length,
+      CHEMICAL: chemicalKeywords.filter(k => lowerText.includes(k)).length,
+    };
+
+    // Finde den Produkttyp mit dem höchsten Score
+    const detectedType = Object.entries(scores).reduce((prev, current) =>
+      current[1] > prev[1] ? current : prev
+    ) as [ProductPassport['type'], number];
+
+    if (detectedType[1] > 0) {
+      console.log(`✅ Produkttyp erkannt: ${detectedType[0]} (Score: ${detectedType[1]})`);
+      return detectedType[0];
+    }
+
+    // Fallback auf generischen Typ
+    console.log('⚠️ Produkttyp nicht erkannt, nutze generischen Typ');
+    return 'OTHER';
   }
 
   private extractBatteryData(pdfText: string): AIExtractionOutput {
@@ -800,6 +896,150 @@ export class MockLocalProvider implements AIProvider {
       }
     }
     return undefined;
+  }
+
+  private extractElectronicsData(pdfText: string): AIExtractionOutput {
+    console.log('🖥️  Extrahiere Elektronik-Produktdaten...');
+
+    const hersteller = this.extractBatteryManufacturer(pdfText); // Nutze gleiche Hersteller-Logik
+    const modellname = this.extractProductModel(pdfText); // Nutze gleiche Modell-Logik
+    const stromverbrauch = this.extractNumberFromContext(pdfText, 'stromverbrauch|power consumption|watt|w');
+    const energieeffizienzklasse = this.extractEnergyClass(pdfText);
+
+    const missingFields = [];
+    if (!hersteller) missingFields.push('Hersteller');
+    if (!modellname) missingFields.push('Modellname');
+
+    const confidence = (2 - missingFields.length) / 2;
+
+    return {
+      productType: 'ELECTRONICS',
+      confidence,
+      extractedFields: {
+        type: 'ELECTRONICS',
+        hersteller: hersteller || '',
+        modellname: modellname || '',
+        ...(stromverbrauch && { stromverbrauch }),
+        ...(energieeffizienzklasse && { energieeffizienzklasse }),
+      } as any,
+      warnings: [],
+    };
+  }
+
+  private extractFurnitureData(pdfText: string): AIExtractionOutput {
+    console.log('🪑 Extrahiere Möbel-Produktdaten...');
+
+    const hersteller = this.extractBatteryManufacturer(pdfText);
+    const modellname = this.extractProductModel(pdfText);
+    const material = this.extractMaterial(pdfText);
+
+    return {
+      productType: 'FURNITURE',
+      confidence: 0.6,
+      extractedFields: {
+        type: 'FURNITURE',
+        hersteller: hersteller || '',
+        modellname: modellname || '',
+        ...(material && { material }),
+      } as any,
+      warnings: [],
+    };
+  }
+
+  private extractChemicalData(pdfText: string): AIExtractionOutput {
+    console.log('⚗️  Extrahiere Chemikalien-Produktdaten...');
+
+    const hersteller = this.extractBatteryManufacturer(pdfText);
+    const modellname = this.extractProductModel(pdfText);
+    const gefahrenstoffe = this.extractHazards(pdfText);
+
+    return {
+      productType: 'CHEMICAL',
+      confidence: 0.5,
+      extractedFields: {
+        type: 'CHEMICAL',
+        hersteller: hersteller || '',
+        modellname: modellname || '',
+        ...(gefahrenstoffe.length > 0 && { gefahrenstoffe }),
+      } as any,
+      warnings: gefahrenstoffe.length > 0 ? [`Enthält Gefahrenstoffe: ${gefahrenstoffe.join(', ')}`] : [],
+    };
+  }
+
+  private extractGenericData(pdfText: string, detectedType?: string): AIExtractionOutput {
+    console.log('❓ Extrahiere generische Produktdaten...');
+
+    const hersteller = this.extractBatteryManufacturer(pdfText);
+    const modellname = this.extractProductModel(pdfText);
+
+    // Extrahiere alle Zahlen und Werte als generische Felder
+    const additionalFields: any = {};
+    
+    // Suche nach Zahlen-Wert-Paaren
+    const numberPattern = /([a-z]+)[\s:=]*(\d+(?:[.,]\d+)?)\s*([a-z%°c]*)/gi;
+    let match;
+    const seen = new Set<string>();
+    
+    while ((match = numberPattern.exec(pdfText)) !== null) {
+      const key = match[1].trim().toLowerCase().replace(/\s+/g, '_');
+      if (!seen.has(key) && key.length > 2 && key.length < 30) {
+        additionalFields[key] = match[2];
+        seen.add(key);
+      }
+    }
+
+    return {
+      productType: detectedType as any || 'OTHER',
+      confidence: 0.4,
+      extractedFields: {
+        type: detectedType || 'OTHER',
+        hersteller: hersteller || '',
+        modellname: modellname || '',
+        ...additionalFields,
+      } as any,
+      warnings: [`Produkttyp unbekannt oder generisch. Daten könnten unvollständig sein.`],
+    };
+  }
+
+  // ===== HILFSMETHODEN FÜR WEITERE PRODUKTTYPEN =====
+
+  private extractNumberFromContext(text: string, contextPattern: string): number | undefined {
+    const pattern = new RegExp(`${contextPattern}[\\s:=]*(\\d+(?:[.,]\\d+)?)`, 'i');
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return parseFloat(match[1].replace(',', '.'));
+    }
+    return undefined;
+  }
+
+  private extractEnergyClass(text: string): string | undefined {
+    const pattern = /(?:energieeffizienz|energy|effizienz)[\s:]*([A-G](?:\+)?)/i;
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      return match[1];
+    }
+    return undefined;
+  }
+
+  private extractHazards(text: string): string[] {
+    const hazards: string[] = [];
+    const hazardKeywords = [
+      { key: 'giftig', names: ['Giftig', 'Toxisch'] },
+      { key: 'ätzend', names: ['Ätzend'] },
+      { key: 'explosiv', names: ['Explosiv'] },
+      { key: 'brennbar', names: ['Brennbar', 'Flammable'] },
+      { key: 'oxidierend', names: ['Oxidierend'] },
+      { key: 'umwelt', names: ['Umweltschädlich'] },
+    ];
+
+    const lowerText = text.toLowerCase();
+    for (const hazard of hazardKeywords) {
+      if (lowerText.includes(hazard.key)) {
+        hazards.push(...hazard.names);
+      }
+    }
+
+    return [...new Set(hazards)]; // Entferne Duplikate
   }
 
   async validateField(

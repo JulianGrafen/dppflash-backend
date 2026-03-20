@@ -44,11 +44,58 @@ export interface TextileDPP extends BaseDPP {
   readonly type: 'TEXTILE';
   materialZusammensetzung: string;
   herkunftsland: string;
+  [key: string]: any; // Erlaubt zusätzliche Felder
+}
+
+/**
+ * Spezifische Anforderungen für Elektronik/Computer/Geräte.
+ */
+export interface ElectronicsDPP extends BaseDPP {
+  readonly type: 'ELECTRONICS';
+  produkttyp?: string;
+  stromverbrauch?: number;
+  energieeffizienzklasse?: string;
+  rohstoffgewinnung?: string;
+  haltbarkeit?: string;
+  reparierbarkit?: string;
+  [key: string]: any; // Erlaubt zusätzliche Felder
+}
+
+/**
+ * Spezifische Anforderungen für Möbel/Furniture.
+ */
+export interface FurnitureDPP extends BaseDPP {
+  readonly type: 'FURNITURE';
+  material?: string;
+  abmessungen?: string;
+  gewicht?: number;
+  zerlegbarkeit?: string;
+  [key: string]: any; // Erlaubt zusätzliche Felder
+}
+
+/**
+ * Spezifische Anforderungen für Chemikalien/Chemicals.
+ */
+export interface ChemicalDPP extends BaseDPP {
+  readonly type: 'CHEMICAL';
+  zusammensetzung?: string;
+  gefahrenstoffe?: string[];
+  verwendung?: string;
+  entsorgung?: string;
+  [key: string]: any; // Erlaubt zusätzliche Felder
+}
+
+/**
+ * Generischer/Fallback Produkttyp für unbekannte oder zukünftige Kategorien.
+ */
+export interface GenericDPP extends BaseDPP {
+  readonly type: 'OTHER';
+  [key: string]: any; // Alle Felder sind dynamisch
 }
 
 /** * Union Type für einfache Erweiterbarkeit um künftige Kategorien wie Möbel oder Elektronik. 
  */
-export type ProductPassport = BatteryDPP | TextileDPP;
+export type ProductPassport = BatteryDPP | TextileDPP | ElectronicsDPP | FurnitureDPP | ChemicalDPP | GenericDPP;
 
 /**
  * Document Upload Metadaten – speichert Informationen über hochgeladene PDFs.

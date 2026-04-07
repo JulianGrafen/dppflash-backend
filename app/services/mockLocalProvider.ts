@@ -77,10 +77,13 @@ export class MockLocalProvider implements AIProvider {
   private detectProductType(text: string): ProductPassport['type'] {
     const lowerText = text.toLowerCase();
 
-    // Batterie-Keywords
+    // Batterie-Keywords (inkl. bekannte Hersteller)
     const batteryKeywords = [
       'batterie', 'battery', 'akku', 'kwh', 'kw', 'zelle', 'cell',
-      'lade', 'charge', 'lithium', 'nmc', 'lfp', 'lipo', 'energiespeicher'
+      'lade', 'charge', 'lithium', 'nmc', 'lfp', 'lipo', 'energiespeicher',
+      // Bekannte Batteriehersteller — werden oft auf dem Deckblatt genannt
+      'lg chem', 'lg energy', 'samsung sdi', 'catl', 'panasonic', 'byd',
+      'tesla', 'northvolt', 'svolt', 'envision', 'saft', 'varta',
     ];
 
     // Textil-Keywords
@@ -130,9 +133,9 @@ export class MockLocalProvider implements AIProvider {
       return detectedType[0];
     }
 
-    // Fallback auf generischen Typ
-    console.log('⚠️ Produkttyp nicht erkannt, nutze generischen Typ');
-    return 'OTHER';
+    // Fallback: Batterie ist der Standard-Produkttyp dieser Anwendung
+    console.log('⚠️ Produkttyp nicht erkannt, nutze BATTERY als Standard');
+    return 'BATTERY';
   }
 
   private extractBatteryData(pdfText: string): AIExtractionOutput {
@@ -640,14 +643,19 @@ export class MockLocalProvider implements AIProvider {
     }
 
     // Strategie 5: Zweite nicht-leere Zeile des Dokuments als letzter Ausweg
+    // Erfordert mind. ein echtes Wort (4+ aufeinanderfolgende Buchstaben), um Schrift-Zeichensalat zu vermeiden
     const PDF_KW2 = /^(?:seite|page|datum|date|version|revision|stream|endstream|endobj|obj|xref|trailer|startxref|%%eof)\b/i;
-    const meaningfulLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !PDF_KW2.test(l));
-    if (meaningfulLines.length > 1) {
-      console.log(`✓ Modellname (zweite Zeile): ${meaningfulLines[1]}`);
-      return meaningfulLines[1];
-    } else if (meaningfulLines.length === 1) {
-      console.log(`✓ Modellname (erste Zeile): ${meaningfulLines[0]}`);
-      return meaningfulLines[0];
+    const meaningsfulLines = text.split('\n').map(l => l.trim()).filter(l =>
+      l.length > 3 && l.length < 80 &&
+      /[a-zA-ZäöüÄÖÜ]{4,}/.test(l) && // mind. ein echtes Wort
+      !PDF_KW2.test(l)
+    );
+    if (meaningsfulLines.length > 1) {
+      console.log(`✓ Modellname (zweite Zeile): ${meaningsfulLines[1]}`);
+      return meaningsfulLines[1];
+    } else if (meaningsfulLines.length === 1) {
+      console.log(`✓ Modellname (erste Zeile): ${meaningsfulLines[0]}`);
+      return meaningsfulLines[0];
     }
 
     console.log('❌ Modellname nicht gefunden');

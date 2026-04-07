@@ -446,7 +446,8 @@ export class BatteryRegexExtractor implements IExtractor {
     const lines = text
       .split('\n')
       .map((l) => l.trim())
-      .filter((l) => l.length > 3 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !SKIP.test(l));
+      // Erfordert mind. ein echtes Wort (4+ Buchstaben) — filtert Zeichensalat aus Custom-Font-PDFs
+      .filter((l) => l.length > 3 && /[a-zA-ZäöüÄÖÜ]{4,}/.test(l) && !SKIP.test(l));
     // Prefer short lines (likely headings/titles) but fall back to any line
     const short = lines.filter((l) => l.length < 80);
     const pool = short.length > 0 ? short : lines;

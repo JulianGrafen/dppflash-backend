@@ -175,6 +175,31 @@ function extractPdfWithFallback(buffer: Buffer): string {
 }
 
 /**
+ * Entfernt PDF-Struktur-Müll (Font-Metadaten, Stream-Tokens etc.) aus extrahiertem Text.
+ * Wird nach jeder Extraktionsstrategie angewendet bevor der Text validiert wird.
+ */
+function cleanPdfText(raw: string): string {
+  const JUNK_LINE = [
+    /FontDescriptor|FontBBox|ItalicAngle|\/Flags\s+\d/i,
+    /BitsPerComponent|ColorSpace|\/Filter\s*\//i,
+    /endobj|endstream|startxref/i,
+    /^\s*stream\s*$/i,
+    /^\s*\d+\s+\d+\s+obj\b/,
+    /\/Type\s*\/Font|\/BaseFont|\/Encoding\s*\//i,
+    /\/ToUnicode|\/CMapName|\/Registry/i,
+    /\/Resources|\/ProcSet|\/XObject/i,
+    /^%%EOF/,
+    /^\/[A-Z][a-zA-Z]+\s*\//,   // lone /PdfKeyword /
+  ];
+  return raw
+    .split('\n')
+    .filter(line => !JUNK_LINE.some(p => p.test(line)))
+    .join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+/**
  * Extrahiert Rohtext aus einem PDF-Buffer.
  * Nutzt Python wenn verfügbar, sonst Fallback auf einfache Textextraktion.
  *
@@ -197,9 +222,12 @@ export async function extractPdfText(
       const pdfParseModule = await import('pdf-parse');
       const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
       const parsed = await pdfParse(pdfBuffer);
-      if (parsed.text && parsed.text.trim().length > 50) {
-        textContent = parsed.text;
-        console.log(`📄 PDF mit pdf-parse extrahiert: ${textContent.length} Zeichen`);
+      if (parsed.text && parsed.text.trim().length > 20) {
+        const cleaned = cleanPdfText(parsed.text);
+        if (cleaned.length > 20) {
+          textContent = cleaned;
+          console.log(`📄 PDF mit pdf-parse extrahiert (bereinigt): ${textContent.length} Zeichen`);
+        }
       }
     } catch (e) {
       console.log(`⚠️ pdf-parse fehlgeschlagen: ${e}`);
@@ -208,8 +236,9 @@ export async function extractPdfText(
     // Strategie 2: Python (optional, nur lokal verfügbar)
     if (!textContent) {
       try {
-        textContent = await extractPdfWithPython(pdfBuffer);
-        console.log(`📄 PDF mit Python extrahiert: ${textContent.length} Zeichen`);
+        const raw = await extractPdfWithPython(pdfBuffer);
+        textContent = cleanPdfText(raw);
+        console.log(`📄 PDF mit Python extrahiert (bereinigt): ${textContent.length} Zeichen`);
       } catch (e) {
         console.log(`⚠️ Python nicht verfügbar, nutze Binär-Fallback`);
       }
@@ -217,8 +246,8 @@ export async function extractPdfText(
 
     // Strategie 3: Binär-Fallback (letzter Ausweg)
     if (!textContent) {
-      textContent = extractPdfWithFallback(pdfBuffer);
-      console.log(`📄 PDF mit Binär-Fallback extrahiert: ${textContent.length} Zeichen`);
+      textContent = cleanPdfText(extractPdfWithFallback(pdfBuffer));
+      console.log(`📄 PDF mit Binär-Fallback extrahiert (bereinigt): ${textContent.length} Zeichen`);
     }
 
     const extractionDuration = Date.now() - startTime;

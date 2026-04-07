@@ -311,7 +311,8 @@ export class MockLocalProvider implements AIProvider {
     }
 
     // Strategie 5: Erste nicht-leere Zeile des Dokuments (Deckblatt-Logik)
-    const firstLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l));
+    const PDF_KW = /^(?:seite|page|datum|date|version|revision|stream|endstream|endobj|obj|xref|trailer|startxref|%%eof)\b/i;
+    const firstLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !PDF_KW.test(l));
     if (firstLines.length > 0) {
       console.log(`✓ Hersteller (erste Zeile): ${firstLines[0]}`);
       return firstLines[0];
@@ -668,7 +669,8 @@ export class MockLocalProvider implements AIProvider {
     }
 
     // Strategie 5: Zweite nicht-leere Zeile des Dokuments als letzter Ausweg
-    const meaningfulLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !/^(?:seite|page|datum|date|version|revision)\b/i.test(l));
+    const PDF_KW2 = /^(?:seite|page|datum|date|version|revision|stream|endstream|endobj|obj|xref|trailer|startxref|%%eof)\b/i;
+    const meaningfulLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !PDF_KW2.test(l));
     if (meaningfulLines.length > 1) {
       console.log(`✓ Modellname (zweite Zeile): ${meaningfulLines[1]}`);
       return meaningfulLines[1];

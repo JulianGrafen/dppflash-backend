@@ -86,11 +86,6 @@ export async function POST(request: NextRequest) {
 
     const extractedFields = result.extractedData.extractedFields as any;
 
-    console.log('📤 Upload Response wird zusammengestellt:');
-    console.log('  extractedFields:', extractedFields);
-    console.log('  hersteller:', extractedFields.hersteller);
-    console.log('  modellname:', extractedFields.modellname);
-
     // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const productId = generateProductId();
     const productPassport: ProductPassport = {
@@ -99,6 +94,9 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
       // Speichere ALLE extrahierten Felder, nicht nur ausgewählte
       ...extractedFields,
+      // Speichere Extraktions-Metadaten damit die Produktseite echte Konfidenz zeigt
+      extractionConfidence: result.extractedData.confidence,
+      extractionWarnings: result.extractedData.warnings,
     } as any;
 
     // Speichere das Produkt

@@ -76,9 +76,15 @@ export default function CreateDashboard() {
 
       setDpp(savedDpp);
 
-      // Product is always saved by upload route — always go to QR result.
-      // The product page works even with partial data.
-      setStep('result');
+      // confidence < 0.5 means 2+ mandatory fields are missing — show form to complete
+      const confidence: number = result.confidence ?? 0;
+      if (confidence < 0.5) {
+        const missing = (result.warnings ?? []).join(', ') || 'Pflichtfelder fehlen';
+        setErrorMessage(`Einige Felder konnten nicht erkannt werden. Bitte ergänzen Sie die Daten. (${missing})`);
+        setStep('form');
+      } else {
+        setStep('result');
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unbekannter Fehler';
       log('PDF upload error:', msg);

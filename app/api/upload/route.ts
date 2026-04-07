@@ -1,159 +1,85 @@
+/**
+ * POST /api/upload
+ *
+ * Pipeline:
+ *   Validate PDF → Extract ESPR fields → Persist → Generate QR → Respond
+ *
+ * All heavy lifting lives in localExtractionService (swappable via IExtractor).
+ * Persistence uses server-store (Supabase-backed, Vercel-safe).
+ */
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
+import { extractFromPdfBuffer } from '@/app/services/localExtractionService';
+import { saveProductToStore } from '@/app/lib/server-store';
+import { generateQRCode } from '@/app/services/qrCodeService';
+import type { UploadApiResponse } from '@/app/types/espr';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-interface BatteryPassport {
-  id: string;
-  type: 'BATTERY';
-  hersteller: string;
-  modellname: string;
-  herstellungsdatum: string;
-  kapazitaetKWh: number;
-  chemischesSystem: string;
-  co2Fussabdruck: string;
-  recyclingAnteilLi: number;
-  recyclingAnteilCo: number;
-  erwarteteLebensdauer: string;
-}
 
-// ─── Extraction helpers ───────────────────────────────────────────────────────
 
-/** Extract a plain string value for a given label */
-function extractString(text: string, patterns: RegExp[]): string {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1].trim();
-  }
-  return '';
-}
 
-/** Extract a float value for a given label */
-function extractNumber(text: string, patterns: RegExp[]): number {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) {
-      const value = parseFloat(match[1].replace(',', '.'));
-      if (!isNaN(value)) return value;
-    }
-  }
-  return 0;
-}
-
-/** Parse all ESPR-required battery fields from raw PDF text */
-function extractBatteryFields(text: string): Omit<BatteryPassport, 'id' | 'type'> {
-  const hersteller = extractString(text, [
-    /(?:hersteller|manufacturer|produzent|company)[:\s]+([^\n,;]{2,60})/i,
-    /\b([A-Z][a-zA-Z0-9\s&\-]{2,40}(?:GmbH|AG|Inc|Ltd|SE|KG))\b/,
-  ]);
-
-  const modellname = extractString(text, [
-    /(?:modell(?:name|bezeichnung)?|model(?:\s*name)?)[:\s]+([^\n,;]{2,60})/i,
-    /(?:produkt|product)[:\s]+([^\n,;]{2,60})/i,
-  ]);
-
-  const herstellungsdatum = extractString(text, [
-    /(?:herstellungs|produktions)datum[:\s]+([^\n,;]{4,20})/i,
-    /(?:manufactured|production\s*date)[:\s]+([^\n,;]{4,20})/i,
-    /(?:datum|date)[:\s]+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i,
-  ]);
-
-  const kapazitaetKWh = extractNumber(text, [
-    /(\d+(?:[.,]\d+)?)\s*kWh/i,
-    /(?:kapazit[äa]t|capacity)[:\s]+(\d+(?:[.,]\d+)?)/i,
-  ]);
-
-  const chemischesSystem = extractString(text, [
-    /(?:chemisches?\s*system|chemistry|zellchemie)[:\s]+([^\n,;]{2,50})/i,
-    /(?:batterietyp|battery\s*type)[:\s]+([^\n,;]{2,50})/i,
-    /(LiFePO4|NMC|NCA|LCO|LFP|Lithium-Ionen[^\n,;]{0,30}|Blei-Säure|NiMH)/i,
-  ]);
-
-  const co2Fussabdruck = extractString(text, [
-    /(?:co2[- ]?fu[sß]{1,2}abdruck|carbon\s*footprint|co2)[:\s]+([^\n,;]{2,50})/i,
-    /(\d+(?:[.,]\d+)?\s*kg\s*co2[^\n,;]{0,20})/i,
-  ]);
-
-  const recyclingAnteilLi = extractNumber(text, [
-    /(?:lithium|li)[^\n]{0,20}(?:recycling[^\n]{0,10})?(\d+(?:[.,]\d+)?)\s*%/i,
-    /recycling[^\n]{0,30}lithium[^\n]{0,10}(\d+(?:[.,]\d+)?)\s*%/i,
-  ]);
-
-  const recyclingAnteilCo = extractNumber(text, [
-    /(?:kobalt|cobalt|co)[^\n]{0,20}(?:recycling[^\n]{0,10})?(\d+(?:[.,]\d+)?)\s*%/i,
-    /recycling[^\n]{0,30}(?:kobalt|cobalt)[^\n]{0,10}(\d+(?:[.,]\d+)?)\s*%/i,
-  ]);
-
-  const erwarteteLebensdauer = extractString(text, [
-    /(?:lebensdauer|lifespan|lifecycle|ladezyklen|cycles)[:\s]+([^\n,;]{2,50})/i,
-    /(\d[\d.,\s]*(?:lade)?zyklen)/i,
-    /(\d[\d.,\s]*\s*Jahre)/i,
-  ]);
-
-  return {
-    hersteller,
-    modellname,
-    herstellungsdatum,
-    kapazitaetKWh,
-    chemischesSystem,
-    co2Fussabdruck,
-    recyclingAnteilLi,
-    recyclingAnteilCo,
-    erwarteteLebensdauer,
-  };
-}
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+export async function POST(
+  request: NextRequest,
+): Promise<NextResponse<UploadApiResponse>> {
+  // 1. Parse multipart form
+  const formData = await request.formData().catch(() => null);
+  if (!formData) {
+    return NextResponse.json(
+      { success: false, error: 'Ungültige Formulardaten.' },
+      { status: 400 },
+    );
+  }
+
+  // 2. Validate file
+  const file = formData.get('file');
+  if (!file || !(file instanceof Blob)) {
+    return NextResponse.json(
+      { success: false, error: "Kein File unter dem Key 'file' gefunden." },
+      { status: 400 },
+    );
+  }
+  if (file.type !== 'application/pdf') {
+    return NextResponse.json(
+      { success: false, error: `Nur PDF-Dateien erlaubt (erhalten: ${file.type}).` },
+      { status: 400 },
+    );
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { success: false, error: 'Datei zu groß (max 10 MB).' },
+      { status: 400 },
+    );
+  }
+
+  // 3. Extract → persist → generate QR
   try {
-    const formData = await request.formData();
-    const file = formData.get('file');
-
-    if (!file || !(file instanceof Blob)) {
-      return NextResponse.json(
-        { success: false, error: "Keine Datei unter dem Key 'file' gefunden." },
-        { status: 400 }
-      );
-    }
-
-    if (file.type !== 'application/pdf') {
-      return NextResponse.json(
-        { success: false, error: `Ungültiger Typ: ${file.type}. Nur PDF erlaubt.` },
-        { status: 400 }
-      );
-    }
-
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Extract text with pdf-parse (pure Node.js — no binaries, works on Vercel)
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-    const parsed = await pdfParse(buffer);
-    const text: string = parsed.text ?? '';
+    // IExtractor-backed — swap strategy at runtime with registerExtractor()
+    const data = await extractFromPdfBuffer(buffer);
 
-    if (!text.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'PDF enthält keinen lesbaren Text (möglicherweise gescannt).' },
-        { status: 422 }
-      );
-    }
+    // BaseDPP has [key: string]: any, so EsprProductData is structurally compatible
+    await saveProductToStore(data as any);
 
-    const fields = extractBatteryFields(text);
+    const baseUrl = request.nextUrl.origin;
+    const productUrl = `${baseUrl}/p/${data.id}`;
+    const qrCodeDataUrl = await generateQRCode(data.id, { size: 300 });
 
-    const data: BatteryPassport = {
-      id: randomUUID(),
-      type: 'BATTERY',
-      ...fields,
-    };
-
-    return NextResponse.json({ success: true, data });
-
+    return NextResponse.json({
+      success: true,
+      productId: data.id,
+      productUrl,
+      qrCodeDataUrl,
+      data,
+    });
   } catch (error) {
-    console.error('Upload route error:', error);
+    console.error('[POST /api/upload]', error);
     return NextResponse.json(
       { success: false, error: 'Interner Fehler beim Verarbeiten der PDF.' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

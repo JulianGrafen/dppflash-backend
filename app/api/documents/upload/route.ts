@@ -33,11 +33,7 @@ function generateProductId(): string {
  */
 export async function POST(request: NextRequest) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_DPP_URL
-      || process.env.NEXT_PUBLIC_APP_URL
-      || (request.headers.get('x-forwarded-host')
-          ? `https://${request.headers.get('x-forwarded-host')}`
-          : `http://${request.headers.get('host') || 'localhost:3000'}`);
+    const baseUrl = process.env.NEXT_PUBLIC_DPP_URL || request.nextUrl.origin;
     const tenantId = request.nextUrl.searchParams.get('tenantId');
     const productTypeParam = request.nextUrl.searchParams.get('productType');
 

@@ -52,6 +52,9 @@ if (!globalThis.__dpp_store__) {
 async function saveToSupabase(product: ProductPassport): Promise<void> {
   if (!supabase) return;
   try {
+    // Auto-create bucket if it doesn't exist yet
+    await supabase.storage.createBucket(STORAGE_BUCKETS.EXTRACTED_DATA, { public: false }).catch(() => {});
+
     const json = JSON.stringify(product);
     const blob = new Blob([json], { type: "application/json" });
     const { error } = await supabase.storage

@@ -416,7 +416,7 @@ export default function CreateDashboard() {
             </div>
 
             {/* Extracted Data Info */}
-            {extractedData && extractedData.confidence && (
+            {extractedData && Number(extractedData.confidence) > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start justify-between">
                   <div>

@@ -80,6 +80,8 @@ function parseNum(raw: string): number {
   const s = raw.trim();
   // German thousands-only: "1.234" → 1234
   if (/^\d{1,3}(\.\d{3})+$/.test(s)) return parseFloat(s.replace(/\./g, ''));
+  // English thousands-only: "1,000" → 1000
+  if (/^\d{1,3}(,\d{3})+$/.test(s)) return parseFloat(s.replace(/,/g, ''));
   // German decimal: "1,5" → 1.5
   if (s.includes(',') && !s.includes('.')) return parseFloat(s.replace(',', '.'));
   // Both separators: "1.234,56" → 1234.56
@@ -330,19 +332,19 @@ export class BatteryRegexExtractor implements IExtractor {
   private extractRecycledContent(text: string): RecycledContent {
     return {
       cobaltPct: matchPct(text, [
-        /(?:kobalt|cobalt)[^\n]{0,50}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
-        /recycling[^\n]{0,40}(?:kobalt|cobalt)[^\n]{0,30}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /(?:kobalt|cobalt)[^\n]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /recycling[^\n]{0,40}?(?:kobalt|cobalt)[^\n]{0,30}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
       ]),
       lithiumPct: matchPct(text, [
-        /(?:lithium)[^\n]{0,50}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
-        /recycling[^\n]{0,40}lithium[^\n]{0,30}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /(?:lithium)[^\n]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /recycling[^\n]{0,40}?lithium[^\n]{0,30}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
       ]),
       nickelPct: matchPct(text, [
-        /(?:nickel)[^\n]{0,50}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
-        /recycling[^\n]{0,40}nickel[^\n]{0,30}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /(?:nickel)[^\n]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /recycling[^\n]{0,40}?nickel[^\n]{0,30}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
       ]),
       leadPct: matchPct(text, [
-        /(?:blei|lead|pb)[^\n]{0,50}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
+        /(?:blei|lead|pb)[^\n]{0,50}?(\d{1,3}(?:[.,]\d+)?)\s*%/i,
       ]),
     };
   }
@@ -373,8 +375,8 @@ export class BatteryRegexExtractor implements IExtractor {
       sparePartsAvailableYears: matchNum(
         text,
         [
-          /(?:ersatzteile|spare\s*parts)[^\n]{0,60}(\d{1,3})\s*(?:jahre|years)/i,
-          /(?:verfügbarkeit|availability)[^\n]{0,50}(\d{1,3})\s*(?:jahre|years)/i,
+          /(?:ersatzteile|spare\s*parts)[^\n]{0,60}?(\d{1,3})\s*(?:jahre|years)/i,
+          /(?:verfügbarkeit|availability)[^\n]{0,50}?(\d{1,3})\s*(?:jahre|years)/i,
         ],
         0,
         50,
@@ -430,7 +432,7 @@ export class BatteryRegexExtractor implements IExtractor {
         } else {
           [d, mo, y] = parts.map(Number);
         }
-        const date = new Date(y, mo - 1, d);
+        const date = new Date(Date.UTC(y, mo - 1, d));
         if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
       } catch {
         /* continue to next pattern */

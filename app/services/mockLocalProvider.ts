@@ -1,5 +1,6 @@
 import { AIProvider } from './aiProvider';
 import { ProductPassport, AIExtractionOutput } from '../types/dpp-types';
+import { BatteryRegexExtractor } from './localExtractionService';
 
 /**
  * Lokale DSGVO-konforme Extraktions-Engine.
@@ -135,35 +136,14 @@ export class MockLocalProvider implements AIProvider {
   }
 
   private extractBatteryData(pdfText: string): AIExtractionOutput {
-    console.log('🔋 Extrahiere Battery-Produktdaten mit ESPR-Feldern...');
+    const e = new BatteryRegexExtractor().extract(pdfText);
 
-    // Basis-Felder
-    const hersteller = this.extractBatteryManufacturer(pdfText);
-    const modellname = this.extractProductModel(pdfText);
-    const kapazitaetKWh = this.extractBatteryCapacity(pdfText);
-    const chemischesSystem = this.extractBatteryChemistry(pdfText);
-    
-    // ESPR-spezifische Felder
-    const batterietyp = this.extractBatteryType(pdfText);
-    const produktionsdatum = this.extractProductionDate(pdfText);
-    const co2Fussabdruck = this.extractCO2Footprint(pdfText);
-    const co2FussabdruckTotal = this.extractCO2Total(pdfText);
-    const lebensdauer = this.extractLifespan(pdfText);
-    const reparierbarkeitsIndex = this.extractRepairabilityIndex(pdfText);
-    const ersatzteileVerfuegbarkeit = this.extractSparePartsAvailability(pdfText);
-    const recyclingAnteilKobalt = this.extractRecyclingShare(pdfText, 'Kobalt');
-    const recyclingAnteilLithium = this.extractRecyclingShare(pdfText, 'Lithium');
-    const recyclingAnteilNickel = this.extractRecyclingShare(pdfText, 'Nickel');
-    const recyclingAnweisungen = this.extractRecyclingInstructions(pdfText);
-    // Zusätzliche Felder
-    const seriennummer = this.extractSerialNumber(pdfText);
-    const nennspannungV = this.extractVoltage(pdfText);
-    const gewichtKg = this.extractWeightKg(pdfText);
-    const zertifizierungsstelle = this.extractCertificationBody(pdfText);
-    const referenznummer = this.extractReferenceNumber(pdfText);
-    const rechtlicheHinweise = this.extractLegalNotes(pdfText);
+    const hersteller = e.hersteller || '';
+    const modellname = e.modellname || '';
+    const kapazitaetKWh = e.capacityKwh ?? 0;
+    const chemischesSystem = e.chemistry || '';
 
-    const missingFields = [];
+    const missingFields: string[] = [];
     if (!hersteller) missingFields.push('Hersteller');
     if (!modellname) missingFields.push('Modellname');
     if (!kapazitaetKWh) missingFields.push('Kapazität');
@@ -171,48 +151,39 @@ export class MockLocalProvider implements AIProvider {
 
     const confidence = (4 - missingFields.length) / 4;
 
-    const result: AIExtractionOutput = {
+    console.log('✅ Battery Extraktion:', { hersteller, modellname, kapazitaetKWh, confidence: confidence.toFixed(2) });
+
+    return {
       productType: 'BATTERY',
       confidence,
       extractedFields: {
         type: 'BATTERY',
-        hersteller: hersteller || '',
-        modellname: modellname || '',
-        kapazitaetKWh: kapazitaetKWh || 0,
-        chemischesSystem: chemischesSystem || '',
-        seriennummer: seriennummer || undefined,
-        nennspannungV: nennspannungV || undefined,
-        gewichtKg: gewichtKg || undefined,
-        batterietyp: batterietyp || undefined,
-        produktionsdatum: produktionsdatum || undefined,
-        co2FussabdruckKgGesamt: co2FussabdruckTotal || undefined,
-        co2FussabdruckKgProKwh: co2Fussabdruck || undefined,
-        erwarteteLebensdauerLadezyklen: lebensdauer || undefined,
-        reparierbarkeitsIndex: reparierbarkeitsIndex || undefined,
-        ersatzteileVerfuegbarkeitJahre: ersatzteileVerfuegbarkeit || undefined,
-        recyclinganteilKobalt: recyclingAnteilKobalt !== undefined ? recyclingAnteilKobalt : undefined,
-        recyclinganteilLithium: recyclingAnteilLithium !== undefined ? recyclingAnteilLithium : undefined,
-        recyclinganteilNickel: recyclingAnteilNickel !== undefined ? recyclingAnteilNickel : undefined,
-        recyclingAnweisungen: recyclingAnweisungen || undefined,
-        zertifizierungsstelle: zertifizierungsstelle || undefined,
-        referenznummer: referenznummer || undefined,
-        rechtlicheHinweise: rechtlicheHinweise || undefined,
+        hersteller,
+        modellname,
+        kapazitaetKWh,
+        chemischesSystem,
+        seriennummer:                   e.serialNumber,
+        nennspannungV:                  e.nominalVoltageV,
+        gewichtKg:                      e.weightKg,
+        batterietyp:                    e.batteryType,
+        produktionsdatum:               e.productionDate,
+        co2FussabdruckKgGesamt:         e.carbonFootprint?.totalKg,
+        co2FussabdruckKgProKwh:         e.carbonFootprint?.perKwhKg,
+        erwarteteLebensdauerLadezyklen: e.lifecycle?.expectedCycles,
+        reparierbarkeitsIndex:          e.lifecycle?.repairabilityScore,
+        ersatzteileVerfuegbarkeitJahre: e.lifecycle?.sparePartsAvailableYears,
+        recyclinganteilKobalt:          e.recycledContent?.cobaltPct,
+        recyclinganteilLithium:         e.recycledContent?.lithiumPct,
+        recyclinganteilNickel:          e.recycledContent?.nickelPct,
+        recyclingAnweisungen:           e.endOfLife?.recyclingInstructions,
+        zertifizierungsstelle:          e.certificationBody,
+        referenznummer:                 e.regulatoryReference,
+        rechtlicheHinweise:             e.legalNotes,
       } as any,
       warnings: missingFields.length > 0
         ? [`Fehlende Felder: ${missingFields.join(', ')}`]
         : [],
     };
-
-    console.log('✅ Battery Extraktion: ', {
-      hersteller: (result.extractedFields as any).hersteller,
-      modellname: (result.extractedFields as any).modellname,
-      kapazitaet: (result.extractedFields as any).kapazitaetKWh,
-      co2: (result.extractedFields as any).co2FussabdruckKgProKwh,
-      lebensdauer: (result.extractedFields as any).erwarteteLebensdauerLadezyklen,
-      confidence: confidence.toFixed(2),
-    });
-
-    return result;
   }
 
   private extractBatteryManufacturer(text: string): string {

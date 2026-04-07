@@ -613,6 +613,7 @@ export default function CreateDashboard() {
                 <QRCodeDisplay 
                   productId={dpp.id}
                   productName={dpp.modellname || dpp.type}
+                  productData={dpp as any}
                 />
               )}
             </div>

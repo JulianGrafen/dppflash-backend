@@ -14,14 +14,29 @@ import {
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ d?: string }>;
 }
 
-export default async function ProductPage({ params }: PageProps) {
+export default async function ProductPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { d } = await searchParams;
 
   console.log(`🔍 Suche Produkt mit ID: ${id}`);
 
-  const product = await getProductById(id) as any;
+  let product = await getProductById(id) as any;
+
+  // Fallback: decode product data from URL param (set by QRCodeDisplay)
+  if (!product && d) {
+    try {
+      const decoded = JSON.parse(decodeURIComponent(d));
+      if (decoded?.id && decoded?.type) {
+        product = decoded;
+        console.log(`✅ Produkt aus URL-Parameter geladen: ${id}`);
+      }
+    } catch {
+      console.warn('❌ Fehler beim Dekodieren des URL-Parameters');
+    }
+  }
 
   if (!product) {
     console.error(`❌ Produkt nicht gefunden: ${id}`);

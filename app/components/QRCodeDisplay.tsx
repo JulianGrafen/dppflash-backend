@@ -6,6 +6,7 @@ import { Download, Share2, Copy, Check } from 'lucide-react';
 interface QRCodeDisplayProps {
   productId: string;
   productName: string;
+  productData?: Record<string, any>; // Full product data encoded into QR URL
   qrCodeDataUrl?: string; // Base64 PNG oder Data URL
   gtin?: string; // Optional GS1 Nummer
 }
@@ -22,6 +23,7 @@ interface QRCodeDisplayProps {
 export default function QRCodeDisplay({
   productId,
   productName,
+  productData,
   qrCodeDataUrl,
   gtin,
 }: QRCodeDisplayProps) {
@@ -32,7 +34,12 @@ export default function QRCodeDisplay({
   const baseUrl = typeof window !== 'undefined'
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_DPP_URL || 'http://localhost:3000');
-  const dppLink = `${baseUrl}/p/${productId}`;
+  
+  // Encode product data into URL so the QR code works even without server-side persistence
+  const dataParam = productData
+    ? '?d=' + encodeURIComponent(JSON.stringify(productData))
+    : '';
+  const dppLink = `${baseUrl}/p/${productId}${dataParam}`;
 
   // Generiere QR-Code wenn nicht vorhanden
   useEffect(() => {

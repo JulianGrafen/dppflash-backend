@@ -15,6 +15,29 @@
 
 import type { RawPdfContent } from '../types/extraction';
 
+// ─── Quality gate ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns true when the string is probably binary garbage rather than real text.
+ *
+ * PDFs with embedded CIDFonts expose binary glyph IDs as Latin-1 characters in
+ * the range U+0080–U+00FF.  We tolerate German umlauts (Ä Ö Ü ä ö ü ß) and
+ * the Euro sign, but anything else in that range signals a bad decode.
+ *
+ * Threshold: > 10 % "suspicious extended" chars flagged → garbage.
+ */
+const GERMAN_EXTENDED = new Set([0xc4, 0xd6, 0xdc, 0xe4, 0xf6, 0xfc, 0xdf, 0x20ac]);
+
+function looksLikeBinary(text: string): boolean {
+  if (text.length < 20) return false;
+  let suspicious = 0;
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.codePointAt(i) ?? 0;
+    if (cp > 0x7f && !GERMAN_EXTENDED.has(cp)) suspicious++;
+  }
+  return suspicious / text.length > 0.10;
+}
+
 // ─── Junk-line filter ─────────────────────────────────────────────────────────
 
 /** PDF structural tokens that leak through text extraction and must be removed. */
@@ -182,11 +205,16 @@ export async function readPdf(
     try {
       const raw = await run();
       const text = stripJunk(raw);
-      if (text.length >= MIN_USABLE_LENGTH) {
-        outcome = { text, strategy: name };
-        break;
+      if (text.length < MIN_USABLE_LENGTH) {
+        console.debug(`[PdfReader] ${name}: ${text.length} chars — too short, trying next`);
+        continue;
       }
-      console.debug(`[PdfReader] ${name}: ${text.length} chars — too short, trying next`);
+      if (looksLikeBinary(text)) {
+        console.warn(`[PdfReader] ${name}: output looks like binary garbage (high extended-char ratio), skipping`);
+        continue;
+      }
+      outcome = { text, strategy: name };
+      break;
     } catch (err) {
       console.warn(
         `[PdfReader] ${name} failed: ${err instanceof Error ? err.message : err}`,

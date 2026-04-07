@@ -217,13 +217,14 @@ export async function extractPdfText(
   try {
     let textContent = '';
 
-    // Strategie 1: pdf-parse (reines Node.js, funktioniert auf Vercel)
+    // Strategie 1: pdf-parse v2 (PDFParse class API, funktioniert auf Vercel)
     try {
-      const pdfParseModule = await import('pdf-parse');
-      const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
-      const parsed = await pdfParse(pdfBuffer);
-      if (parsed.text && parsed.text.trim().length > 20) {
-        const cleaned = cleanPdfText(parsed.text);
+      const { PDFParse } = await import('pdf-parse') as any;
+      const parser = new PDFParse({ data: pdfBuffer });
+      const parsed = await parser.getText();
+      const raw: string = parsed?.text ?? '';
+      if (raw.trim().length > 20) {
+        const cleaned = cleanPdfText(raw);
         if (cleaned.length > 20) {
           textContent = cleaned;
           console.log(`📄 PDF mit pdf-parse extrahiert (bereinigt): ${textContent.length} Zeichen`);

@@ -61,15 +61,6 @@ export default function CreateDashboard() {
       log('PDF processed successfully', result);
       setExtractedData(result);
 
-      // Überprüfe, ob erforderliche Felder extrahiert wurden
-      if (!result.extractedData?.hersteller || !result.extractedData?.modellname) {
-        throw new Error(
-          `PDF-Extraktion unvollständig: ${!result.extractedData?.hersteller ? 'Hersteller' : 'Modellname'} konnte nicht erkannt werden. Bitte überprüfen Sie die PDF-Datei.`
-        );
-      }
-
-      // Das Produkt wurde bereits im Upload-Schritt vollständig gespeichert.
-      // Wir nutzen die zurückgegebene productId direkt — kein zweiter Speichervorgang.
       const { productType, ...allExtractedFields } = result.extractedData;
       const savedDpp: ProductPassport = {
         id: result.productId,
@@ -79,7 +70,16 @@ export default function CreateDashboard() {
       } as any;
 
       setDpp(savedDpp);
-      setStep('result');
+
+      // Wenn Pflichtfelder fehlen → Form zum Nachbearbeiten öffnen, nicht abbrechen
+      if (!result.extractedData?.hersteller || !result.extractedData?.modellname) {
+        setErrorMessage(
+          `Einige Felder konnten nicht automatisch erkannt werden (${!result.extractedData?.hersteller ? 'Hersteller' : 'Modellname'}). Bitte ergänzen Sie die Daten unten.`
+        );
+        setStep('form');
+      } else {
+        setStep('result');
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unbekannter Fehler';
       log('PDF upload error:', msg);

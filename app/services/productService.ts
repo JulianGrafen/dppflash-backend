@@ -39,21 +39,14 @@ export async function saveProduct(
     throw new Error('Pflichtfelder erforderlich: hersteller, modellname, type');
   }
 
+  // Spread ALL incoming fields — never drop anything from the PDF extraction
   const completeProduct: ProductPassport = {
+    ...product,
     id,
-    createdAt,
+    createdAt: createdAt as Date,
     hersteller: product.hersteller,
     modellname: product.modellname,
     type: product.type,
-    // Type-spezifische Felder
-    ...(product.type === 'BATTERY' && {
-      kapazitaetKWh: (product as any).kapazitaetKWh || 0,
-      chemischesSystem: (product as any).chemischesSystem || '',
-    }),
-    ...(product.type === 'TEXTILE' && {
-      materialZusammensetzung: (product as any).materialZusammensetzung || '',
-      herkunftsland: (product as any).herkunftsland || '',
-    }),
   } as ProductPassport;
 
   // MVP: Speichern in Global Store

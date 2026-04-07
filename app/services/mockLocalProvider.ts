@@ -147,6 +147,7 @@ export class MockLocalProvider implements AIProvider {
     const batterietyp = this.extractBatteryType(pdfText);
     const produktionsdatum = this.extractProductionDate(pdfText);
     const co2Fussabdruck = this.extractCO2Footprint(pdfText);
+    const co2FussabdruckTotal = this.extractCO2Total(pdfText);
     const lebensdauer = this.extractLifespan(pdfText);
     const reparierbarkeitsIndex = this.extractRepairabilityIndex(pdfText);
     const ersatzteileVerfuegbarkeit = this.extractSparePartsAvailability(pdfText);
@@ -154,6 +155,13 @@ export class MockLocalProvider implements AIProvider {
     const recyclingAnteilLithium = this.extractRecyclingShare(pdfText, 'Lithium');
     const recyclingAnteilNickel = this.extractRecyclingShare(pdfText, 'Nickel');
     const recyclingAnweisungen = this.extractRecyclingInstructions(pdfText);
+    // Zusätzliche Felder
+    const seriennummer = this.extractSerialNumber(pdfText);
+    const nennspannungV = this.extractVoltage(pdfText);
+    const gewichtKg = this.extractWeightKg(pdfText);
+    const zertifizierungsstelle = this.extractCertificationBody(pdfText);
+    const referenznummer = this.extractReferenceNumber(pdfText);
+    const rechtlicheHinweise = this.extractLegalNotes(pdfText);
 
     const missingFields = [];
     if (!hersteller) missingFields.push('Hersteller');
@@ -172,16 +180,23 @@ export class MockLocalProvider implements AIProvider {
         modellname: modellname || '',
         kapazitaetKWh: kapazitaetKWh || 0,
         chemischesSystem: chemischesSystem || '',
+        seriennummer: seriennummer || undefined,
+        nennspannungV: nennspannungV || undefined,
+        gewichtKg: gewichtKg || undefined,
         batterietyp: batterietyp || undefined,
         produktionsdatum: produktionsdatum || undefined,
+        co2FussabdruckKgGesamt: co2FussabdruckTotal || undefined,
         co2FussabdruckKgProKwh: co2Fussabdruck || undefined,
         erwarteteLebensdauerLadezyklen: lebensdauer || undefined,
         reparierbarkeitsIndex: reparierbarkeitsIndex || undefined,
         ersatzteileVerfuegbarkeitJahre: ersatzteileVerfuegbarkeit || undefined,
-        recyclinganteilKobalt: recyclingAnteilKobalt || undefined,
-        recyclinganteilLithium: recyclingAnteilLithium || undefined,
-        recyclinganteilNickel: recyclingAnteilNickel || undefined,
+        recyclinganteilKobalt: recyclingAnteilKobalt !== undefined ? recyclingAnteilKobalt : undefined,
+        recyclinganteilLithium: recyclingAnteilLithium !== undefined ? recyclingAnteilLithium : undefined,
+        recyclinganteilNickel: recyclingAnteilNickel !== undefined ? recyclingAnteilNickel : undefined,
         recyclingAnweisungen: recyclingAnweisungen || undefined,
+        zertifizierungsstelle: zertifizierungsstelle || undefined,
+        referenznummer: referenznummer || undefined,
+        rechtlicheHinweise: rechtlicheHinweise || undefined,
       } as any,
       warnings: missingFields.length > 0
         ? [`Fehlende Felder: ${missingFields.join(', ')}`]
@@ -201,13 +216,12 @@ export class MockLocalProvider implements AIProvider {
   }
 
   private extractBatteryManufacturer(text: string): string {
-    // Strategie 1: Kontext-basierte Extraktion mit flexiblen Patterns
-    // Wichtig: Nur bis zum nächsten Zeilenumbruch oder Komma akzeptieren
+    // Strategie 1: Kontext-basierte Extraktion.
+    // Lookahead stoppt vor dem nächsten "Label:" Muster (z.B. "Modellname:", "Seriennummer:")
+    const labelBoundary = /\s+[A-ZÄÖÜ][a-zäöü][a-zA-ZäöüÄÖÜß\s\-]*\s*:/;
     const contextPatterns = [
-      // "Hersteller:" oder "Manufacturer:" mit max 60 Zeichen bis Zeilenumbruch
-      /(?:hersteller|manufacturer|maker|brand|produzent|producer|fabrikant)[\s:]+([^\n,;]{2,80}?)[\n,;$]/i,
-      // Text zwischen spezifischen Markierungen - längere Captures
-      /^(?:unternehmen|company)[\s:]+([^\n,;]{2,80}?)[\n,;$]/im,
+      /(?:hersteller|manufacturer|maker|brand|produzent|producer|fabrikant)[\s:]+(.+?)(?=\s+[A-ZÄÖÜ][a-zäöü][a-zA-ZäöüÄÖÜß\s\-]*\s*:|\n|,|;|$)/i,
+      /^(?:unternehmen|company)[\s:]+(.+?)(?=\s+[A-ZÄÖÜ][a-zäöü][a-zA-ZäöüÄÖÜß\s\-]*\s*:|\n|,|;|$)/im,
     ];
 
     for (const pattern of contextPatterns) {
@@ -546,13 +560,11 @@ export class MockLocalProvider implements AIProvider {
   }
 
   private extractProductModel(text: string): string {
-    // Strategie 1: Kontext-basierte Extraktion - nach Schlüsselwörtern suchen
-    // Diese Patterns erlauben mehrere Wörter und verschiedene Formate
+    // Strategie 1: Kontext-basierte Extraktion.
+    // Lookahead stoppt vor dem nächsten "Label:" Muster (z.B. "Seriennummer:", "Herstellungsdatum:")
     const contextPatterns = [
-      // "Modellname:" oder "Model:" gefolgt von bis zu 50 Zeichen bis Zeilenumbruch
-      /(?:modellname|produktname|product name|modell|model)[\s:]+([A-Z][^\n,;]{2,60}?)(?:\n|,|;|$|—|by)/i,
-      // Nach "Product:" oder "Batteriemodell:" suchen
-      /(?:product|batterie)[\s:]+([A-Z][^\n]{2,60}?)(?:\n|,|@|—|\d{3,})/i,
+      /(?:modellname|produktname|product name|modell|model)[\s:]+([^\n,;]+?)(?=\s+[A-ZÄÖÜ][a-zäöü][a-zA-ZäöüÄÖÜß\s\-]*\s*:|\n|,|;|$)/i,
+      /(?:product|batterie)[\s:]+([^\n,;]+?)(?=\s+[A-ZÄÖÜ][a-zäöü][a-zA-ZäöüÄÖÜß\s\-]*\s*:|\n|@|—|\d{4,}|$)/i,
       // Suche nach Muster mit bekannten Model-Qualifizierern (Pro, Plus, Max, Standard, etc.)
       /\b([A-Z][a-zA-Z0-9\s\-]{3,50}?(?:Pro|Plus|Max|Standard|X|T|S|SE|XL|L|M|TL|GT)\b[0-9A-Z\-\d]*)\b/i,
       // Allgemeines Muster: Großbuchstabe + alphanumerisch + Zahlen (z.B. PowerCell Pro T100)
@@ -673,22 +685,30 @@ export class MockLocalProvider implements AIProvider {
   }
 
   private extractProductionDate(text: string): Date | undefined {
-    // Produktionsdatum Pattern (DD.MM.YYYY oder ähnlich)
     const patterns = [
-      /(?:produktionsdatum|production date|manufact(?:ured|uring) date|date)[\s:]*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/i,
-      /(\d{4})-(\d{2})-(\d{2})/,  // ISO-Format
+      /(?:produktionsdatum|herstellungsdatum|production date|manufacturing date|manufact(?:ured|uring) date)[\s:]*(\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4})/i,
+      /(\d{4})-(\d{2})-(\d{2})/,
     ];
-    
+
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match?.[1]) {
         try {
-          // Versuche zu parsen
           const dateStr = match[1];
-          const parsed = new Date(dateStr);
-          if (!isNaN(parsed.getTime())) {
-            console.log(`✓ Produktionsdatum: ${parsed.toLocaleDateString('de-DE')}`);
-            return parsed;
+          // Handle German DD.MM.YYYY format
+          const parts = dateStr.split(/[.\/-]/);
+          if (parts.length === 3) {
+            let year: number, month: number, day: number;
+            if (parseInt(parts[0]) > 1000) {
+              [year, month, day] = parts.map(Number); // YYYY-MM-DD
+            } else {
+              [day, month, year] = parts.map(Number); // DD.MM.YYYY
+            }
+            const parsed = new Date(year, month - 1, day);
+            if (!isNaN(parsed.getTime())) {
+              console.log(`✓ Produktionsdatum: ${parsed.toLocaleDateString('de-DE')}`);
+              return parsed;
+            }
           }
         } catch (e) {
           // Ignorieren und weitermachen
@@ -698,19 +718,48 @@ export class MockLocalProvider implements AIProvider {
     return undefined;
   }
 
+  private parseGermanNumber(str: string): number {
+    // "24.500" (thousands sep) → 24500, "24,5" (decimal) → 24.5, "1.234,56" → 1234.56
+    if (/^\d{1,3}(\.\d{3})+$/.test(str)) return parseFloat(str.replace(/\./g, ''));
+    if (str.includes(',') && !str.includes('.')) return parseFloat(str.replace(',', '.'));
+    if (str.includes('.') && str.includes(',')) return parseFloat(str.replace(/\./g, '').replace(',', '.'));
+    return parseFloat(str);
+  }
+
   private extractCO2Footprint(text: string): number | undefined {
-    // CO2-Fußabdruck Pattern
+    // CO2-Fußabdruck per kWh — "450 kg CO2e pro kWh" or "450 kg CO2e / kWh"
     const patterns = [
-      /(?:co2|CO2|carbon footprint)[\s:]*(\d+(?:[.,]\d+)?)\s*(?:kg|kg co2e)/i,
-      /(\d+(?:[.,]\d+)?)\s*(?:kg co2e|kg\s*CO2)/i,
+      /([0-9][0-9.,]*)\s*(?:kg\s*)?co2(?:e)?\s*(?:pro|per|\/)\s*kwh/i,
+      /co2[\w\s\-]*(?:pro|per|\/)\s*kwh[\s:]*([0-9][0-9.,]*)/i,
     ];
-    
+
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match?.[1]) {
-        const value = parseFloat(match[1].replace(',', '.'));
+        const value = this.parseGermanNumber(match[1]);
         if (value > 0 && value < 100000) {
-          console.log(`✓ CO2-Fußabdruck: ${value} kg CO2e/kWh`);
+          console.log(`✓ CO2-Fußabdruck/kWh: ${value}`);
+          return value;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private extractCO2Total(text: string): number | undefined {
+    // Gesamt-CO2-Fußabdruck — e.g. "24.500 kg CO2e (Cradle-to-Gate)"
+    const patterns = [
+      /co2[\w\s\-]*(?:fußabdruck|footprint|fussabdruck)[\s:]*([0-9][0-9.,]*)\s*(?:kg|t(?:o[n])?)/i,
+      /([0-9][0-9.,]*)\s*kg\s*co2e/i,
+      /([0-9][0-9.,]*)\s*kg\s*co2(?!\s*e?\s*\/)/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) {
+        const value = this.parseGermanNumber(match[1]);
+        if (value > 0 && value < 10_000_000) {
+          console.log(`✓ CO2 gesamt: ${value} kg CO2e`);
           return value;
         }
       }
@@ -721,19 +770,20 @@ export class MockLocalProvider implements AIProvider {
   private extractLifespan(text: string): number | undefined {
     // Lebensdauer Pattern (Ladezyklen) - mehrere Varianten
     const patterns = [
-      /(?:lebensdauer|lifespan|lade?zyklen|cycles|cycle life)[\s:=]*(\d{1,5})/i,
-      /(?:bis zu|up to|~|approximately|approx)\s*(\d{1,5})\s*(?:ladezyklen|cycles|cycle)/i,
-      /(?:vollzyklus|full cycle|charge cycle)[\s:=]*(\d{1,5})/i,
+      // German thousands separator support: "5.000" or "5,000"
+      /(?:lebensdauer|lifespan|lade?zyklen|cycles|cycle life)[\s:=]*(\d{1,3}(?:[.,]\d{3})*|\d+)/i,
+      /(?:bis zu|up to|~|approximately|approx)\s*(\d{1,3}(?:[.,]\d{3})*|\d+)\s*(?:ladezyklen|cycles|cycle)/i,
+      /(?:vollzyklus|full cycle|charge cycle)[\s:=]*(\d{1,3}(?:[.,]\d{3})*|\d+)/i,
       // Suche nach Zahlen gefolgt von "cycles" oder "Zyklen"
-      /(\d{3,5})\s*(?:load cycle|charge cycle|lade?zyklen|cycles)/i,
+      /(\d{1,3}(?:[.,]\d{3})+|\d{3,5})\s*(?:load cycle|charge cycle|lade?zyklen|cycles)/i,
       // Kontextuell: "1000-2000" Zyklen
-      /(\d{4,5})\s*(?:lade?zyklen|full cycles)/i,
+      /(\d{1,3}(?:[.,]\d{3})+|\d{4,5})\s*(?:lade?zyklen|full cycles)/i,
     ];
     
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match?.[1]) {
-        const value = parseInt(match[1]);
+        const value = this.parseGermanNumber(match[1]);
         if (value > 100 && value < 100000) {
           console.log(`✓ Erwartete Lebensdauer: ${value} Ladezyklen`);
           return value;
@@ -772,7 +822,8 @@ export class MockLocalProvider implements AIProvider {
     // Reparierbarkeits-Index Pattern - sehr flexible Suche
     const patterns = [
       // Explizite Patterns mit verschiedenen Schreibweisen
-      /(?:reparierbarkeit|reparierbarkeits|repairability)(?:\s+index)?[\s:=]*(\d+(?:[.,]\d+)?)\s*\/\s*10/i,
+      /(?:reparierbarkeit|reparierbarkeits|repairability)(?:[\-\s]+index)?[\s:=]*(\d+(?:[.,]\d+)?)\s*\/\s*10/i,
+      /(?:reparierbarkeit|reparierbarkeits|repairability)-index[\s:=]*(\d+(?:[.,]\d+)?)/i,
       /reparierbarkeitsindex[\s:=]*(\d+(?:[.,]\d+)?)/i,
       /(?:repairability score|repair index|repair score)[\s:=]*(\d+(?:[.,]\d+)?)/i,
       // Zahlen zwischen 0 und 10 mit "Reparierbarkeit" Kontext
@@ -811,6 +862,9 @@ export class MockLocalProvider implements AIProvider {
   private extractSparePartsAvailability(text: string): number | undefined {
     // Verfügbarkeit von Ersatzteilen (Jahre) - sehr flexible Suche
     const patterns = [
+      // "Verfügbarkeit von Ersatzteilen: 10 Jahre" (word order: availability first)
+      /verfügbarkeit\s+von\s+ersatzteilen?[\s:]*(\d{1,3})\s*(?:jahre|years|jahr|year)/i,
+      /(?:availability|verfügbarkeit)\s+(?:of|von)\s+(?:spare parts|ersatzteilen?)[\s:]*(\d{1,3})\s*(?:jahre|years|jahr|year)/i,
       // Explizite Muster mit verschiedenen Schreibweisen
       /(?:ersatzteile|spare parts|spareparts)[\s:]*(?:verfügbar|available)[\s:]*(\d{1,3})\s*(?:jahre|years|jahr|year)/i,
       /(?:ersatzteile|spare parts)[\s:]*(\d{1,3})\s*(?:jahre|years|jahr|year)/i,
@@ -866,15 +920,21 @@ export class MockLocalProvider implements AIProvider {
   }
 
   private extractRecyclingShare(text: string, material: string): number | undefined {
-    // Recyclinganteil nach Material (z.B. Kobalt 15%, Lithium 8%, etc.)
-    const pattern = new RegExp(`${material}\\s*\\(?(\\d+(?:[.,]\\d+)?)\\s*%`, 'i');
-    const match = text.match(pattern);
-    
-    if (match?.[1]) {
-      const value = parseFloat(match[1].replace(',', '.'));
-      if (value >= 0 && value <= 100) {
-        console.log(`✓ Recyclinganteil ${material}: ${value}%`);
-        return value;
+    // Patterns: "Kobalt (15%)", "Kobalt: 15 %", "Recycling-Anteil Lithium: 12.5 %"
+    // Note: char class includes ( so " (" is handled
+    const patterns = [
+      new RegExp(`recycling[\\w\\s\\-]*${material}[\\s:)(]*([\\d.,]+)\\s*%`, 'i'),
+      new RegExp(`${material}[\\s:)(]*([\\d.,]+)\\s*%`, 'i'),
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) {
+        const value = parseFloat(match[1].replace(',', '.'));
+        if (value >= 0 && value <= 100) {
+          console.log(`✓ Recyclinganteil ${material}: ${value}%`);
+          return value;
+        }
       }
     }
     return undefined;
@@ -894,6 +954,79 @@ export class MockLocalProvider implements AIProvider {
         console.log(`✓ Recycling-Anweisungen: ${result.substring(0, 50)}...`);
         return result;
       }
+    }
+    return undefined;
+  }
+
+  private extractSerialNumber(text: string): string | undefined {
+    const match = text.match(/(?:seriennummer|serial\s*number|serial\s*no\.?)[\s:]+([A-Z0-9\-]+)/i);
+    if (match?.[1]) {
+      console.log(`✓ Seriennummer: ${match[1]}`);
+      return match[1].trim();
+    }
+    return undefined;
+  }
+
+  private extractVoltage(text: string): number | undefined {
+    const patterns = [
+      /(?:nennspannung|nominal voltage|spannung|voltage)[\s:]*([0-9][0-9.,]*)\s*[Vv]\b/i,
+      /([0-9]+)\s*[Vv]\b(?:\s*(?:nominal|Nenn))/i,
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) {
+        const value = this.parseGermanNumber(match[1]);
+        if (value > 0 && value < 100000) {
+          console.log(`✓ Nennspannung: ${value} V`);
+          return value;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private extractWeightKg(text: string): number | undefined {
+    const patterns = [
+      /(?:gewicht|weight|masse|mass)[\s:]*([0-9][0-9.,]*)\s*kg\b/i,
+      /([0-9][0-9.,]*)\s*kg\b(?![Wh\/])/i,
+    ];
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) {
+        const value = this.parseGermanNumber(match[1]);
+        if (value > 0 && value < 100000) {
+          console.log(`✓ Gewicht: ${value} kg`);
+          return value;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private extractCertificationBody(text: string): string | undefined {
+    const match = text.match(/(?:zertifizierungsstelle|certification body|certifying authority)[\s:]+([^\n.]+)/i);
+    if (match?.[1]) {
+      console.log(`✓ Zertifizierungsstelle: ${match[1].trim()}`);
+      return match[1].trim();
+    }
+    return undefined;
+  }
+
+  private extractReferenceNumber(text: string): string | undefined {
+    const match = text.match(/(?:referenznummer|reference\s*(?:no\.?|number)|ref\.?\s*nr\.?)[\s:]+([A-Z0-9\-]+)/i);
+    if (match?.[1]) {
+      console.log(`✓ Referenznummer: ${match[1]}`);
+      return match[1].trim();
+    }
+    return undefined;
+  }
+
+  private extractLegalNotes(text: string): string | undefined {
+    const match = text.match(/(?:rechtliche\s*hinweise|legal\s*notes?|rechtlicher\s*hinweis)[\s:\n]+([^\n]{20,300})/i);
+    if (match?.[1]) {
+      const note = match[1].trim().substring(0, 300);
+      console.log(`✓ Rechtliche Hinweise: ${note.substring(0, 50)}...`);
+      return note;
     }
     return undefined;
   }

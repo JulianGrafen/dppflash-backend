@@ -106,47 +106,15 @@ export async function POST(request: NextRequest) {
 
     // ===== RESPONSE MIT PRODUCT-LINK =====
     const responseData = {
-      productId, // ← WICHTIG: Geben Sie die ID zurück für direkten Link
-      productUrl: `/p/${productId}`, // ← Direkter Link zum Produktpass
+      productId,
+      productUrl: `/p/${productId}`,
       documentId: result.documentMetadata.id,
       fileName: result.documentMetadata.fileName,
       uploadedAt: result.documentMetadata.uploadedAt,
       extractedData: {
         productType: result.extractedData.productType,
-        // ALLE extrahierten Felder (gefiltert nach Produkttyp)
-        ...(extractedFields.hersteller && { hersteller: extractedFields.hersteller }),
-        ...(extractedFields.modellname && { modellname: extractedFields.modellname }),
-        // Battery-spezifische Felder
-        ...(result.extractedData.productType === 'BATTERY' && {
-          ...(extractedFields.kapazitaetKWh && { kapazitaetKWh: extractedFields.kapazitaetKWh }),
-          ...(extractedFields.chemischesSystem && { chemischesSystem: extractedFields.chemischesSystem }),
-          ...(extractedFields.batterietyp && { batterietyp: extractedFields.batterietyp }),
-          ...(extractedFields.produktionsdatum && { produktionsdatum: extractedFields.produktionsdatum }),
-          ...(extractedFields.co2FussabdruckKgProKwh && { co2FussabdruckKgProKwh: extractedFields.co2FussabdruckKgProKwh }),
-          ...(extractedFields.erwarteteLebensdauerLadezyklen && { erwarteteLebensdauerLadezyklen: extractedFields.erwarteteLebensdauerLadezyklen }),
-          ...(extractedFields.reparierbarkeitsIndex && { reparierbarkeitsIndex: extractedFields.reparierbarkeitsIndex }),
-          ...(extractedFields.ersatzteileVerfuegbarkeitJahre && { ersatzteileVerfuegbarkeitJahre: extractedFields.ersatzteileVerfuegbarkeitJahre }),
-          ...(extractedFields.recyclinganteilKobalt && { recyclinganteilKobalt: extractedFields.recyclinganteilKobalt }),
-          ...(extractedFields.recyclinganteilLithium && { recyclinganteilLithium: extractedFields.recyclinganteilLithium }),
-          ...(extractedFields.recyclinganteilNickel && { recyclinganteilNickel: extractedFields.recyclinganteilNickel }),
-          ...(extractedFields.recyclingAnweisungen && { recyclingAnweisungen: extractedFields.recyclingAnweisungen }),
-        }),
-        // Textile-spezifische Felder
-        ...(result.extractedData.productType === 'TEXTILE' && {
-          ...(extractedFields.materialZusammensetzung && { materialZusammensetzung: extractedFields.materialZusammensetzung }),
-          ...(extractedFields.herkunftsland && { herkunftsland: extractedFields.herkunftsland }),
-        }),
-        // Alle anderen Felder (für zukünftige Produkttypen)
-        // Filtern Sie Duplikate und interne Felder
-        ...Object.fromEntries(
-          Object.entries(extractedFields).filter(([key, value]) => {
-            const baseKeys = ['hersteller', 'modellname', 'id', 'type', 'createdAt'];
-            const batteryKeys = ['kapazitaetKWh', 'chemischesSystem', 'batterietyp', 'produktionsdatum', 'co2FussabdruckKgProKwh', 'erwarteteLebensdauerLadezyklen', 'reparierbarkeitsIndex', 'ersatzteileVerfuegbarkeitJahre', 'recyclinganteilKobalt', 'recyclinganteilLithium', 'recyclinganteilNickel', 'recyclingAnweisungen'];
-            const textileKeys = ['materialZusammensetzung', 'herkunftsland'];
-            const excludedKeys = [...baseKeys, ...batteryKeys, ...textileKeys];
-            return !excludedKeys.includes(key) && value !== undefined && value !== null && value !== '';
-          })
-        ),
+        // Return ALL extracted fields — let the client decide what to show
+        ...extractedFields,
       },
       confidence: result.extractedData.confidence,
       warnings: result.extractedData.warnings,

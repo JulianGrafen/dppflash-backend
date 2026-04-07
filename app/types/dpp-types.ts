@@ -1,68 +1,88 @@
 /**
+ * ===== DIGITALE PRODUKTPASS TYPEN =====
+ * 
+ * Unterstützt ALLE EU-Verordnungen für Produktpässe:
+ * - ESPR (Batterien) ab 2026
+ * - ESPR (Textilien) ab 2027
+ * - Digital Product Passport (Elektronik) geplant
+ * - Farben & Lacke (PCP) ab 2024
+ * - Schmierstoffe ab 2025
+ * - Reifen ab 2027
+ * - Kunststofferzeugnisse ab 2026
+ * - Waschmaschinen ab 2025
+ * - Kühlgeräte ab 2026
+ * - Beleuchtung ab 2026
+ * - Möbel ab 2027
+ * - Chemikalien ab 2028
+ */
+
+/**
  * Basis-Interface für alle Produktpässe.
- * Enthält Felder, die für jede EU-Regulierung (ESPR) identisch sind. 
+ * Enthält Felder, die für jede EU-Regulierung identisch sind. 
  */
 export interface BaseDPP {
   readonly id: string;
   readonly createdAt: Date;
+  readonly language: string; // ISO 639-1 Code: 'de', 'en', 'fr', 'it', 'es', etc.
   hersteller: string;
   modellname: string;
+  [key: string]: any; // Dynamische Felder
 }
 
 /**
- * Spezifische Anforderungen für Batterien (Pflicht ab 2026 nach ESPR). 
- * Enthält alle Felder aus EU-Verordnung 2023/2863 für Batterie-Zertifikate.
+ * Batterien (ESPR - ab 2026)
  */
 export interface BatteryDPP extends BaseDPP {
   readonly type: 'BATTERY';
-  // Basis-Spezifikationen
-  kapazitaetKWh: number;
-  chemischesSystem: string;
-  batterietyp?: string; // z.B. "Lithium-Ionen-Akku (>2 kWh)"
+  kapazitaetKWh?: number;
+  chemischesSystem?: string;
+  batterietyp?: string;
+  seriennummer?: string;
+  nennspannungV?: number;
+  gewichtKg?: number;
   produktionsdatum?: Date;
-  
-  // Nachhaltigkeit und Materialzusammensetzung
-  recyclinganteilKobalt?: number; // Prozentanteil
+  co2FussabdruckKgGesamt?: number;
+  co2FussabdruckKgProKwh?: number;
+  recyclinganteilKobalt?: number;
   recyclinganteilLithium?: number;
   recyclinganteilNickel?: number;
-  co2FussabdruckKgProKwh?: number;
-  
-  // Haltbarkeit und Wartung
   erwarteteLebensdauerLadezyklen?: number;
-  reparierbarkeitsIndex?: number; // z.B. 8.5 / 10
+  reparierbarkeitsIndex?: number;
   ersatzteileVerfuegbarkeitJahre?: number;
-  
-  // Entsorgung und Recycling
   recyclingAnweisungen?: string;
-  garantierteDataAvailabilityJahre?: number; // z.B. bis 2041
+  zertifizierungsstelle?: string;
+  referenznummer?: string;
+  rechtlicheHinweise?: string;
 }
 
 /**
- * Spezifische Anforderungen für Textilien (Pflicht ab ca. 2027). 
+ * Textilien (ESPR - ab 2027)
  */
 export interface TextileDPP extends BaseDPP {
   readonly type: 'TEXTILE';
-  materialZusammensetzung: string;
-  herkunftsland: string;
-  [key: string]: any; // Erlaubt zusätzliche Felder
+  materialZusammensetzung?: string;
+  herkunftsland?: string;
+  verarbeitungsland?: string;
+  pflegehinweise?: string;
+  nachhaltigkeit?: string;
 }
 
 /**
- * Spezifische Anforderungen für Elektronik/Computer/Geräte.
+ * Elektronik & Digital Produkte (geplant)
  */
 export interface ElectronicsDPP extends BaseDPP {
   readonly type: 'ELECTRONICS';
   produkttyp?: string;
   stromverbrauch?: number;
   energieeffizienzklasse?: string;
-  rohstoffgewinnung?: string;
-  haltbarkeit?: string;
-  reparierbarkit?: string;
-  [key: string]: any; // Erlaubt zusätzliche Felder
+  lebensdauer?: number;
+  reparierbarkeit?: string;
+  updatefrequenz?: string;
+  sicherheitsmerkmale?: string;
 }
 
 /**
- * Spezifische Anforderungen für Möbel/Furniture.
+ * Möbel (ab 2027)
  */
 export interface FurnitureDPP extends BaseDPP {
   readonly type: 'FURNITURE';
@@ -70,19 +90,116 @@ export interface FurnitureDPP extends BaseDPP {
   abmessungen?: string;
   gewicht?: number;
   zerlegbarkeit?: string;
-  [key: string]: any; // Erlaubt zusätzliche Felder
+  nachhaltigkeitszertifikat?: string;
+  herkunftslander?: string[];
 }
 
 /**
- * Spezifische Anforderungen für Chemikalien/Chemicals.
+ * Farben & Lacke (PCP - ab 2024)
+ */
+export interface PaintDPP extends BaseDPP {
+  readonly type: 'PAINT';
+  zusammensetzung?: string;
+  gefahrenstoffe?: string[];
+  verwendung?: string;
+  lagerbedingungen?: string;
+  entsorgungshinweise?: string;
+  voc?: number; // Volatile Organic Compounds
+}
+
+/**
+ * Schmierstoffe (ab 2025)
+ */
+export interface LubricantDPP extends BaseDPP {
+  readonly type: 'LUBRICANT';
+  zusammensetzung?: string;
+  viskositaet?: string;
+  temperaturbereich?: string;
+  gefahrenstoffe?: string[];
+  umweltfreundlichkeit?: string;
+  verwendungsbereich?: string;
+}
+
+/**
+ * Reifen (ab 2027)
+ */
+export interface TyreDPP extends BaseDPP {
+  readonly type: 'TYRE';
+  reifengross?: string;
+  lastindex?: string;
+  geschwindigkeitsindex?: string;
+  energieeffizienz?: string;
+  nassgriffleistung?: string;
+  aussengeraeusch?: number;
+  recyclingmerkmale?: string;
+}
+
+/**
+ * Kunststofferzeugnisse (ab 2026)
+ */
+export interface PlasticDPP extends BaseDPP {
+  readonly type: 'PLASTIC';
+  kunststoffart?: string;
+  recyclinggehalt?: number;
+  recyclingfaehigkeit?: string;
+  abbaubarkeit?: string;
+  herkunftsrohstoffe?: string;
+  verwendungszweck?: string;
+}
+
+/**
+ * Waschmaschinen (ab 2025)
+ */
+export interface WasherDPP extends BaseDPP {
+  readonly type: 'WASHER';
+  energie_kwh?: number;
+  wasser_liter?: number;
+  kapazitaet_kg?: number;
+  geraeusch_db?: number;
+  haltbarkeit_jahre?: number;
+  reparierbarkeit?: string;
+  ersatzteilverlfuegbarkeit?: number;
+}
+
+/**
+ * Kühlgeräte (ab 2026)
+ */
+export interface RefrigeratorDPP extends BaseDPP {
+  readonly type: 'REFRIGERATOR';
+  volumen_liter?: number;
+  energieverbrauch_kwh?: number;
+  klimaklasse?: string;
+  geraeusch_db?: number;
+  kuehlmittel?: string;
+  energieeffizienz?: string;
+  haltbarkeit_jahre?: number;
+}
+
+/**
+ * Beleuchtung (ab 2026)
+ */
+export interface LightingDPP extends BaseDPP {
+  readonly type: 'LIGHTING';
+  leuchtenart?: string;
+  leistung_watt?: number;
+  lichtstrom_lumen?: number;
+  farbtemperatur_kelvin?: number;
+  lebensdauer_std?: number;
+  energieeffizienzklasse?: string;
+  quecksilbergehalt?: string;
+}
+
+/**
+ * Chemikalien allgemein (ab 2028)
  */
 export interface ChemicalDPP extends BaseDPP {
   readonly type: 'CHEMICAL';
   zusammensetzung?: string;
   gefahrenstoffe?: string[];
   verwendung?: string;
-  entsorgung?: string;
-  [key: string]: any; // Erlaubt zusätzliche Felder
+  lagerbedingungen?: string;
+  entsorgungshinweise?: string;
+  sicherheitsdatenblatt?: string;
 }
 
 /**
@@ -90,12 +207,26 @@ export interface ChemicalDPP extends BaseDPP {
  */
 export interface GenericDPP extends BaseDPP {
   readonly type: 'OTHER';
-  [key: string]: any; // Alle Felder sind dynamisch
+  [key: string]: any;
 }
 
-/** * Union Type für einfache Erweiterbarkeit um künftige Kategorien wie Möbel oder Elektronik. 
+/**
+ * Union Type für alle Produktpässe - automatische Erweiterbarkeit
  */
-export type ProductPassport = BatteryDPP | TextileDPP | ElectronicsDPP | FurnitureDPP | ChemicalDPP | GenericDPP;
+export type ProductPassport = 
+  | BatteryDPP 
+  | TextileDPP 
+  | ElectronicsDPP 
+  | FurnitureDPP 
+  | PaintDPP 
+  | LubricantDPP 
+  | TyreDPP 
+  | PlasticDPP 
+  | WasherDPP 
+  | RefrigeratorDPP 
+  | LightingDPP 
+  | ChemicalDPP 
+  | GenericDPP;
 
 /**
  * Document Upload Metadaten – speichert Informationen über hochgeladene PDFs.

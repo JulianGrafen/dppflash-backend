@@ -59,7 +59,6 @@ export default function CreateDashboard() {
 
       const result = await response.json();
       log('PDF processed successfully', result);
-      log('Response extractedData:', result.extractedData);
       setExtractedData(result);
 
       // Überprüfe, ob erforderliche Felder extrahiert wurden
@@ -69,28 +68,18 @@ export default function CreateDashboard() {
         );
       }
 
-      // Erkenne Produkttyp aus extractedData
-      const detectedType = result.extractedData?.productType || 'BATTERY';
-      
-      // Erstelle neues Produkt basierend auf extrahierten Daten
-      const newDpp = DPPFactory.createEmptyPassport(detectedType);
-      log('Created empty passport:', newDpp);
-      
-      // Merge die extrahierten Felder direkt (ohne extractedFields Wrapper)
-      if (result.extractedData && typeof result.extractedData === 'object') {
-        // Kopiere alle Felder außer productType (das ist nicht in ProductPassport)
-        const { productType, ...fieldsToMerge } = result.extractedData;
-        log('Fields to merge:', fieldsToMerge);
-        Object.assign(newDpp, fieldsToMerge);
-        log('Merged fields result:', newDpp);
-      }
+      // Das Produkt wurde bereits im Upload-Schritt vollständig gespeichert.
+      // Wir nutzen die zurückgegebene productId direkt — kein zweiter Speichervorgang.
+      const { productType, ...allExtractedFields } = result.extractedData;
+      const savedDpp: ProductPassport = {
+        id: result.productId,
+        type: productType || 'BATTERY',
+        createdAt: new Date(),
+        ...allExtractedFields,
+      } as any;
 
-      setDpp(newDpp);
-      log('Final newDpp before autoSave:', newDpp);
-      
-      // AUTO-SAVE: Speichere Produkt direkt mit allen extrahierten Daten
-      log('✅ Speichere Produkt mit extrahierten Daten aus PDF', newDpp);
-      await autoSaveProduct(newDpp);
+      setDpp(savedDpp);
+      setStep('result');
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unbekannter Fehler';
       log('PDF upload error:', msg);

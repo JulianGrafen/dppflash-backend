@@ -61,24 +61,24 @@ export default function CreateDashboard() {
       log('PDF processed successfully', result);
       setExtractedData(result);
 
-      const { productType, ...allExtractedFields } = result.extractedData;
+      const productType = result.extractedData?.productType || 'BATTERY';
+      const allExtractedFields = { ...(result.extractedData ?? {}) };
+      delete allExtractedFields.productType;
+
       const savedDpp: ProductPassport = {
         id: result.productId,
-        type: productType || 'BATTERY',
+        type: productType,
         createdAt: new Date(),
+        hersteller: allExtractedFields.hersteller || '',
+        modellname: allExtractedFields.modellname || '',
         ...allExtractedFields,
       } as any;
 
       setDpp(savedDpp);
 
-      // Product already saved by upload route — go straight to QR result.
-      // If extraction was partial, the product page shows whatever was found.
-      if (result.status === 'FAILED') {
-        setErrorMessage('PDF konnte nicht verarbeitet werden. Bitte füllen Sie die Daten manuell aus.');
-        setStep('form');
-      } else {
-        setStep('result');
-      }
+      // Product is always saved by upload route — always go to QR result.
+      // The product page works even with partial data.
+      setStep('result');
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unbekannter Fehler';
       log('PDF upload error:', msg);

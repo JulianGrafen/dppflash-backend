@@ -1,311 +1,169 @@
 import type { ExtractionResult } from '../types/dpp-types';
-import { spawn } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 
 /**
- * PDF Extraction Service – Lokal verarbeitet für DSGVO-Compliance.
- * 
- * Kann auf Python und pdfplumber/pypdf für zuverlässige PDF-Extraktion:
- * - Keine komplexen Browser-APIs erforderlich
- * - Läuft 100% lokal
- * - 100% DSGVO-konform - keine Datentransfers
- * 
- * Fallback auf einfache Textextraktion wenn Python nicht verfügbar
+ * PDF Extraction Service — pdfjs-dist primary, pdf-parse fallback, raw binary last resort.
+ * Works on Vercel (serverless) and locally without any native dependencies.
  */
 
-/**
- * Nutze Python mit pdfplumber für kleine PDF-Extraktion.
- * Fallback auf einfache String-Parsing wenn Python nicht verfügbar.
- */
-async function extractPdfWithPython(pdfBuffer: Buffer): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const tempFile = join(tmpdir(), `temp_${Date.now()}.pdf`);
-    
-    try {
-      // Schreibe PDF zu Temp-Datei
-      writeFileSync(tempFile, pdfBuffer);
-      
-      // Python-Script zum Extrahieren von Text
-      const pythonScript = `
-import sys
-try:
-    import pdfplumber
-    pdf_path = sys.argv[1]
-    with pdfplumber.open(pdf_path) as pdf:
-        text = '\\n'.join(page.extract_text() or '' for page in pdf.pages)
-        print(text)
-except ImportError:
-    import PyPDF2
-    pdf_path = sys.argv[1]
-    with open(pdf_path, 'rb') as f:
-        reader = PyPDF2.PdfReader(f)
-        text = '\\n'.join(p.extract_text() for p in reader.pages)
-        print(text)
-except Exception as e:
-    print(f"Error: {e}", file=sys.stderr)
-    sys.exit(1)
-`;
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategy 1 — pdfjs-dist (Mozilla PDF.js, pure JS, most reliable)
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractWithPdfjs(pdfBuffer: Buffer): Promise<string> {
+  // Must use legacy build in Node.js (no DOMMatrix dependency)
+  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs') as any;
 
-      const python = spawn('python3', ['-c', pythonScript, tempFile]);
-      let output = '';
-      let errorOutput = '';
-
-      python.stdout.on('data', (data) => {
-        output += data.toString();
-      });
-
-      python.stderr.on('data', (data) => {
-        errorOutput += data.toString();
-      });
-
-      python.on('close', (code) => {
-        unlinkSync(tempFile); // Löschen Temp-Datei
-
-        if (code === 0 && output.trim()) {
-          resolve(output.trim());
-        } else {
-          reject(new Error(errorOutput || 'Python PDF extraction failed'));
-        }
-      });
-
-      python.on('error', (err) => {
-        unlinkSync(tempFile);
-        reject(err);
-      });
-    } catch (error) {
-      try {
-        unlinkSync(tempFile);
-      } catch (e) {
-        // Ignore
-      }
-      reject(error);
-    }
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+    verbosity: 0, // silence warnings
   });
+
+  const pdf = await loadingTask.promise;
+  const parts: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => item.str ?? '')
+      .join(' ');
+    parts.push(pageText);
+  }
+
+  return parts.join('\n').replace(/[ \t]{2,}/g, ' ').trim();
 }
 
-/**
- * Extrahiert Text direkt aus PDF-Binär (Fallback für wenn Python-Tools nicht verfügbar).
- * Nutzt fortgeschrittene Methoden zur Text-Extrahierung aus PDF-Streams.
- */
-function extractPdfWithFallback(buffer: Buffer): string {
-  // Strategie 1: UTF-8 Dekodierung
-  let text = buffer.toString('utf8', 0, buffer.length);
-  let cleaned = text
-    .replace(/\x00/g, '') // Null-Bytes entfernen
-    .replace(/[^\x20-\x7E\u0080-\u00FF]/g, ' ') // ASCII + Umlaute
-    .replace(/\s+/g, ' ')
-    .trim();
-  
-  if (cleaned.length > 100) {
-    return cleaned.substring(0, 10000);
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategy 2 — pdf-parse v2 (PDFParse class API)
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractWithPdfParse(pdfBuffer: Buffer): Promise<string> {
+  const { PDFParse } = await import('pdf-parse') as any;
+  const parser = new PDFParse({ data: pdfBuffer });
+  const result = await parser.getText();
+  const text: string = result?.text ?? '';
+  return text.replace(/[ \t]{2,}/g, ' ').trim();
+}
 
-  // Strategie 2: Versuche latin1 Dekodierung
-  const latin1Text = buffer.toString('latin1');
-  
-  // Extrahiere alle Strings zwischen Klammern (traditionelle PDF-Struktur)
-  const matches: string[] = [];
-  const parenPattern = /\(([^()]{3,200})\)/g;
-  let match;
-  
-  while ((match = parenPattern.exec(latin1Text)) !== null) {
-    let extracted = match[1]
-      .replace(/\\n/g, ' ')
-      .replace(/\\/g, '')
-      .trim();
-    
-    // Filter: nur Strings mit echtem Text (nicht PDF-Operatoren)
-    if (extracted.length > 2 && 
-        !extracted.match(/^\/|^<<|^>>|^[0-9]+\s+[0-9]+|endobj|stream/) &&
-        extracted.match(/[a-zA-ZäöüßÄÖÜ0-9]/)) {
-      matches.push(extracted);
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategy 3 — Raw binary scan (last resort for non-standard PDFs)
+// Walks the buffer extracting printable ASCII runs from content streams.
+// ─────────────────────────────────────────────────────────────────────────────
+function extractWithBinaryScan(buffer: Buffer): string {
+  const latin1 = buffer.toString('latin1');
+  const runs: string[] = [];
+
+  // Walk stream ... endstream blocks — those contain the actual text operators
+  const streamRe = /stream\r?\n([\s\S]*?)\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = streamRe.exec(latin1)) !== null) {
+    const block = m[1];
+    // PDF text in parentheses: (Hello World)
+    const parenRe = /\(([^()]{1,300})\)/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = parenRe.exec(block)) !== null) {
+      const s = pm[1]
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, '')
+        .replace(/\\\\/g, '\\')
+        .replace(/\\([0-9]{1,3})/g, (_: string, oct: string) =>
+          String.fromCharCode(parseInt(oct, 8))
+        )
+        .trim();
+      if (s.length > 1 && /[a-zA-Z0-9äöüßÄÖÜ]/.test(s)) {
+        runs.push(s);
+      }
     }
   }
 
-  if (matches.length > 5) {
-    text = matches.join(' ');
-    cleaned = text
-      .replace(/\s+/g, ' ')
-      .slice(0, 10000)
-      .trim();
-    
-    if (cleaned.length > 100) {
-      return cleaned;
-    }
+  if (runs.length > 3) {
+    return runs.join(' ').replace(/\s{2,}/g, ' ').trim();
   }
 
-  // Strategie 3: Brute-Force: Suche nach zusammenhängenden druckbaren Zeichen
-  const asciiMatches: string[] = [];
+  // Absolute last resort: extract long printable ASCII sequences from entire buffer
+  const printable: string[] = [];
   let current = '';
-  
-  for (let i = 0; i < buffer.length; i++) {
-    const byte = buffer[i];
-    // ASCII druckbar (32-126) oder Umlaute
-    if ((byte >= 0x20 && byte <= 0x7E) || byte >= 0x80) {
-      current += String.fromCharCode(byte);
-    } else if (current.length > 3) {
-      asciiMatches.push(current);
+  for (let i = 0; i < Math.min(buffer.length, 200_000); i++) {
+    const b = buffer[i];
+    if (b >= 0x20 && b <= 0x7e) {
+      current += String.fromCharCode(b);
+    } else {
+      if (current.length >= 4 && /[a-zA-Z0-9]/.test(current)) {
+        printable.push(current);
+      }
       current = '';
     }
   }
-  
-  if (current.length > 3) {
-    asciiMatches.push(current);
-  }
-  
-  // Filtere Müll heraus
-  const goodStrings = asciiMatches.filter(s => 
-    s.length > 3 && 
-    s.match(/[a-zA-Z0-9äöüß]/i) &&
-    !s.match(/^[\x00-\x1F]{3}/)
-  );
-  
-  if (goodStrings.length > 0) {
-    return goodStrings
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .slice(0, 10000)
-      .trim();
-  }
+  if (current.length >= 4) printable.push(current);
 
-  // Fallback: Roh-Text
-  return buffer.toString('utf8', 0, Math.min(10000, buffer.length));
-}
-
-/**
- * Entfernt PDF-Struktur-Müll (Font-Metadaten, Stream-Tokens etc.) aus extrahiertem Text.
- * Wird nach jeder Extraktionsstrategie angewendet bevor der Text validiert wird.
- */
-function cleanPdfText(raw: string): string {
-  const JUNK_LINE = [
-    /FontDescriptor|FontBBox|ItalicAngle|\/Flags\s+\d/i,
-    /BitsPerComponent|ColorSpace|\/Filter\s*\//i,
-    /endobj|endstream|startxref/i,
-    /^\s*stream\s*$/i,
-    /^\s*\d+\s+\d+\s+obj\b/,
-    /\/Type\s*\/Font|\/BaseFont|\/Encoding\s*\//i,
-    /\/ToUnicode|\/CMapName|\/Registry/i,
-    /\/Resources|\/ProcSet|\/XObject/i,
-    /^%%EOF/,
-    /^\/[A-Z][a-zA-Z]+\s*\//,   // lone /PdfKeyword /
-  ];
-  return raw
-    .split('\n')
-    .filter(line => !JUNK_LINE.some(p => p.test(line)))
-    .join('\n')
-    .replace(/[ \t]{2,}/g, ' ')
+  return printable
+    .filter(s => !/^(endobj|endstream|startxref|stream|xref|trailer)$/.test(s.trim()))
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .slice(0, 15_000)
     .trim();
 }
 
-/**
- * Extrahiert Rohtext aus einem PDF-Buffer.
- * Nutzt Python wenn verfügbar, sonst Fallback auf einfache Textextraktion.
- *
- * @param pdfBuffer - Binärer PDF-Inhalt
- * @param fileName - Name des PDFs (für Fehlerbehandlung und Logging)
- * @returns ExtractionResult mit Text und Metadaten
- * @throws Error wenn PDF ungültig oder korrupt ist
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
 export async function extractPdfText(
   pdfBuffer: Buffer,
   fileName: string
 ): Promise<ExtractionResult> {
   const startTime = Date.now();
+  let textContent = '';
+  let pageCount = 1;
+  let strategy = '';
 
-  try {
-    let textContent = '';
-
-    // Strategie 1: pdf-parse v2 (PDFParse class API, funktioniert auf Vercel)
+  // 1. pdfjs-dist — most reliable, handles all conforming PDFs
+  if (!textContent) {
     try {
-      const { PDFParse } = await import('pdf-parse') as any;
-      const parser = new PDFParse({ data: pdfBuffer });
-      const parsed = await parser.getText();
-      const raw: string = parsed?.text ?? '';
-      if (raw.trim().length > 20) {
-        const cleaned = cleanPdfText(raw);
-        if (cleaned.length > 20) {
-          textContent = cleaned;
-          console.log(`📄 PDF mit pdf-parse extrahiert (bereinigt): ${textContent.length} Zeichen`);
-        }
-      }
+      textContent = await extractWithPdfjs(pdfBuffer);
+      strategy = 'pdfjs-dist';
     } catch (e) {
-      console.log(`⚠️ pdf-parse fehlgeschlagen: ${e}`);
+      console.log(`⚠️  pdfjs-dist: ${e instanceof Error ? e.message : e}`);
     }
+  }
 
-    // Strategie 2: Python (optional, nur lokal verfügbar)
-    if (!textContent) {
-      try {
-        const raw = await extractPdfWithPython(pdfBuffer);
-        textContent = cleanPdfText(raw);
-        console.log(`📄 PDF mit Python extrahiert (bereinigt): ${textContent.length} Zeichen`);
-      } catch (e) {
-        console.log(`⚠️ Python nicht verfügbar, nutze Binär-Fallback`);
-      }
+  // 2. pdf-parse v2 — good fallback
+  if (!textContent) {
+    try {
+      textContent = await extractWithPdfParse(pdfBuffer);
+      strategy = 'pdf-parse';
+    } catch (e) {
+      console.log(`⚠️  pdf-parse: ${e instanceof Error ? e.message : e}`);
     }
+  }
 
-    // Strategie 3: Binär-Fallback (letzter Ausweg)
-    if (!textContent) {
-      textContent = cleanPdfText(extractPdfWithFallback(pdfBuffer));
-      console.log(`📄 PDF mit Binär-Fallback extrahiert (bereinigt): ${textContent.length} Zeichen`);
-    }
+  // 3. Raw binary scan — catches non-standard / hand-crafted PDFs
+  if (!textContent) {
+    textContent = extractWithBinaryScan(pdfBuffer);
+    strategy = 'binary-scan';
+  }
 
-    const extractionDuration = Date.now() - startTime;
+  const extractionDuration = Date.now() - startTime;
 
-    if (!textContent || textContent.trim().length === 0) {
-      throw new Error(`PDF "${fileName}" enthält keinen extrahierbaren Text`);
-    }
-
-    console.log(`📄 PDF "${fileName}" extrahiert: ${textContent.length} Zeichen`);
-
-    return {
-      text: textContent,
-      pageCount: 1,
-      metadata: {
-        fileName: fileName,
-      },
-      extractionDuration,
-    };
-  } catch (error) {
+  if (!textContent || textContent.trim().length < 5) {
     throw new Error(
-      `PDF-Extraktion fehlgeschlagen für "${fileName}": ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`
+      `PDF "${fileName}" enthält keinen extrahierbaren Text (alle 3 Strategien fehlgeschlagen)`
     );
   }
+
+  console.log(`📄 "${fileName}" → ${strategy}, ${textContent.length} Zeichen, ${extractionDuration}ms`);
+
+  return {
+    text: textContent,
+    pageCount,
+    metadata: { fileName },
+    extractionDuration,
+  };
 }
 
-/**
- * Validiert, ob die extrahierten Rohdaten sinnvoll wirken.
- * Heuristik: Mindestanzahl Zeichen + Sonderzeichen-Ratio
- * 
- * @param text - Rohtext aus PDF
- * @returns true wenn Text plausibel ist
- */
 export function isValidExtractionText(text: string): boolean {
-  // Minimale Textlänge für sinnvolle Extraktion
-  const MIN_CHARS = 20;
-  // Maximal akzeptierter Anteil von Sonderzeichen
-  const GARBAGE_RATIO = 0.6;
-
-  console.log(`📋 Validierungstext-Länge: ${text.length} Zeichen (mindestens ${MIN_CHARS} erforderlich)`);
-
-  if (text.length < MIN_CHARS) {
-    console.log('❌ Text zu kurz - überspringe Validierung');
-    return false;
-  }
-
-  // Zähle Sonderzeichen (außer Deutsch-Umlauten und normalen Zeichen)
-  const specialCharCount = (text.match(/[^a-zA-Z0-9äöüßÄÖÜ\s\-.,;:()\n%€$\/\[\]'"!?@#*+]/g) || []).length;
-  const ratio = specialCharCount / text.length;
-
-  // Erkenne PDF-Binär-Müll (Font-Metadaten usw.)
-  const hasFontGarbage = /FontDescriptor|FontBBox|ItalicAngle|\/Flags\s+\d|BitsPerComponent|ColorSpace/i.test(text);
-  if (hasFontGarbage) {
-    console.log('❌ Text enthält PDF-Binär-Müll (Font Descriptor)');
-    return false;
-  }
-
-  console.log(`📊 Sonderzeichen-Ratio: ${(ratio * 100).toFixed(1)}% (max ${(GARBAGE_RATIO * 100).toFixed(1)}%)`);
-
-  return ratio < GARBAGE_RATIO;
+  if (text.length < 20) return false;
+  const garbage = (text.match(/[^a-zA-Z0-9äöüßÄÖÜ\s\-.,;:()\n%€$\/\[\]'"!?@#*+]/g) ?? []).length;
+  return garbage / text.length < 0.6;
 }

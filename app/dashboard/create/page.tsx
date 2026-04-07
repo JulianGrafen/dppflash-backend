@@ -71,11 +71,10 @@ export default function CreateDashboard() {
 
       setDpp(savedDpp);
 
-      // Wenn Pflichtfelder fehlen → Form zum Nachbearbeiten öffnen, nicht abbrechen
-      if (!result.extractedData?.hersteller || !result.extractedData?.modellname) {
-        setErrorMessage(
-          `Einige Felder konnten nicht automatisch erkannt werden (${!result.extractedData?.hersteller ? 'Hersteller' : 'Modellname'}). Bitte ergänzen Sie die Daten unten.`
-        );
+      // Product already saved by upload route — go straight to QR result.
+      // If extraction was partial, the product page shows whatever was found.
+      if (result.status === 'FAILED') {
+        setErrorMessage('PDF konnte nicht verarbeitet werden. Bitte füllen Sie die Daten manuell aus.');
         setStep('form');
       } else {
         setStep('result');

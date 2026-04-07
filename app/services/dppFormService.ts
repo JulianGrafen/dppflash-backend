@@ -13,6 +13,7 @@ export class DPPFactory {
     const base = {
       id: uuidv4(), // Eindeutige ID für den QR-Link
       createdAt: new Date(),
+      language: 'de',
       hersteller: '',
       modellname: '',
     };
@@ -32,9 +33,9 @@ export class DPPFactory {
     
     switch (data.type) {
       case 'BATTERY':
-        return hasBaseFields && data.kapazitaetKWh > 0 && !!data.chemischesSystem;
+        return hasBaseFields && (data as any).kapazitaetKWh > 0 && !!(data as any).chemischesSystem;
       case 'TEXTILE':
-        return hasBaseFields && !!data.materialZusammensetzung && !!data.herkunftsland;
+        return hasBaseFields && !!(data as any).materialZusammensetzung && !!(data as any).herkunftsland;
       default:
         return false;
     }

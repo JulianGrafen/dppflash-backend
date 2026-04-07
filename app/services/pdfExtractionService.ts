@@ -192,14 +192,33 @@ export async function extractPdfText(
   try {
     let textContent = '';
 
-    // Versuche zuerst Python
+    // Strategie 1: pdf-parse (reines Node.js, funktioniert auf Vercel)
     try {
-      textContent = await extractPdfWithPython(pdfBuffer);
-      console.log(`📄 PDF mit Python extrahiert: ${textContent.length} Zeichen`);
+      const pdfParseModule = await import('pdf-parse');
+      const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
+      const parsed = await pdfParse(pdfBuffer);
+      if (parsed.text && parsed.text.trim().length > 50) {
+        textContent = parsed.text;
+        console.log(`📄 PDF mit pdf-parse extrahiert: ${textContent.length} Zeichen`);
+      }
     } catch (e) {
-      // Fallback auf einfache Extraktion
-      console.log(`⚠️ Python nicht verfügbar, nutze Fallback`);
+      console.log(`⚠️ pdf-parse fehlgeschlagen: ${e}`);
+    }
+
+    // Strategie 2: Python (optional, nur lokal verfügbar)
+    if (!textContent) {
+      try {
+        textContent = await extractPdfWithPython(pdfBuffer);
+        console.log(`📄 PDF mit Python extrahiert: ${textContent.length} Zeichen`);
+      } catch (e) {
+        console.log(`⚠️ Python nicht verfügbar, nutze Binär-Fallback`);
+      }
+    }
+
+    // Strategie 3: Binär-Fallback (letzter Ausweg)
+    if (!textContent) {
       textContent = extractPdfWithFallback(pdfBuffer);
+      console.log(`📄 PDF mit Binär-Fallback extrahiert: ${textContent.length} Zeichen`);
     }
 
     const extractionDuration = Date.now() - startTime;
@@ -234,9 +253,9 @@ export async function extractPdfText(
  */
 export function isValidExtractionText(text: string): boolean {
   // Minimale Textlänge für sinnvolle Extraktion
-  const MIN_CHARS = 10;
+  const MIN_CHARS = 50;
   // Maximal akzeptierter Anteil von Sonderzeichen
-  const GARBAGE_RATIO = 0.7;
+  const GARBAGE_RATIO = 0.3;
 
   console.log(`📋 Validierungstext-Länge: ${text.length} Zeichen (mindestens ${MIN_CHARS} erforderlich)`);
 
@@ -246,8 +265,15 @@ export function isValidExtractionText(text: string): boolean {
   }
 
   // Zähle Sonderzeichen (außer Deutsch-Umlauten und normalen Zeichen)
-  const specialCharCount = (text.match(/[^a-zA-Z0-9äöüßÄÖÜ\s\-.,;:()\n%€$]/g) || []).length;
+  const specialCharCount = (text.match(/[^a-zA-Z0-9äöüßÄÖÜ\s\-.,;:()\n%€$\/\[\]'"!?@#*+]/g) || []).length;
   const ratio = specialCharCount / text.length;
+
+  // Erkenne PDF-Binär-Müll (Font-Metadaten usw.)
+  const hasFontGarbage = /FontDescriptor|FontBBox|ItalicAngle|\/Flags\s+\d|BitsPerComponent|ColorSpace/i.test(text);
+  if (hasFontGarbage) {
+    console.log('❌ Text enthält PDF-Binär-Müll (Font Descriptor)');
+    return false;
+  }
 
   console.log(`📊 Sonderzeichen-Ratio: ${(ratio * 100).toFixed(1)}% (max ${(GARBAGE_RATIO * 100).toFixed(1)}%)`);
 

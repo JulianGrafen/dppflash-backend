@@ -62,19 +62,9 @@ export async function processPdfDocument(
       };
     }
 
-    // Schritt 3: Validierung Rohtext
+    // Schritt 3: Validierung Rohtext (nur Warnung – Extraktion wird trotzdem versucht)
     if (!isValidExtractionText(rawText)) {
-      return {
-        documentMetadata,
-        extractedData: {
-          productType: productTypeHint || 'BATTERY',
-          confidence: 0,
-          extractedFields: {},
-          warnings: ['PDF-Text wirkt unplausibel oder zu kurz'],
-        },
-        status: 'PARTIAL',
-        message: 'Warnung: PDF-Text scheint nicht standardmäßig zu sein. Manuelle Überprüfung empfohlen.',
-      };
+      console.warn('⚠️ PDF-Text möglicherweise unvollständig, Extraktion wird trotzdem versucht.');
     }
 
     // Schritt 4: AI-Strukturierung (nur Rohtext zu OpenAI)

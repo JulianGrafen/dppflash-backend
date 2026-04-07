@@ -303,11 +303,18 @@ export class MockLocalProvider implements AIProvider {
     const capitalWords = text.match(/\b[A-Z][a-zA-Z]{2,25}\b/g) || [];
     if (capitalWords.length > 0) {
       // Bevorzuge längere Wörter (mindestens 5 Buchstaben für einen guten Firmennamen)
-      const longWords = capitalWords.filter(w => w.length > 4 && !['Model', 'Type', 'Version', 'Ersatz', 'Recycling'].includes(w));
+      const longWords = capitalWords.filter(w => w.length > 4 && !['Model', 'Type', 'Version', 'Ersatz', 'Recycling', 'Batterie', 'Battery', 'Produkt', 'Product', 'Seite', 'Page', 'Datum', 'Date', 'Stand', 'Status'].includes(w));
       if (longWords.length > 0) {
         console.log(`✓ Hersteller (Heuristik): ${longWords[0]}`);
         return longWords[0];
       }
+    }
+
+    // Strategie 5: Erste nicht-leere Zeile des Dokuments (Deckblatt-Logik)
+    const firstLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l));
+    if (firstLines.length > 0) {
+      console.log(`✓ Hersteller (erste Zeile): ${firstLines[0]}`);
+      return firstLines[0];
     }
 
     console.log('❌ Hersteller nicht gefunden');
@@ -658,6 +665,16 @@ export class MockLocalProvider implements AIProvider {
           return candidate;
         }
       }
+    }
+
+    // Strategie 5: Zweite nicht-leere Zeile des Dokuments als letzter Ausweg
+    const meaningfulLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3 && l.length < 80 && /[a-zA-ZäöüÄÖÜ]/.test(l) && !/^(?:seite|page|datum|date|version|revision)\b/i.test(l));
+    if (meaningfulLines.length > 1) {
+      console.log(`✓ Modellname (zweite Zeile): ${meaningfulLines[1]}`);
+      return meaningfulLines[1];
+    } else if (meaningfulLines.length === 1) {
+      console.log(`✓ Modellname (erste Zeile): ${meaningfulLines[0]}`);
+      return meaningfulLines[0];
     }
 
     console.log('❌ Modellname nicht gefunden');

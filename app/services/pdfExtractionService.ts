@@ -253,9 +253,9 @@ export async function extractPdfText(
  */
 export function isValidExtractionText(text: string): boolean {
   // Minimale Textlänge für sinnvolle Extraktion
-  const MIN_CHARS = 50;
+  const MIN_CHARS = 20;
   // Maximal akzeptierter Anteil von Sonderzeichen
-  const GARBAGE_RATIO = 0.3;
+  const GARBAGE_RATIO = 0.6;
 
   console.log(`📋 Validierungstext-Länge: ${text.length} Zeichen (mindestens ${MIN_CHARS} erforderlich)`);
 

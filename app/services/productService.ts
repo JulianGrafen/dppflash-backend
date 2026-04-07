@@ -50,7 +50,7 @@ export async function saveProduct(
   } as ProductPassport;
 
   // MVP: Speichern in Global Store
-  const savedProduct = saveProductToStore(completeProduct);
+  const savedProduct = await saveProductToStore(completeProduct);
 
   return savedProduct;
 }
@@ -66,7 +66,7 @@ export async function getProduct(
   productId: string,
   tenantId?: string
 ): Promise<ProductPassport | undefined> {
-  const product = getProductFromStore(productId);
+  const product = await getProductFromStore(productId);
 
   if (!product) {
     console.warn(`⚠️ Produto não encontrado: ${productId}`);
@@ -98,7 +98,7 @@ export async function updateProduct(
   productId: string,
   updates: Partial<ProductPassport>
 ): Promise<ProductPassport> {
-  const existing = getProductFromStore(productId);
+  const existing = await getProductFromStore(productId);
 
   if (!existing) {
     throw new Error(`Produto não encontrado: ${productId}`);
@@ -109,7 +109,7 @@ export async function updateProduct(
     ...updates,
   } as ProductPassport;
 
-  const savedProduct = saveProductToStore(updated);
+  const savedProduct = await saveProductToStore(updated);
 
   console.log(`✏️ Produto atualizado: ${productId}`);
   return savedProduct;
@@ -125,7 +125,7 @@ export async function deleteProduct(
   productId: string,
   tenantId?: string
 ): Promise<void> {
-  const existing = getProductFromStore(productId);
+  const existing = await getProductFromStore(productId);
   
   if (!existing) {
     throw new Error(`Produto não encontrado: ${productId}`);

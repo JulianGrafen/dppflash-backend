@@ -29,7 +29,7 @@ export default function QRCodeDisplay({
   const [qrUrl, setQrUrl] = useState<string | null>(qrCodeDataUrl || null);
   const [isLoading, setIsLoading] = useState(!qrCodeDataUrl);
 
-  const baseUrl = process.env.NEXT_PUBLIC_DPP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_DPP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const dppLink = `${baseUrl}/p/${productId}`;
 
   // Generiere QR-Code wenn nicht vorhanden

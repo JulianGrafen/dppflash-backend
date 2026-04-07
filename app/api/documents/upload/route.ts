@@ -33,6 +33,11 @@ function generateProductId(): string {
  */
 export async function POST(request: NextRequest) {
   try {
+    const baseUrl = process.env.NEXT_PUBLIC_DPP_URL
+      || process.env.NEXT_PUBLIC_APP_URL
+      || (request.headers.get('x-forwarded-host')
+          ? `https://${request.headers.get('x-forwarded-host')}`
+          : `http://${request.headers.get('host') || 'localhost:3000'}`);
     const tenantId = request.nextUrl.searchParams.get('tenantId');
     const productTypeParam = request.nextUrl.searchParams.get('productType');
 
@@ -101,13 +106,13 @@ export async function POST(request: NextRequest) {
     } as any;
 
     // Speichere das Produkt
-    saveProductToStore(productPassport);
+    await saveProductToStore(productPassport);
     console.log(`✅ Produkt gespeichert mit ID: ${productId}`);
 
     // ===== RESPONSE MIT PRODUCT-LINK =====
     const responseData = {
       productId,
-      productUrl: `/p/${productId}`,
+      productUrl: `${baseUrl}/p/${productId}`,
       documentId: result.documentMetadata.id,
       fileName: result.documentMetadata.fileName,
       uploadedAt: result.documentMetadata.uploadedAt,

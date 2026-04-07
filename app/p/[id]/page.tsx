@@ -21,7 +21,7 @@ export default async function ProductPage({ params }: PageProps) {
 
   console.log(`🔍 Suche Produkt mit ID: ${id}`);
 
-  const product = getProductById(id) as any;
+  const product = await getProductById(id) as any;
 
   if (!product) {
     console.error(`❌ Produkt nicht gefunden: ${id}`);

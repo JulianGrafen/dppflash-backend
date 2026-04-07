@@ -5,10 +5,10 @@ import { getProductFromStore } from './server-store';
  * Holt ein Produkt anhand der ID.
  * Nutzt den globalen Server-Store.
  */
-export const getProductById = (id: string): ProductPassport | undefined => {
+export const getProductById = async (id: string): Promise<ProductPassport | undefined> => {
   console.log(`[getProductById] Suche nach ID: ${id}`);
   
-  const product = getProductFromStore(id);
+  const product = await getProductFromStore(id);
   
   if (product) {
     console.log(`[getProductById] ✅ Gefunden: ${id}`);

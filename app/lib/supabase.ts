@@ -16,14 +16,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Supabase Umgebungsvariablen nicht konfiguriert. Bitte .env.local überprüfen.');
+  console.warn('⚠️ Supabase Umgebungsvariablen nicht konfiguriert. Datenbankfunktionen deaktiviert.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false, // Server-only Client
-  },
-});
+export const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+      },
+    })
+  : null;
 
 /**
  * Bucket-Namen für Datenspeicherung (konstant).

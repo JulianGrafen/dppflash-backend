@@ -76,6 +76,10 @@ export async function getPdfDocument(
     throw new Error('Zugriff verweigert: Datei gehört nicht zu diesem Mandanten');
   }
 
+  if (!supabase) {
+    throw new Error('Supabase nicht konfiguriert. PDF-Abruf nicht verfügbar.');
+  }
+
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKETS.PDF_UPLOADS)
     .download(filePath);
@@ -99,6 +103,10 @@ export async function deletePdfDocument(
 ): Promise<void> {
   if (!filePath.startsWith(`tenants/${tenantId}/`)) {
     throw new Error('Zugriff verweigert: Datei gehört nicht zu diesem Mandanten');
+  }
+
+  if (!supabase) {
+    throw new Error('Supabase nicht konfiguriert. Datei-Löschung nicht verfügbar.');
   }
 
   const { error } = await supabase.storage

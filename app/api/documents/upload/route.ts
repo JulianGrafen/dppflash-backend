@@ -129,6 +129,8 @@ export async function POST(request: NextRequest) {
 
     // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const productId = generateProductId();
+    const hersteller = typeof extractedFields.hersteller === 'string' ? extractedFields.hersteller : '';
+    const modellname = typeof extractedFields.modellname === 'string' ? extractedFields.modellname : '';
     const productPassport: ProductPassport = {
       id: productId,
       type: result.extractedData.productType,
@@ -136,6 +138,8 @@ export async function POST(request: NextRequest) {
       language: 'de',
       // Speichere ALLE extrahierten Felder, nicht nur ausgewählte
       ...extractedFields,
+      hersteller,
+      modellname,
       // Speichere Extraktions-Metadaten damit die Produktseite echte Konfidenz zeigt
       extractionConfidence: result.extractedData.confidence,
       extractionWarnings: result.extractedData.warnings,

@@ -37,6 +37,7 @@ type AzureOpenAiUserContentPart =
     };
 
 const MAX_DOCUMENT_TEXT_CHARS = 20_000;
+const MAX_ERROR_BODY_CHARS = 700;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -99,6 +100,14 @@ function buildVisionPrompt(productTypeHint?: string): string {
 The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Do not invent missing values. Return only the required JSON object.`;
 }
 
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}...`;
+}
+
 export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   constructor(
     private readonly config: AzureOpenAiConfig,
@@ -107,8 +116,17 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
 
   async extract(input: SemanticDppExtractionInput): Promise<SemanticDppExtractionResult> {
     const preparedInput = await this.prepareInput(input);
+    const requestUrl = this.chatCompletionsUrl();
 
-    const response = await fetch(this.chatCompletionsUrl(), {
+    this.logger.info('azure_openai_request_started', {
+      endpoint: this.config.endpoint,
+      deployment: this.config.deploymentName,
+      apiVersion: this.config.apiVersion,
+      requestMode: Array.isArray(preparedInput.userContent) ? 'vision' : 'text',
+      requestUrl,
+    });
+
+    const response = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -126,7 +144,25 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
     });
 
     if (!response.ok) {
-      throw new Error(`Azure OpenAI extraction failed with status ${response.status}.`);
+      const responseBody = await response.text();
+      const requestId = response.headers.get('x-request-id')
+        || response.headers.get('apim-request-id')
+        || response.headers.get('x-ms-request-id')
+        || 'n/a';
+
+      this.logger.error('azure_openai_request_failed', {
+        status: response.status,
+        statusText: response.statusText,
+        deployment: this.config.deploymentName,
+        apiVersion: this.config.apiVersion,
+        endpoint: this.config.endpoint,
+        requestId,
+        responseBody: truncate(responseBody, MAX_ERROR_BODY_CHARS),
+      });
+
+      throw new Error(
+        `Azure OpenAI extraction failed with status ${response.status}. Deployment="${this.config.deploymentName}", apiVersion="${this.config.apiVersion}", requestId="${requestId}". Body: ${truncate(responseBody, MAX_ERROR_BODY_CHARS)}`,
+      );
     }
 
     const payload = (await response.json()) as AzureOpenAiChatResponse;

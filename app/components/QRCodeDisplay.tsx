@@ -23,11 +23,10 @@ interface QRCodeDisplayProps {
 export default function QRCodeDisplay({
   productId,
   productName,
-  productData: _productData,
+  productData,
   qrCodeDataUrl,
   gtin,
 }: QRCodeDisplayProps) {
-  void _productData;
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [qrUrl, setQrUrl] = useState<string | null>(qrCodeDataUrl || null);
   const [isLoading, setIsLoading] = useState(!qrCodeDataUrl);
@@ -35,9 +34,34 @@ export default function QRCodeDisplay({
   const baseUrl = typeof window !== 'undefined'
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_DPP_URL || 'http://localhost:3000');
-  
-  // Keep DPP links short and stable for QR scanners.
-  const dppLink = `${baseUrl}/p/${productId}`;
+
+  // In stateless/serverless mode without Supabase persistence, add compact
+  // fallback payload so /p/[id] can still render instead of 404.
+  const isPersistentStorageConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const compactFallbackPayload = productData
+    ? {
+        id: productId,
+        type: productData.type ?? 'OTHER',
+        createdAt: productData.createdAt ?? new Date().toISOString(),
+        language: productData.language ?? 'de',
+        hersteller: productData.hersteller,
+        modellname: productData.modellname,
+        upi: productData.upi,
+        gtin: productData.gtin,
+        materialComposition: productData.materialComposition,
+        recycledContent: productData.recycledContent,
+        carbonFootprint: productData.carbonFootprint,
+        substancesOfConcern: productData.substancesOfConcern,
+        extractionConfidence: productData.extractionConfidence,
+        extractionWarnings: productData.extractionWarnings,
+      }
+    : undefined;
+
+  const fallbackQuery = !isPersistentStorageConfigured && compactFallbackPayload
+    ? `?d=${encodeURIComponent(JSON.stringify(compactFallbackPayload))}`
+    : '';
+
+  const dppLink = `${baseUrl}/p/${productId}${fallbackQuery}`;
 
   // Generiere QR-Code wenn nicht vorhanden
   useEffect(() => {

@@ -38,6 +38,7 @@ type AzureOpenAiUserContentPart =
 
 const MAX_DOCUMENT_TEXT_CHARS = 20_000;
 const MAX_ERROR_BODY_CHARS = 700;
+let hasLoggedAzureOpenAiUrl = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -117,6 +118,11 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   async extract(input: SemanticDppExtractionInput): Promise<SemanticDppExtractionResult> {
     const preparedInput = await this.prepareInput(input);
     const requestUrl = this.chatCompletionsUrl();
+
+    if (!hasLoggedAzureOpenAiUrl) {
+      console.info(`[DPP] Azure OpenAI request URL: ${requestUrl}`);
+      hasLoggedAzureOpenAiUrl = true;
+    }
 
     this.logger.info('azure_openai_request_started', {
       endpoint: this.config.endpoint,
@@ -238,6 +244,8 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   }
 
   private chatCompletionsUrl(): string {
-    return `${this.config.endpoint}/openai/deployments/${this.config.deploymentName}/chat/completions?api-version=${this.config.apiVersion}`;
+    const deployment = encodeURIComponent(this.config.deploymentName);
+    const apiVersion = encodeURIComponent(this.config.apiVersion);
+    return `${this.config.endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
   }
 }

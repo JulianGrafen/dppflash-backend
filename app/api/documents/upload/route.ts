@@ -120,12 +120,25 @@ export async function POST(request: NextRequest) {
     );
 
     const extractedFields = result.extractedData.extractedFields as Record<string, unknown>;
+    const hasExtractedFields = Object.keys(extractedFields).length > 0;
 
     console.info('[DPP] upload_processed', {
       status: result.status,
       confidence: result.extractedData.confidence,
       warningCount: result.extractedData.warnings.length,
     });
+
+    if (result.status === 'FAILED' && !hasExtractedFields) {
+      return NextResponse.json(
+        {
+          error: 'Keine DPP-Daten konnten extrahiert werden.',
+          details: result.message,
+          warnings: result.extractedData.warnings,
+          status: result.status,
+        },
+        { status: 422 },
+      );
+    }
 
     // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const productId = generateProductId();

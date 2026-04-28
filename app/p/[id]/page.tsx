@@ -44,6 +44,16 @@ function Pct({ label, value }: { label: string; value?: number }) {
   return <Field label={label} value={`${value} %`} />;
 }
 
+function formatComplexValue(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 function ConfidenceBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100);
   const color =
@@ -195,6 +205,16 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Batterietyp"     value={p.batteryType} />
           <Field label="Nennspannung"    value={p.nominalVoltageV !== undefined ? `${p.nominalVoltageV} V` : undefined} />
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
+        </Section>
+
+        {/* ── DPP Core fields (new extraction schema) ── */}
+        <Section title="DPP-Kernfelder (ESPR)">
+          <Field label="UPI" value={formatComplexValue(raw.upi)} />
+          <Field label="GTIN" value={formatComplexValue(raw.gtin)} />
+          <Field label="Materialzusammensetzung" value={formatComplexValue(raw.materialComposition)} />
+          <Field label="Rezyklatanteil" value={formatComplexValue(raw.recycledContent)} />
+          <Field label="CO₂-Fußabdruck" value={formatComplexValue(raw.carbonFootprint)} />
+          <Field label="Besorgniserregende Stoffe" value={formatComplexValue(raw.substancesOfConcern)} />
         </Section>
 
         {/* ── Carbon footprint (Art. 7) ── */}

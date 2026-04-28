@@ -54,7 +54,9 @@ export default function CreateDashboard() {
       );
 
       if (!response.ok) {
-        throw new Error(`Upload Error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        const details = errorData.details || errorData.error || 'Unbekannter Fehler';
+        throw new Error(`Upload Error: ${response.status} - ${details}`);
       }
 
       const result = await response.json();

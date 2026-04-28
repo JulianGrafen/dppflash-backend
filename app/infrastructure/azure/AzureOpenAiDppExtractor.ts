@@ -6,6 +6,7 @@ import type {
 } from '@/app/application/ports/SemanticDppExtractionPort';
 import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
 import type { AzureOpenAiConfig } from '@/app/infrastructure/azure/azureConfig';
+import { renderPdfPagesAsImages } from '@/app/utils/pdfPageImages';
 import { readPdf } from '@/app/utils/pdfReader';
 
 interface AzureOpenAiChatResponse {
@@ -21,6 +22,19 @@ interface DppExtractionEnvelope {
   readonly confidence?: number;
   readonly warnings?: readonly string[];
 }
+
+type AzureOpenAiUserContentPart =
+  | {
+      readonly type: 'text';
+      readonly text: string;
+    }
+  | {
+      readonly type: 'image_url';
+      readonly image_url: {
+        readonly url: string;
+        readonly detail: 'high';
+      };
+    };
 
 const MAX_DOCUMENT_TEXT_CHARS = 20_000;
 
@@ -77,6 +91,14 @@ Extract the ESPR DPP fields from this PDF-derived document text. The PDF was con
 ${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
 }
 
+function buildVisionPrompt(productTypeHint?: string): string {
+  const hint = productTypeHint ? `Product type hint: ${productTypeHint}` : 'No product type hint provided.';
+
+  return `${hint}
+
+The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Do not invent missing values. Return only the required JSON object.`;
+}
+
 export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   constructor(
     private readonly config: AzureOpenAiConfig,
@@ -84,14 +106,7 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   ) {}
 
   async extract(input: SemanticDppExtractionInput): Promise<SemanticDppExtractionResult> {
-    const pdfContent = await readPdf(input.pdf, input.fileName);
-    const userPrompt = buildUserPrompt(pdfContent.text, input.productTypeHint);
-
-    this.logger.info('pdf_prepared_for_azure_openai', {
-      fileSizeBytes: input.pdf.byteLength,
-      pageCount: pdfContent.pageCount,
-      textLength: pdfContent.text.length,
-    });
+    const preparedInput = await this.prepareInput(input);
 
     const response = await fetch(this.chatCompletionsUrl(), {
       method: 'POST',
@@ -105,7 +120,7 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
         temperature: 0,
         messages: [
           { role: 'system', content: buildSystemPrompt() },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: preparedInput.userContent },
         ],
       }),
     });
@@ -132,8 +147,58 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
       dpp: envelope.dpp,
       confidence: envelope.confidence ?? 0,
       warnings: envelope.warnings ?? [],
-      pageCount: pdfContent.pageCount,
+      pageCount: preparedInput.pageCount,
     };
+  }
+
+  private async prepareInput(input: SemanticDppExtractionInput): Promise<{
+    readonly userContent: string | readonly AzureOpenAiUserContentPart[];
+    readonly pageCount: number;
+  }> {
+    try {
+      const pdfContent = await readPdf(input.pdf, input.fileName);
+
+      this.logger.info('pdf_text_prepared_for_azure_openai', {
+        fileSizeBytes: input.pdf.byteLength,
+        pageCount: pdfContent.pageCount,
+        textLength: pdfContent.text.length,
+      });
+
+      return {
+        userContent: buildUserPrompt(pdfContent.text, input.productTypeHint),
+        pageCount: pdfContent.pageCount,
+      };
+    } catch (error) {
+      this.logger.warn('pdf_text_extraction_failed_using_vision_fallback', {
+        fileSizeBytes: input.pdf.byteLength,
+        reason: error instanceof Error ? error.message : 'unknown',
+      });
+
+      const renderedPages = await renderPdfPagesAsImages(input.pdf);
+
+      if (renderedPages.images.length === 0) {
+        throw new Error('PDF could not be converted to text or rendered page images.');
+      }
+
+      this.logger.info('pdf_images_prepared_for_azure_openai', {
+        pageCount: renderedPages.pageCount,
+        renderedPageCount: renderedPages.images.length,
+      });
+
+      return {
+        userContent: [
+          { type: 'text', text: buildVisionPrompt(input.productTypeHint) },
+          ...renderedPages.images.map((image) => ({
+            type: 'image_url' as const,
+            image_url: {
+              url: image.dataUrl,
+              detail: 'high' as const,
+            },
+          })),
+        ],
+        pageCount: renderedPages.pageCount,
+      };
+    }
   }
 
   private chatCompletionsUrl(): string {

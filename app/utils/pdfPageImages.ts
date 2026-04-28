@@ -1,5 +1,3 @@
-import { createCanvas } from '@napi-rs/canvas';
-
 export interface PdfPageImage {
   readonly pageNumber: number;
   readonly dataUrl: string;
@@ -13,10 +11,21 @@ export interface PdfPageImageResult {
 const DEFAULT_MAX_PAGES = 3;
 const DEFAULT_RENDER_SCALE = 1.6;
 
+type CanvasFactory = (width: number, height: number) => {
+  getContext(contextType: '2d'): unknown;
+  toDataURL(mimeType: 'image/png'): string;
+};
+
+async function loadCreateCanvas(): Promise<CanvasFactory> {
+  const canvasModule = await import('@napi-rs/canvas');
+  return canvasModule.createCanvas as CanvasFactory;
+}
+
 export async function renderPdfPagesAsImages(
   buffer: Buffer,
   maxPages: number = DEFAULT_MAX_PAGES,
 ): Promise<PdfPageImageResult> {
+  const createCanvas = await loadCreateCanvas();
   const pdfjsLib = (await import(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');

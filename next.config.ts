@@ -5,6 +5,7 @@ import type { NextConfig } from "next";
 const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined;
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['@napi-rs/canvas'],
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_DPP_URL || vercelUrl || 'http://localhost:3000',
   },

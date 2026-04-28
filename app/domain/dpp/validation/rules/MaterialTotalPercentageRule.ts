@@ -5,6 +5,7 @@ import type {
 } from '@/app/domain/dpp/validation/DppValidationTypes';
 
 const MAX_TOTAL_PERCENTAGE = 100;
+const MASS_BALANCE_TOLERANCE = 0.1;
 
 function sumPercentages(entries: readonly { readonly percentage: number }[]): number {
   return entries.reduce((total, entry) => total + entry.percentage, 0);
@@ -16,17 +17,26 @@ export class MaterialTotalPercentageRule implements DppValidationRule {
   validate(dpp: DppProductPassport): readonly ValidationFinding[] {
     const totalMaterialPercentage = sumPercentages(dpp.materialComposition);
     const totalRecycledPercentage = sumPercentages(dpp.recycledContent);
-    const totalPercentage = totalMaterialPercentage + totalRecycledPercentage;
+    const findings: ValidationFinding[] = [];
 
-    if (totalPercentage <= MAX_TOTAL_PERCENTAGE) {
-      return [];
+    if (totalMaterialPercentage > MAX_TOTAL_PERCENTAGE + MASS_BALANCE_TOLERANCE) {
+      findings.push({
+        severity: 'error',
+        code: 'DPP_MATERIAL_TOTAL_EXCEEDS_100',
+        field: 'materialComposition',
+        message: `Total material composition must not exceed 100% (+/- ${MASS_BALANCE_TOLERANCE} tolerance). Current total is ${totalMaterialPercentage.toFixed(2)}%.`,
+      });
     }
 
-    return [{
-      severity: 'error',
-      code: 'DPP_MATERIAL_TOTAL_EXCEEDS_100',
-      field: 'materialComposition,recycledContent',
-      message: `Total material share including recycled and virgin content must not exceed 100%. Current total is ${totalPercentage.toFixed(2)}%.`,
-    }];
+    if (totalRecycledPercentage > totalMaterialPercentage + MASS_BALANCE_TOLERANCE) {
+      findings.push({
+        severity: 'error',
+        code: 'DPP_RECYCLED_EXCEEDS_COMPOSITION',
+        field: 'recycledContent',
+        message: `Recycled content (${totalRecycledPercentage.toFixed(2)}%) cannot exceed total composition (${totalMaterialPercentage.toFixed(2)}%).`,
+      });
+    }
+
+    return findings;
   }
 }

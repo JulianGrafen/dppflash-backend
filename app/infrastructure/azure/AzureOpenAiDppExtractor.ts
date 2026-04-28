@@ -80,7 +80,13 @@ Return only JSON with this exact shape:
   "confidence": 0.0,
   "warnings": ["string"]
 }
-Use null-free JSON. If a required value is not in the document, use an empty string or empty array and add a warning. Do not invent GTINs, UPIs, materials, substances or carbon data.`;
+Use null-free JSON. If a required value is not in the document, use an empty string or empty array and add a warning. Do not invent GTINs, UPIs, materials, substances or carbon data.
+Extraction robustness rules:
+- Handle OCR noise, broken line breaks, and multilingual labels (DE/EN) like UPI, GTIN, batch/lot, composition/material mix, recycled content, carbon footprint, substances of concern.
+- Normalize percentages from formats like "12,5%", "12.5 %", "0.125" (if clearly percentage context convert to 12.5).
+- materialComposition must represent full composition (virgin + recycled shares) and should target ~100%.
+- recycledContent is a subset breakdown and MUST NOT be added on top of materialComposition total.
+- If units or values are ambiguous, keep safest value and add a warning describing ambiguity.`;
 }
 
 function buildUserPrompt(documentText: string, productTypeHint?: string): string {
@@ -89,6 +95,11 @@ function buildUserPrompt(documentText: string, productTypeHint?: string): string
   return `${hint}
 
 Extract the ESPR DPP fields from this PDF-derived document text. The PDF was converted locally before this Azure OpenAI call, so treat the text as the source of truth and never invent missing values.
+Map common synonyms:
+- material composition = Zusammensetzung, Materialmix, composition, ingredients
+- recycled content = Rezyklatanteil, recycled share, PCR/PIR
+- substances of concern = SVHC, hazardous substances, besorgniserregende Stoffe
+- carbon footprint = CO2-Fußabdruck, carbon footprint, kg CO2e
 
 ${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
 }

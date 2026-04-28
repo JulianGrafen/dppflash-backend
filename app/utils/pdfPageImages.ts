@@ -8,6 +8,8 @@ export interface PdfPageImageResult {
   readonly pageCount: number;
 }
 
+type PdfJsGetDocumentInput = Parameters<typeof import('pdfjs-dist').getDocument>[0];
+
 const DEFAULT_MAX_PAGES = 3;
 const DEFAULT_RENDER_SCALE = 1.6;
 
@@ -30,15 +32,18 @@ export async function renderPdfPagesAsImages(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
 
+  const documentParameters = {
+    data: new Uint8Array(buffer),
+    disableWorker: true,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+    disableFontFace: true,
+    verbosity: 0,
+  } as unknown as PdfJsGetDocumentInput;
+
   const pdf = await pdfjsLib
-    .getDocument({
-      data: new Uint8Array(buffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-      disableFontFace: true,
-      verbosity: 0,
-    })
+    .getDocument(documentParameters)
     .promise;
 
   const pagesToRender = Math.min(pdf.numPages, maxPages);

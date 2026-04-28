@@ -15,6 +15,20 @@
 
 import type { RawPdfContent } from '../types/extraction';
 
+type PdfJsGetDocumentInput = Parameters<typeof import('pdfjs-dist').getDocument>[0];
+
+interface PdfParseTextResult {
+  readonly text?: string;
+}
+
+interface PdfParseInstance {
+  getText(): Promise<PdfParseTextResult>;
+}
+
+interface PdfParseConstructor {
+  new(input: { readonly data: Buffer }): PdfParseInstance;
+}
+
 // ─── Quality gate ─────────────────────────────────────────────────────────────
 
 /**
@@ -71,14 +85,17 @@ async function readWithPdfjs(buffer: Buffer): Promise<string> {
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
 
-  const loadingTask = pdfjsLib.getDocument({
+  const documentParameters = {
     data: new Uint8Array(buffer),
+    disableWorker: true,
     useWorkerFetch: false,
     isEvalSupported: false,
     useSystemFonts: true,
     disableFontFace: true,
     verbosity: 0,
-  });
+  } as unknown as PdfJsGetDocumentInput;
+
+  const loadingTask = pdfjsLib.getDocument(documentParameters);
 
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
@@ -100,10 +117,10 @@ async function readWithPdfjs(buffer: Buffer): Promise<string> {
 
 async function readWithPdfParse(buffer: Buffer): Promise<string> {
   // pdf-parse v2 changed the API: it exports a named class, not a function.
-  const { PDFParse } = (await import('pdf-parse')) as { PDFParse: any };
+  const { PDFParse } = (await import('pdf-parse')) as { PDFParse: PdfParseConstructor };
   const parser = new PDFParse({ data: buffer });
-  const result = await (parser as any).getText();
-  return (result?.text ?? '') as string;
+  const result = await parser.getText();
+  return result.text ?? '';
 }
 
 // ─── Strategy 3: Binary content-stream scan ───────────────────────────────────
@@ -254,7 +271,11 @@ async function getPageCount(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
   const pdf = await pdfjsLib
-    .getDocument({ data: new Uint8Array(buffer), verbosity: 0 })
+    .getDocument({
+      data: new Uint8Array(buffer),
+      disableWorker: true,
+      verbosity: 0,
+    } as unknown as PdfJsGetDocumentInput)
     .promise;
   return pdf.numPages;
 }

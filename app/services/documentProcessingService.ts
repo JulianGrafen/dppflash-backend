@@ -1,16 +1,17 @@
-import { extractPdfText, isValidExtractionText } from './pdfExtractionService';
-import { storePdfDocument, getPdfDocument } from './documentStorageService';
+import { storePdfDocument } from './documentStorageService';
 import { ProviderRegistry } from './aiProvider';
 import { DocumentMetadata, AIExtractionOutput, ProductPassport } from '../types/dpp-types';
+import { DppValidationError } from '@/app/domain/dpp/dppSchema';
+import { createAzureDppExtractionService } from '@/app/infrastructure/composition/dppExtractionComposition';
 
 /**
  * Document Processing Pipeline – End-to-End Orchestrierung.
  * 
  * Workflow:
  * 1. PDF hochladen → in Supabase Storage speichern
- * 2. Lokale Extraktion mit pdf-parse
- * 3. Validierung des Rohtexts
- * 4. Sende zu OpenAI für Strukturierung (DSGVO-konform)
+ * 2. Azure AI Document Intelligence analysiert das PDF
+ * 3. Azure OpenAI extrahiert semantisch das ESPR-DPP-Schema
+ * 4. Domain-Validierung prüft Pflichtfelder und Wertebereiche
  * 5. Ergebnis zurück an Nutzer (Human-in-the-Loop)
  * 
  * Fehlerbehandlung auf jede Stufe mit aussagekräftigen Fehlermeldungen.
@@ -47,60 +48,50 @@ export async function processPdfDocument(
       throw new Error(`Speicherfehler: ${error instanceof Error ? error.message : 'Unbekannt'}`);
     }
 
-    // Schritt 2: Lokale PDF-Extraktion (DSGVO-konform)
-    let rawText: string;
+    // Schritt 2: Hexagonaler Use Case mit Azure-Adaptern.
     try {
-      const result = await extractPdfText(file, fileName);
-      rawText = result.text;
-      documentMetadata.extractedText = rawText;
-    } catch (error) {
-      return {
-        documentMetadata,
-        extractedData: { productType: productTypeHint || 'BATTERY', confidence: 0, extractedFields: {}, warnings: [`Extraktion fehlgeschlagen: ${error}`] },
-        status: 'FAILED',
-        message: `PDF-Extraktion fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannt'}`,
-      };
-    }
-
-    // Schritt 3: Validierung Rohtext (nur Warnung – Extraktion wird trotzdem versucht)
-    if (!isValidExtractionText(rawText)) {
-      console.warn('⚠️ PDF-Text möglicherweise unvollständig, Extraktion wird trotzdem versucht.');
-    }
-
-    // Schritt 4: AI-Strukturierung (nur Rohtext zu OpenAI)
-    let extractedData: AIExtractionOutput;
-    try {
-      const aiProvider = ProviderRegistry.getActive();
-      console.log('📄 AI-Provider aktiv, starte Extraktion...', { rawText: rawText.substring(0, 200) });
-      extractedData = await aiProvider.extractProductData(rawText, productTypeHint);
-      console.log('✅ AI-Extraktion fertig:', { 
-        productType: extractedData.productType, 
-        confidence: extractedData.confidence,
-        hersteller: extractedData.extractedFields.hersteller,
-        modellname: extractedData.extractedFields.modellname
+      const dppExtractionService = createAzureDppExtractionService();
+      const result = await dppExtractionService.extractFromPdf({
+        pdf: file,
+        fileName,
+        productTypeHint,
       });
-    } catch (error) {
+
+      documentMetadata.status = 'EXTRACTED';
+
       return {
         documentMetadata,
         extractedData: {
-          productType: productTypeHint || 'BATTERY',
-          confidence: 0.5,
-          extractedFields: {},
-          warnings: [`AI-Strukturierung fehlgeschlagen, manuelle Eingabe erforderlich: ${error}`],
+          productType: 'OTHER',
+          confidence: result.confidence,
+          extractedFields: {
+            type: 'OTHER',
+            ...result.dpp,
+          } as Partial<ProductPassport>,
+          warnings: [...result.warnings],
         },
-        status: 'PARTIAL',
-        message: 'AI konnte Daten nicht vollständig extrahieren. Bitte manuell überprüfen.',
+        status: 'SUCCESS',
+        message: 'PDF erfolgreich als validierter ESPR-DPP verarbeitet',
+      };
+    } catch (error) {
+      const warnings = error instanceof DppValidationError
+        ? error.issues.map((issue) => `${issue.field}: ${issue.message}`)
+        : [`DPP-Extraktion fehlgeschlagen: ${error instanceof Error ? error.message : 'Unbekannt'}`];
+
+      return {
+        documentMetadata,
+        extractedData: {
+          productType: productTypeHint || 'OTHER',
+          confidence: 0,
+          extractedFields: {},
+          warnings,
+        },
+        status: error instanceof DppValidationError ? 'PARTIAL' : 'FAILED',
+        message: error instanceof DppValidationError
+          ? 'DPP-Daten extrahiert, aber ESPR-Pflichtfelder sind nicht valide.'
+          : 'DPP-Extraktion fehlgeschlagen.',
       };
     }
-
-    documentMetadata.status = 'EXTRACTED';
-
-    return {
-      documentMetadata,
-      extractedData,
-      status: 'SUCCESS',
-      message: 'PDF erfolgreich verarbeitet',
-    };
   } catch (error) {
     throw error;
   }

@@ -12,13 +12,48 @@ function generateProductId(): string {
   return `prod_${timestamp}_${random}`.substring(0, 30);
 }
 
+const INTERNAL_RESPONSE_FIELDS = new Set(['id', 'type', 'createdAt']);
+const SUPPORTED_PRODUCT_TYPES = new Set<ProductPassport['type']>([
+  'BATTERY',
+  'TEXTILE',
+  'ELECTRONICS',
+  'FURNITURE',
+  'CHEMICAL',
+  'OTHER',
+]);
+
+function parseProductType(value: string | null): ProductPassport['type'] | undefined {
+  if (!value || !SUPPORTED_PRODUCT_TYPES.has(value as ProductPassport['type'])) {
+    return undefined;
+  }
+
+  return value as ProductPassport['type'];
+}
+
+function toPublicExtractedData(
+  productType: string,
+  extractedFields: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    productType,
+    ...Object.fromEntries(
+      Object.entries(extractedFields).filter(([key, value]) => (
+        !INTERNAL_RESPONSE_FIELDS.has(key)
+        && value !== undefined
+        && value !== null
+        && value !== ''
+      )),
+    ),
+  };
+}
+
 /**
  * POST /api/documents/upload
  * 
  * Nimmt eine PDF-Datei entgegen und startet die Verarbeitungs-Pipeline:
  * 1. Speichern in Supabase Storage
- * 2. Lokale Extraktion (pdf-parse)
- * 3. AI-Strukturierung (OpenAI)
+ * 2. Azure AI Document Intelligence analysiert das PDF
+ * 3. Azure OpenAI extrahiert das ESPR-DPP-Schema
  * 4. **Speichern aller Daten im Store**
  * 5. Rückgabe strukturierter Daten mit Product-Link
  * 
@@ -75,7 +110,7 @@ export async function POST(request: NextRequest) {
     );
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const productType = productTypeParam as any;
+    const productType = parseProductType(productTypeParam);
 
     const result = await processPdfDocument(
       buffer,
@@ -84,7 +119,13 @@ export async function POST(request: NextRequest) {
       productType
     );
 
-    const extractedFields = result.extractedData.extractedFields as any;
+    const extractedFields = result.extractedData.extractedFields as Record<string, unknown>;
+
+    console.info('[DPP] upload_processed', {
+      status: result.status,
+      confidence: result.extractedData.confidence,
+      warningCount: result.extractedData.warnings.length,
+    });
 
     // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const productId = generateProductId();
@@ -92,16 +133,17 @@ export async function POST(request: NextRequest) {
       id: productId,
       type: result.extractedData.productType,
       createdAt: new Date(),
+      language: 'de',
       // Speichere ALLE extrahierten Felder, nicht nur ausgewählte
       ...extractedFields,
       // Speichere Extraktions-Metadaten damit die Produktseite echte Konfidenz zeigt
       extractionConfidence: result.extractedData.confidence,
       extractionWarnings: result.extractedData.warnings,
-    } as any;
+    } as ProductPassport;
 
     // Speichere das Produkt
     await saveProductToStore(productPassport);
-    console.log(`✅ Produkt gespeichert mit ID: ${productId}`);
+    console.info('[DPP] product_passport_saved', { productId });
 
     // ===== RESPONSE MIT PRODUCT-LINK =====
     const responseData = {
@@ -110,18 +152,14 @@ export async function POST(request: NextRequest) {
       documentId: result.documentMetadata.id,
       fileName: result.documentMetadata.fileName,
       uploadedAt: result.documentMetadata.uploadedAt,
-      extractedData: {
-        productType: result.extractedData.productType,
-        // Return ALL extracted fields — let the client decide what to show
-        ...extractedFields,
-      },
+      extractedData: toPublicExtractedData(result.extractedData.productType, extractedFields),
       confidence: result.extractedData.confidence,
       warnings: result.extractedData.warnings,
       status: result.status,
       message: result.message,
     };
 
-    console.log('📤 Final Response:', { productId, product_url: responseData.productUrl });
+    console.info('[DPP] upload_response_ready', { productId, status: result.status });
 
     return NextResponse.json(
       responseData,

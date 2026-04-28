@@ -1,5 +1,5 @@
 import { supabase, STORAGE_BUCKETS } from '../lib/supabase';
-import { DocumentMetadata, ExtractionResult } from '../types/dpp-types';
+import { DocumentMetadata } from '../types/dpp-types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -37,7 +37,7 @@ export async function storePdfDocument(
   try {
     // MVP: Speichere nur Metadaten (keine echte Supabase-Integration)
     // Zukünftig: Supabase Storage Integration
-    console.log(`💾 MVP-Speicher: Datei "${fileName}" registriert (${fileSize} bytes)`);
+    console.info('[DPP] document_registered', { fileSizeBytes: fileSize });
 
     const metadata: DocumentMetadata = {
       id: documentId,
@@ -51,7 +51,7 @@ export async function storePdfDocument(
       status: extractedText ? 'EXTRACTED' : 'PENDING',
     };
 
-    console.log(`✅ Dokumentmetadaten gespeichert: ${documentId}`);
+    console.info('[DPP] document_metadata_saved', { documentId });
     return metadata;
   } catch (error) {
     throw new Error(

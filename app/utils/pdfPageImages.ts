@@ -1,3 +1,5 @@
+import { configurePdfJsForServer } from './pdfJsServerConfig';
+
 export interface PdfPageImage {
   readonly pageNumber: number;
   readonly dataUrl: string;
@@ -31,6 +33,7 @@ export async function renderPdfPagesAsImages(
   const pdfjsLib = (await import(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
+  configurePdfJsForServer(pdfjsLib);
 
   const documentParameters = {
     data: new Uint8Array(buffer),

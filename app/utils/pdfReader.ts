@@ -14,6 +14,7 @@
  */
 
 import type { RawPdfContent } from '../types/extraction';
+import { configurePdfJsForServer } from './pdfJsServerConfig';
 
 type PdfJsGetDocumentInput = Parameters<typeof import('pdfjs-dist').getDocument>[0];
 
@@ -84,6 +85,7 @@ async function readWithPdfjs(buffer: Buffer): Promise<string> {
   const pdfjsLib = (await import(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
+  configurePdfJsForServer(pdfjsLib);
 
   const documentParameters = {
     data: new Uint8Array(buffer),
@@ -270,6 +272,7 @@ async function getPageCount(
   const pdfjsLib = (await import(
     'pdfjs-dist/legacy/build/pdf.mjs'
   )) as typeof import('pdfjs-dist');
+  configurePdfJsForServer(pdfjsLib);
   const pdf = await pdfjsLib
     .getDocument({
       data: new Uint8Array(buffer),

@@ -1,10 +1,3 @@
-export interface AzureDocumentIntelligenceConfig {
-  readonly endpoint: string;
-  readonly apiKey: string;
-  readonly apiVersion: string;
-  readonly modelId: string;
-}
-
 export interface AzureOpenAiConfig {
   readonly endpoint: string;
   readonly apiKey: string;
@@ -19,7 +12,6 @@ export interface AzureRegionConfig {
 
 export interface AzureDppConfig {
   readonly region: AzureRegionConfig['region'];
-  readonly documentIntelligence: AzureDocumentIntelligenceConfig;
   readonly openAi: AzureOpenAiConfig;
 }
 
@@ -40,12 +32,6 @@ function trimTrailingSlash(value: string): string {
 export function loadAzureDppConfig(): AzureDppConfig {
   return {
     region: 'germanywestcentral',
-    documentIntelligence: {
-      endpoint: trimTrailingSlash(readRequiredEnv('AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT')),
-      apiKey: readRequiredEnv('AZURE_DOCUMENT_INTELLIGENCE_API_KEY'),
-      apiVersion: process.env.AZURE_DOCUMENT_INTELLIGENCE_API_VERSION ?? '2024-11-30',
-      modelId: process.env.AZURE_DOCUMENT_INTELLIGENCE_MODEL_ID ?? 'prebuilt-layout',
-    },
     openAi: {
       endpoint: trimTrailingSlash(readRequiredEnv('AZURE_OPENAI_ENDPOINT')),
       apiKey: readRequiredEnv('AZURE_OPENAI_API_KEY'),

@@ -5,7 +5,6 @@ import {
 } from '@/app/domain/dpp/dppSchema';
 import type { DppValidationService } from '@/app/domain/dpp/validation/DppValidationService';
 import type { ValidationResult } from '@/app/domain/dpp/validation/DppValidationTypes';
-import type { PdfAnalysisPort } from '@/app/application/ports/PdfAnalysisPort';
 import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
 import type { SemanticDppExtractionPort } from '@/app/application/ports/SemanticDppExtractionPort';
 
@@ -25,7 +24,6 @@ export interface DppExtractionResponse {
 }
 
 interface DppExtractionServiceDependencies {
-  readonly pdfAnalyzer: PdfAnalysisPort;
   readonly semanticExtractor: SemanticDppExtractionPort;
   readonly dppValidationService: DppValidationService;
   readonly logger: SafeLoggerPort;
@@ -42,18 +40,9 @@ export class DppExtractionService {
       hasProductTypeHint: Boolean(request.productTypeHint),
     });
 
-    const analysis = await this.dependencies.pdfAnalyzer.analyze({
+    const semanticResult = await this.dependencies.semanticExtractor.extract({
       pdf: request.pdf,
       fileName: request.fileName,
-    });
-
-    this.dependencies.logger.info('pdf_analysis_completed', {
-      textLength: analysis.text.length,
-      pageCount: analysis.pageCount,
-    });
-
-    const semanticResult = await this.dependencies.semanticExtractor.extract({
-      documentText: analysis.text,
       productTypeHint: request.productTypeHint,
     });
 
@@ -89,7 +78,7 @@ export class DppExtractionService {
       warnings: [...semanticResult.warnings, ...validation.warnings],
       validationIssues: [],
       validationResult: validation,
-      pageCount: analysis.pageCount,
+      pageCount: semanticResult.pageCount,
     };
   }
 }

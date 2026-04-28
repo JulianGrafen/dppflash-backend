@@ -6,6 +6,7 @@ import type {
 } from '@/app/application/ports/SemanticDppExtractionPort';
 import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
 import type { AzureOpenAiConfig } from '@/app/infrastructure/azure/azureConfig';
+import { readPdf } from '@/app/utils/pdfReader';
 
 interface AzureOpenAiChatResponse {
   readonly choices?: readonly {
@@ -66,14 +67,14 @@ Return only JSON with this exact shape:
 Use null-free JSON. If a required value is not in the document, use an empty string or empty array and add a warning. Do not invent GTINs, UPIs, materials, substances or carbon data.`;
 }
 
-function buildUserPrompt(input: SemanticDppExtractionInput): string {
-  const hint = input.productTypeHint ? `Product type hint: ${input.productTypeHint}` : 'No product type hint provided.';
+function buildUserPrompt(documentText: string, productTypeHint?: string): string {
+  const hint = productTypeHint ? `Product type hint: ${productTypeHint}` : 'No product type hint provided.';
 
   return `${hint}
 
-Extract the ESPR DPP fields from this document text:
+Extract the ESPR DPP fields from this PDF-derived document text. The PDF was converted locally before this Azure OpenAI call, so treat the text as the source of truth and never invent missing values.
 
-${input.documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
+${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
 }
 
 export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
@@ -83,6 +84,15 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
   ) {}
 
   async extract(input: SemanticDppExtractionInput): Promise<SemanticDppExtractionResult> {
+    const pdfContent = await readPdf(input.pdf, input.fileName);
+    const userPrompt = buildUserPrompt(pdfContent.text, input.productTypeHint);
+
+    this.logger.info('pdf_prepared_for_azure_openai', {
+      fileSizeBytes: input.pdf.byteLength,
+      pageCount: pdfContent.pageCount,
+      textLength: pdfContent.text.length,
+    });
+
     const response = await fetch(this.chatCompletionsUrl(), {
       method: 'POST',
       headers: {
@@ -95,7 +105,7 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
         temperature: 0,
         messages: [
           { role: 'system', content: buildSystemPrompt() },
-          { role: 'user', content: buildUserPrompt(input) },
+          { role: 'user', content: userPrompt },
         ],
       }),
     });
@@ -122,6 +132,7 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
       dpp: envelope.dpp,
       confidence: envelope.confidence ?? 0,
       warnings: envelope.warnings ?? [],
+      pageCount: pdfContent.pageCount,
     };
   }
 

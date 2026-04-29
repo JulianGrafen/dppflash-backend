@@ -46,6 +46,11 @@ KEINE KOMPROMISSE: Eine falsche GTIN führt zu rechtlichen Konsequenzen. Wenn du
 
 REVIEW FLAG: Wenn du eine GTIN findest, der Text aber auch andere Produktvarianten erwähnt, oder wenn du Quellen kombinieren musstest, setze 'requiresManualReview' zwingend auf true und erkläre den Grund in 'reviewReason'.
 
+GTIN/EAN-REGEL:
+- Suche explizit nach Kennzeichnungen wie "GTIN", "EAN" oder "Barcode".
+- Bevorzuge Treffer mit 13 Ziffern (typische EAN/GTIN im EU-Handel) gegenüber kurzen internen Nummern.
+- Interne Artikelnummern/SKU/Art.-Nr./Bestellnummer sind keine GTIN und dürfen nicht als gtin ausgegeben werden.
+
 Gib ausschließlich valides JSON zurück.`;
 
 function buildUserPrompt(productName: string, manufacturer: string | undefined, sourceUrls: readonly string[], webMarkdown: string): string {
@@ -66,9 +71,15 @@ function parseEnrichmentPayload(content: string): EnrichmentPayload {
   }
 
   const record = parsed as Record<string, unknown>;
+  const rawGtin = typeof record.gtin === 'number'
+    ? String(Math.trunc(record.gtin))
+    : typeof record.gtin === 'string'
+      ? record.gtin
+      : '';
+  const gtin = normalizeGtin(rawGtin);
 
   return {
-    gtin: typeof record.gtin === 'string' && record.gtin.trim().length > 0 ? record.gtin.trim() : undefined,
+    gtin,
     origin: typeof record.origin === 'string' && record.origin.trim().length > 0 ? record.origin.trim() : undefined,
     confidence: typeof record.confidence === 'number' && Number.isFinite(record.confidence)
       ? Math.max(0, Math.min(1, record.confidence))
@@ -78,6 +89,20 @@ function parseEnrichmentPayload(content: string): EnrichmentPayload {
       ? record.reviewReason.trim()
       : null,
   };
+}
+
+function normalizeGtin(value: string): string | undefined {
+  const compact = value.trim();
+  if (!compact) {
+    return undefined;
+  }
+
+  const digitsOnly = compact.replace(/\D/g, '');
+  if (/^\d{8}$|^\d{13}$|^\d{14}$/.test(digitsOnly)) {
+    return digitsOnly;
+  }
+
+  return undefined;
 }
 
 function chatCompletionsUrl(): string {

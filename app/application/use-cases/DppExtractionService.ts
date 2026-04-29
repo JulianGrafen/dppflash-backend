@@ -34,16 +34,39 @@ interface DppExtractionServiceDependencies {
 const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
 const REVIEW_REQUIRED = 'REVIEW_REQUIRED';
 const COMPLIANT = 'COMPLIANT';
+const WASTE_CODE_PATTERN = /\b\d{2}\s?\d{2}\s?\d{2}\*?\b/;
+
+function extractWasteCodeCandidate(dpp: DppProductPassport): string | undefined {
+  const candidates = [
+    dpp.wasteCode,
+    dpp.endOfLifeInstructions,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const match = candidate.match(WASTE_CODE_PATTERN);
+    if (match?.[0]) {
+      return match[0];
+    }
+  }
+
+  return undefined;
+}
 
 function enrichWasteCode(dpp: DppProductPassport): {
   readonly dpp: DppProductPassport;
   readonly warnings: readonly string[];
 } {
-  if (!dpp.wasteCode) {
+  const rawWasteCode = extractWasteCodeCandidate(dpp);
+
+  if (!rawWasteCode) {
     return { dpp, warnings: [] };
   }
 
-  const resolution = WasteCodeService.resolve(dpp.wasteCode);
+  const resolution = WasteCodeService.resolve(rawWasteCode);
   const existingInstructions = dpp.endOfLifeInstructions?.trim();
   const mergedInstructions = existingInstructions
     ? existingInstructions.includes(resolution.instruction)
@@ -57,9 +80,12 @@ function enrichWasteCode(dpp: DppProductPassport): {
       wasteCode: resolution.normalizedCode,
       endOfLifeInstructions: mergedInstructions,
     },
-    warnings: resolution.found
-      ? []
-      : [`wasteCode: ${resolution.instruction} (${resolution.normalizedCode || dpp.wasteCode})`],
+    warnings: [
+      ...(dpp.wasteCode ? [] : [`wasteCode: Extracted from disposal text (${resolution.normalizedCode}).`]),
+      ...(resolution.found
+        ? []
+        : [`wasteCode: ${resolution.instruction} (${resolution.normalizedCode || rawWasteCode})`]),
+    ],
   };
 }
 

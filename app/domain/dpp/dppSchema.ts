@@ -56,11 +56,24 @@ export interface EnvironmentalImpactSummary {
   readonly impactNotes?: string;
 }
 
+export interface EnrichmentReview {
+  readonly required: boolean;
+  readonly status: 'PENDING' | 'VALIDATED';
+  readonly enrichedFields?: readonly string[];
+  readonly sourceUrls?: readonly string[];
+  readonly confidence?: number;
+  readonly requiresManualReview?: boolean;
+  readonly reviewReason?: string | null;
+  readonly validatedAt?: string;
+}
+
 export interface DppProductPassport {
   readonly schemaVersion: typeof DPP_SCHEMA_VERSION;
   readonly declaredProductType?: string;
   readonly productName: string;
   readonly wasteCode?: string;
+  readonly complianceStatus?: 'REVIEW_REQUIRED' | 'COMPLIANT';
+  readonly enrichmentReview?: EnrichmentReview;
   readonly manufacturer?: ManufacturerInfo;
   readonly countryOfOrigin?: string;
   readonly countryOfManufacturing?: string;

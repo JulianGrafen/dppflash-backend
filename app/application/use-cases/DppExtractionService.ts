@@ -32,6 +32,8 @@ interface DppExtractionServiceDependencies {
 }
 
 const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
+const REVIEW_REQUIRED = 'REVIEW_REQUIRED';
+const COMPLIANT = 'COMPLIANT';
 
 function enrichWasteCode(dpp: DppProductPassport): {
   readonly dpp: DppProductPassport;
@@ -67,12 +69,45 @@ function needsIdentifierEnrichment(dpp: DppProductPassport): boolean {
 
 function withAppliedEnrichment(
   dpp: DppProductPassport,
-  enrichment: { readonly gtin?: string; readonly origin?: string; readonly confidence: number; readonly sourceUrls: readonly string[] },
+  enrichment: {
+    readonly gtin?: string;
+    readonly origin?: string;
+    readonly confidence: number;
+    readonly sourceUrls: readonly string[];
+    readonly requiresManualReview: boolean;
+    readonly reviewReason: string | null;
+  },
 ): DppProductPassport {
+  const enrichedFields: string[] = [];
+  const nextGtin = enrichment.gtin ?? dpp.gtin;
+  const nextCountryOfOrigin = enrichment.origin ?? dpp.countryOfOrigin;
+
+  if (enrichment.gtin && enrichment.gtin !== dpp.gtin) {
+    enrichedFields.push('gtin');
+  }
+
+  if (enrichment.origin && enrichment.origin !== dpp.countryOfOrigin) {
+    enrichedFields.push('countryOfOrigin');
+  }
+
+  const reviewRequired = enrichedFields.length > 0 || enrichment.requiresManualReview;
+
   return {
     ...dpp,
-    gtin: enrichment.gtin ?? dpp.gtin,
-    countryOfOrigin: enrichment.origin ?? dpp.countryOfOrigin,
+    gtin: nextGtin,
+    countryOfOrigin: nextCountryOfOrigin,
+    complianceStatus: reviewRequired ? REVIEW_REQUIRED : (dpp.complianceStatus ?? COMPLIANT),
+    enrichmentReview: reviewRequired
+      ? {
+          required: true,
+          status: 'PENDING',
+          enrichedFields,
+          sourceUrls: enrichment.sourceUrls,
+          confidence: enrichment.confidence,
+          requiresManualReview: enrichment.requiresManualReview,
+          reviewReason: enrichment.reviewReason,
+        }
+      : dpp.enrichmentReview,
   };
 }
 

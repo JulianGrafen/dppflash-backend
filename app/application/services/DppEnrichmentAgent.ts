@@ -16,6 +16,8 @@ interface EnrichmentPayload {
   readonly gtin?: string;
   readonly origin?: string;
   readonly confidence?: number;
+  readonly requiresManualReview?: boolean;
+  readonly reviewReason?: string | null;
 }
 
 export interface DppEnrichmentAgentInput {
@@ -28,14 +30,23 @@ export interface DppEnrichmentAgentResult {
   readonly origin?: string;
   readonly confidence: number;
   readonly sourceUrls: readonly string[];
+  readonly requiresManualReview: boolean;
+  readonly reviewReason: string | null;
 }
 
-function buildSystemPrompt(): string {
-  return `Du bist ein Daten-Validierer. Ich habe ein Produkt aus einem Sicherheitsdatenblatt (SDB) und Informationen aus dem Web.
-Aufgabe: Finde die GTIN und das Ursprungsland.
-WICHTIG: Wenn die Web-Informationen zu einem anderen Produkt gehören (z.B. andere Größe oder Modell), ignoriere sie.
-Antworte nur im JSON-Format: { gtin: string, origin: string, confidence: number }`;
-}
+const ENRICHMENT_SYSTEM_PROMPT = (productName: string, manufacturer: string, n: number) => `Du bist ein extrem strenger Compliance-Auditor für Produktdaten.
+Zielprodukt: '${productName}' von '${manufacturer}'.
+Du erhältst unstrukturierten Text von ${n} Webseiten-Scrapes.
+
+REGELN:
+
+EXACT MATCH VERIFICATION: Prüfe zwingend, ob der Text exakt das Zielprodukt beschreibt. Wenn der Text Varianten wie 'Stark', 'Mega' oder 'Naturstein' behandelt, IGNORIERE DIESE DATEN KOMPLETT.
+
+KEINE KOMPROMISSE: Eine falsche GTIN führt zu rechtlichen Konsequenzen. Wenn du dir nicht zu 100 % sicher bist, dass die gefundene GTIN exakt zum Zielprodukt gehört, setze gtin auf null.
+
+REVIEW FLAG: Wenn du eine GTIN findest, der Text aber auch andere Produktvarianten erwähnt, oder wenn du Quellen kombinieren musstest, setze 'requiresManualReview' zwingend auf true und erkläre den Grund in 'reviewReason'.
+
+Gib ausschließlich valides JSON zurück.`;
 
 function buildUserPrompt(productName: string, manufacturer: string | undefined, sourceUrls: readonly string[], webMarkdown: string): string {
   return `Produktname: ${productName}
@@ -62,6 +73,10 @@ function parseEnrichmentPayload(content: string): EnrichmentPayload {
     confidence: typeof record.confidence === 'number' && Number.isFinite(record.confidence)
       ? Math.max(0, Math.min(1, record.confidence))
       : undefined,
+    requiresManualReview: typeof record.requiresManualReview === 'boolean' ? record.requiresManualReview : undefined,
+    reviewReason: typeof record.reviewReason === 'string' && record.reviewReason.trim().length > 0
+      ? record.reviewReason.trim()
+      : null,
   };
 }
 
@@ -85,6 +100,8 @@ export class DppEnrichmentAgent {
       return {
         confidence: 0,
         sourceUrls: [],
+        requiresManualReview: false,
+        reviewReason: null,
       };
     }
 
@@ -101,6 +118,8 @@ export class DppEnrichmentAgent {
       return {
         confidence: 0,
         sourceUrls: urls,
+        requiresManualReview: false,
+        reviewReason: null,
       };
     }
 
@@ -116,7 +135,7 @@ export class DppEnrichmentAgent {
         response_format: { type: 'json_object' },
         temperature: 0,
         messages: [
-          { role: 'system', content: buildSystemPrompt() },
+          { role: 'system', content: ENRICHMENT_SYSTEM_PROMPT(productName, manufacturer ?? 'unbekannt', markdownParts.length) },
           {
             role: 'user',
             content: buildUserPrompt(productName, manufacturer, urls, markdownParts.join('\n\n')),
@@ -143,6 +162,8 @@ export class DppEnrichmentAgent {
       origin: enrichment.origin,
       confidence: enrichment.confidence ?? 0,
       sourceUrls: urls,
+      requiresManualReview: enrichment.requiresManualReview ?? false,
+      reviewReason: enrichment.reviewReason ?? null,
     };
   }
 }

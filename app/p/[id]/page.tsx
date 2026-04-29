@@ -39,6 +39,29 @@ function Field({ label, value }: { label: string; value?: string | number }) {
   );
 }
 
+function ReviewField({
+  label,
+  value,
+  highlighted,
+}: {
+  label: string;
+  value?: string | number;
+  highlighted: boolean;
+}) {
+  if (!highlighted) {
+    return <Field label={label} value={value} />;
+  }
+
+  if (value === undefined || value === null || value === '') return null;
+
+  return (
+    <div className="flex justify-between items-start gap-4 px-5 py-3 bg-yellow-50 border-l-4 border-yellow-300">
+      <dt className="text-sm text-yellow-700 shrink-0 w-44">{label}</dt>
+      <dd className="text-sm font-semibold text-yellow-900 text-right">{String(value)}</dd>
+    </div>
+  );
+}
+
 function Pct({ label, value }: { label: string; value?: number }) {
   if (value === undefined) return null;
   return <Field label={label} value={`${value} %`} />;
@@ -440,14 +463,21 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const hasWarnings = p.extractionWarnings.length > 0;
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
   const displayProductName = readDisplayProductName(raw, p);
+  const enrichmentReview = asRecord(raw.enrichmentReview);
+  const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
+  const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
+  const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
+    || asString(enrichmentReview?.status) === 'PENDING';
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
 
       {/* ── Page header ── */}
       <header className="bg-white border-b px-4 py-7 text-center shadow-sm">
-        <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
-          <ShieldCheck size={14} /> EU-Konform · ESPR 2024/1781
+        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 ${
+          isReviewRequired ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+        }`}>
+          <ShieldCheck size={14} /> {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'} · ESPR 2024/1781
         </div>
         <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">{displayProductName}</h1>
         <p className="text-gray-500 text-sm mt-1">Digitaler Produktpass</p>
@@ -484,12 +514,45 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           </div>
         )}
 
+        {isReviewRequired && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 space-y-3">
+            <p className="text-sm font-semibold text-yellow-800">
+              Enrichment-Werte wurden automatisch aus Web-Quellen ergänzt. Bitte prüfen und bestätigen.
+            </p>
+            {enrichmentSources.length > 0 ? (
+              <ul className="text-sm text-yellow-900 space-y-1">
+                {enrichmentSources.map((url) => (
+                  <li key={url}>
+                    <a href={url} target="_blank" rel="noreferrer" className="underline hover:no-underline">
+                      {url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <form action="/api/products/validate" method="post">
+              <input type="hidden" name="productId" value={p.id} />
+              <input type="hidden" name="returnUrl" value={`/p/${p.id}`} />
+              <button
+                type="submit"
+                className="inline-flex items-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white hover:bg-yellow-700"
+              >
+                Daten validieren
+              </button>
+            </form>
+          </div>
+        )}
+
         {/* ── Identity ── */}
         <Section title="Allgemeine Informationen">
           <Field label="Hersteller"        value={p.manufacturer.name || p.hersteller} />
           <Field label="Adresse"           value={p.manufacturer.address} />
           <Field label="Land"              value={p.manufacturer.country} />
-          <Field label="Ursprungsland"     value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined} />
+          <ReviewField
+            label="Ursprungsland"
+            value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}
+            highlighted={enrichmentFields.includes('countryOfOrigin')}
+          />
           <Field label="Herstellungsland"  value={typeof raw.countryOfManufacturing === 'string' ? raw.countryOfManufacturing : undefined} />
           <Field label="Modell"            value={p.modellname} />
           <Field label="Seriennummer"      value={p.serialNumber} />
@@ -512,7 +575,11 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
-          <Field label="GTIN" value={typeof raw.gtin === 'string' ? raw.gtin : undefined} />
+          <ReviewField
+            label="GTIN"
+            value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
+            highlighted={enrichmentFields.includes('gtin')}
+          />
           {renderManufacturerDetails(raw.manufacturer)}
           {renderMaterialComposition(raw.materialComposition)}
           {renderChemicalComposition(raw.chemicalComposition)}

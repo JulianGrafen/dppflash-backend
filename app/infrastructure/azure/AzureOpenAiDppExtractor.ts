@@ -62,6 +62,7 @@ Return only JSON with this exact shape:
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "optional string such as Klebstoff, adhesive, battery or textile",
     "productName": "clear commercial or technical product name",
+    "wasteCode": "optional EAK/EWC waste code such as 08 04 09*",
     "manufacturer": {
       "name": "string",
       "address": "optional string",
@@ -123,6 +124,7 @@ Extraction robustness rules:
 - Preserve original business wording of materials and substances where possible.
 - If a CAS number is visible for a material or substance, copy it exactly.
 - productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
+- wasteCode should capture any explicit EAK/EWC waste code or European waste catalogue code shown in disposal, recycling or safety sections.
 - manufacturer should identify the legal manufacturer or brand owner when visible.
 - countryOfOrigin and countryOfManufacturing may differ; extract both separately when the document distinguishes them.
 - supplierAndProcessInformation should capture supplier/process details only when the document clearly states the level or stage.
@@ -136,6 +138,7 @@ Example target output for an adhesive product sheet:
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "Industriekleber",
     "productName": "Industriekleber UltraFix 5000",
+    "wasteCode": "08 04 09*",
     "manufacturer": {
       "name": "Henkel",
       "address": "Düsseldorf, Germany",
@@ -206,6 +209,7 @@ function buildUserPrompt(documentText: string, productTypeHint?: string): string
 Extract the ESPR DPP fields from this PDF-derived document text. The PDF was converted locally before this Azure OpenAI call, so treat the text as the source of truth and never invent missing values.
 Map common synonyms:
 - product name = Produktname, Handelsname, trade name, product designation, technical name, Produktbezeichnung
+- waste code = EAK, EWC, Abfallschluessel, waste code, European Waste Catalogue code, AVV code
 - manufacturer = Hersteller, manufacturer, brand owner, legal manufacturer
 - country of origin = Ursprungsland, origin, made in, country of origin
 - country of manufacturing = Herstellungsland, manufacturing country, produced in, assembled in

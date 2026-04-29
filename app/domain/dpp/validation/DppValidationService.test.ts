@@ -83,4 +83,17 @@ describe('DppValidationService', () => {
       'DPP_SUBSTANCE_OF_CONCERN_EXCEEDS_THRESHOLD: Substance "Bisphenol-A" exceeds the allowed threshold of 1.5%. Current concentration is 65.00%. Please review manually.',
     );
   });
+
+  it('returns a warning when a waste code is not found in the mapping', () => {
+    const service = new DppValidationService();
+
+    const result = service.validate(createValidPassport({
+      wasteCode: '99 99 99',
+    }));
+
+    expect(result.isValid).toBe(true);
+    expect(result.warnings).toContain(
+      'DPP_UNKNOWN_WASTE_CODE: Waste code "99 99 99" was not found in the configured mapping. Manual review by the specialist department is required.',
+    );
+  });
 });

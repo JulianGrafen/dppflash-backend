@@ -3,6 +3,7 @@ import {
   type DppProductPassport,
   type DppValidationIssue,
 } from '@/app/domain/dpp/dppSchema';
+import { WasteCodeService } from '@/app/application/services/WasteCodeService';
 import type { DppValidationService } from '@/app/domain/dpp/validation/DppValidationService';
 import type { ValidationResult } from '@/app/domain/dpp/validation/DppValidationTypes';
 import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
@@ -29,6 +30,34 @@ interface DppExtractionServiceDependencies {
   readonly logger: SafeLoggerPort;
 }
 
+function enrichWasteCode(dpp: DppProductPassport): {
+  readonly dpp: DppProductPassport;
+  readonly warnings: readonly string[];
+} {
+  if (!dpp.wasteCode) {
+    return { dpp, warnings: [] };
+  }
+
+  const resolution = WasteCodeService.resolve(dpp.wasteCode);
+  const existingInstructions = dpp.endOfLifeInstructions?.trim();
+  const mergedInstructions = existingInstructions
+    ? existingInstructions.includes(resolution.instruction)
+      ? existingInstructions
+      : `${existingInstructions} ${resolution.instruction}`
+    : resolution.instruction;
+
+  return {
+    dpp: {
+      ...dpp,
+      wasteCode: resolution.normalizedCode,
+      endOfLifeInstructions: mergedInstructions,
+    },
+    warnings: resolution.found
+      ? []
+      : [`wasteCode: ${resolution.instruction} (${resolution.normalizedCode || dpp.wasteCode})`],
+  };
+}
+
 export class DppExtractionService {
   constructor(private readonly dependencies: DppExtractionServiceDependencies) {}
 
@@ -45,8 +74,9 @@ export class DppExtractionService {
       fileName: request.fileName,
       productTypeHint: request.productTypeHint,
     });
+    const wasteCodeEnrichment = enrichWasteCode(semanticResult.dpp);
 
-    const validation = this.dependencies.dppValidationService.validate(semanticResult.dpp);
+    const validation = this.dependencies.dppValidationService.validate(wasteCodeEnrichment.dpp);
 
     if (!validation.isValid) {
       this.dependencies.logger.warn('dpp_validation_failed', {
@@ -73,9 +103,9 @@ export class DppExtractionService {
     });
 
     return {
-      dpp: semanticResult.dpp,
+      dpp: wasteCodeEnrichment.dpp,
       confidence: semanticResult.confidence,
-      warnings: [...semanticResult.warnings, ...validation.warnings],
+      warnings: [...semanticResult.warnings, ...wasteCodeEnrichment.warnings, ...validation.warnings],
       validationIssues: [],
       validationResult: validation,
       pageCount: semanticResult.pageCount,

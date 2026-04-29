@@ -13,6 +13,7 @@ import { MandatoryIdentifiersRule } from '@/app/domain/dpp/validation/rules/Mand
 import { MaterialTotalPercentageRule } from '@/app/domain/dpp/validation/rules/MaterialTotalPercentageRule';
 import { PercentageRangeRule } from '@/app/domain/dpp/validation/rules/PercentageRangeRule';
 import { SubstanceOfConcernThresholdRule } from '@/app/domain/dpp/validation/rules/SubstanceOfConcernThresholdRule';
+import { WasteCodeMappingRule } from '@/app/domain/dpp/validation/rules/WasteCodeMappingRule';
 
 const ERROR_SCORE_PENALTY = 25;
 const WARNING_SCORE_PENALTY = 10;
@@ -71,6 +72,7 @@ export class DppValidationService {
       new CarbonFootprintRule(),
       new AdhesiveChemicalComponentsRule(),
       new SubstanceOfConcernThresholdRule(),
+      new WasteCodeMappingRule(),
     ];
   }
 }

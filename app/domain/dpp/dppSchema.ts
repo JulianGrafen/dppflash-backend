@@ -60,6 +60,7 @@ export interface DppProductPassport {
   readonly schemaVersion: typeof DPP_SCHEMA_VERSION;
   readonly declaredProductType?: string;
   readonly productName: string;
+  readonly wasteCode?: string;
   readonly manufacturer?: ManufacturerInfo;
   readonly countryOfOrigin?: string;
   readonly countryOfManufacturing?: string;
@@ -224,6 +225,10 @@ export function validateDppProductPassport(data: DppProductPassport): DppValidat
 
   if (!isNonEmptyString(data.productName)) {
     issues.push({ field: 'productName', message: 'Product name is required.' });
+  }
+
+  if (data.wasteCode !== undefined && !isNonEmptyString(data.wasteCode)) {
+    issues.push({ field: 'wasteCode', message: 'Waste code must not be empty when provided.' });
   }
 
   if (!GTIN_PATTERN.test(data.gtin) || !hasValidGtinChecksum(data.gtin)) {

@@ -510,6 +510,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="DPP-Kernfelder (ESPR)">
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
+          <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
           <Field label="GTIN" value={typeof raw.gtin === 'string' ? raw.gtin : undefined} />
           {renderManufacturerDetails(raw.manufacturer)}

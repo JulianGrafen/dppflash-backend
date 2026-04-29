@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DppSchemaVersion, getRecyclingInstructionsByEwcCode } from '@/app/domain/models/DppModel';
+import { WasteCodeService } from '@/app/application/services/WasteCodeService';
+import { DppSchemaVersion } from '@/app/domain/models/DppModel';
 import { DppValidationService } from '@/app/application/validation/DppValidationService';
 
 function createValidPayload() {
@@ -75,11 +76,27 @@ describe('application DppValidationService', () => {
     expect(report.warnings.some((warning) => warning.code === 'DPP_RECYCLING_GUIDANCE')).toBe(true);
     expect(report.requiredActions.some((action) => action.includes('Gefaehrlicher Abfall'))).toBe(true);
   });
+
+  it('warns when the extracted waste code is not found in the mapping', () => {
+    const service = new DppValidationService();
+    const payload = createValidPayload();
+
+    const report = service.validate({
+      ...payload,
+      circularity: {
+        ...payload.circularity,
+        ewcCode: '99 99 99',
+      },
+    });
+
+    expect(report.warnings.some((warning) => warning.code === 'DPP_UNKNOWN_WASTE_CODE')).toBe(true);
+    expect(report.requiredActions.some((action) => action.includes('specialist department'))).toBe(true);
+  });
 });
 
-describe('getRecyclingInstructionsByEwcCode', () => {
+describe('WasteCodeService', () => {
   it('adds hazardous waste note for starred codes', () => {
-    const instructions = getRecyclingInstructionsByEwcCode('08 04 09*');
+    const instructions = WasteCodeService.resolve('08 04 09*').instruction;
 
     expect(instructions).toContain('Gefaehrlicher Abfall');
   });

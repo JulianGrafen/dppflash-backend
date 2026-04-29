@@ -35,6 +35,3 @@ export interface DppWarningRule {
   validate(dpp: GuardedDppPayload): readonly ValidationMessage[];
 }
 
-export interface RecyclingInstructionResolver {
-  getInstructions(ewcCode: string): string | undefined;
-}

@@ -1,13 +1,10 @@
 import { ZodError } from 'zod';
-import {
-  checkComplianceGaps,
-  getRecyclingInstructionsByEwcCode,
-} from '@/app/domain/models/DppModel';
+import { WasteCodeService } from '@/app/application/services/WasteCodeService';
+import { checkComplianceGaps } from '@/app/domain/models/DppModel';
 import type {
   DppValidationRule,
   DppWarningRule,
   GuardedDppPayload,
-  RecyclingInstructionResolver,
   ValidationMessage,
   ValidationReport,
   ValidationStatus,
@@ -26,13 +23,6 @@ const WARNING_SCORE_PENALTY = 5;
 export interface DppValidationServiceOptions {
   readonly validationRules?: readonly DppValidationRule[];
   readonly warningRules?: readonly DppWarningRule[];
-  readonly recyclingInstructionResolver?: RecyclingInstructionResolver;
-}
-
-class StaticRecyclingInstructionResolver implements RecyclingInstructionResolver {
-  getInstructions(ewcCode: string): string | undefined {
-    return getRecyclingInstructionsByEwcCode(ewcCode);
-  }
 }
 
 function toSchemaErrors(error: ZodError): readonly ValidationMessage[] {
@@ -128,20 +118,31 @@ function splitGapMessages(
 
 function createRecyclingMessages(
   dpp: GuardedDppPayload,
-  resolver: RecyclingInstructionResolver,
 ): readonly ValidationMessage[] {
   const ewcCode = dpp.circularity.ewcCode;
-  const instructions = ewcCode ? resolver.getInstructions(ewcCode) : undefined;
 
-  if (!ewcCode || !instructions) {
+  if (!ewcCode) {
     return [];
   }
 
-  return [{
+  const resolution = WasteCodeService.resolve(ewcCode);
+  const warnings: ValidationMessage[] = [];
+
+  if (!resolution.found) {
+    warnings.push({
+      code: 'DPP_UNKNOWN_WASTE_CODE',
+      path: 'circularity.ewcCode',
+      message: `Waste code "${resolution.normalizedCode || ewcCode}" was not found in the configured mapping. Manual review by the specialist department is required.`,
+    });
+  }
+
+  warnings.push({
     code: 'DPP_RECYCLING_GUIDANCE',
     path: 'circularity.ewcCode',
-    message: instructions,
-  }];
+    message: resolution.instruction,
+  });
+
+  return warnings;
 }
 
 function toRequiredActions(messages: readonly ValidationMessage[]): readonly string[] {
@@ -171,12 +172,9 @@ export class DppValidationService {
 
   private readonly warningRules: readonly DppWarningRule[];
 
-  private readonly recyclingInstructionResolver: RecyclingInstructionResolver;
-
   constructor(options: DppValidationServiceOptions = {}) {
     this.validationRules = options.validationRules ?? DppValidationService.createDefaultValidationRules();
     this.warningRules = options.warningRules ?? DppValidationService.createDefaultWarningRules();
-    this.recyclingInstructionResolver = options.recyclingInstructionResolver ?? new StaticRecyclingInstructionResolver();
   }
 
   validate(extractedJson: unknown): ValidationReport {
@@ -192,7 +190,7 @@ export class DppValidationService {
     const ruleWarnings = this.warningRules.flatMap((rule) => rule.validate(dpp));
     const gapMessages = createGapMessages(dpp);
     const splitGaps = splitGapMessages(gapMessages);
-    const recyclingMessages = createRecyclingMessages(dpp, this.recyclingInstructionResolver);
+    const recyclingMessages = createRecyclingMessages(dpp);
     const errors = [...ruleErrors, ...splitGaps.errors];
     const warnings = [...ruleWarnings, ...splitGaps.warnings, ...recyclingMessages];
     const complianceGaps = checkComplianceGaps(dpp);

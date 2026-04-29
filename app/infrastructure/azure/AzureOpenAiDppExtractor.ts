@@ -38,6 +38,10 @@ type AzureOpenAiUserContentPart =
 
 const MAX_DOCUMENT_TEXT_CHARS = 20_000;
 const MAX_ERROR_BODY_CHARS = 700;
+const COMPOSITION_TARGET_PERCENT = 100;
+const COMPOSITION_TOLERANCE = 0.01;
+const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
+const SYNTHETIC_FILLER_NAME = 'Nicht deklarationspflichtige Stoffe / Fuellstoffe';
 let hasLoggedAzureOpenAiUrl = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,6 +56,116 @@ function parseExtractionEnvelope(content: string): DppExtractionEnvelope {
   }
 
   return parsed as unknown as DppExtractionEnvelope;
+}
+
+function parsePercentageLike(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const compact = value.replace(/\s+/g, '').replace(',', '.');
+  const explicitRange = compact.match(/^(-?\d+(?:\.\d+)?)-<?(-?\d+(?:\.\d+)?)%?$/);
+
+  if (explicitRange) {
+    const lower = Number(explicitRange[1]);
+    const upper = Number(explicitRange[2]);
+    if (Number.isFinite(lower) && Number.isFinite(upper)) {
+      return (lower + upper) / 2;
+    }
+  }
+
+  const normalized = compact.endsWith('%') ? compact.slice(0, -1) : compact;
+  const direct = Number(normalized);
+
+  if (!Number.isFinite(direct)) {
+    return undefined;
+  }
+
+  return direct;
+}
+
+function normalizeMaterialComposition(
+  dpp: DppProductPassport,
+): { readonly dpp: DppProductPassport; readonly warnings: readonly string[] } {
+  const normalizedMaterials = dpp.materialComposition.map((entry) => {
+    const normalizedPercentage = parsePercentageLike(entry.percentage);
+    return {
+      ...entry,
+      percentage: normalizedPercentage ?? entry.percentage,
+    };
+  });
+
+  const total = normalizedMaterials.reduce((sum, material) => sum + material.percentage, 0);
+  const missingShare = COMPOSITION_TARGET_PERCENT - total;
+
+  if (missingShare <= COMPOSITION_TOLERANCE) {
+    return {
+      dpp: {
+        ...dpp,
+        materialComposition: normalizedMaterials,
+      },
+      warnings: [],
+    };
+  }
+
+  return {
+    dpp: {
+      ...dpp,
+      materialComposition: [
+        ...normalizedMaterials,
+        {
+          material: SYNTHETIC_FILLER_NAME,
+          percentage: Number(missingShare.toFixed(2)),
+        },
+      ],
+    },
+    warnings: [
+      `materialComposition: Added synthetic filler entry "${SYNTHETIC_FILLER_NAME}" with ${missingShare.toFixed(2)}% to close mass balance for partially declared SDB composition.`,
+    ],
+  };
+}
+
+function normalizeIdentifiers(dpp: DppProductPassport): {
+  readonly dpp: DppProductPassport;
+  readonly warnings: readonly string[];
+} {
+  const warnings: string[] = [];
+  const upi = dpp.upi?.trim() ? dpp.upi : PENDING_EXTERNAL_MATCH;
+  const gtin = dpp.gtin?.trim() ? dpp.gtin : PENDING_EXTERNAL_MATCH;
+
+  if (upi === PENDING_EXTERNAL_MATCH) {
+    warnings.push('upi: Not explicitly found in document. Set to PENDING_EXTERNAL_MATCH.');
+  }
+
+  if (gtin === PENDING_EXTERNAL_MATCH) {
+    warnings.push('gtin: Not explicitly found in document. Set to PENDING_EXTERNAL_MATCH.');
+  }
+
+  return {
+    dpp: {
+      ...dpp,
+      upi,
+      gtin,
+    },
+    warnings,
+  };
+}
+
+function normalizeExtractedDpp(dpp: DppProductPassport): {
+  readonly dpp: DppProductPassport;
+  readonly warnings: readonly string[];
+} {
+  const normalizedIdentifiers = normalizeIdentifiers(dpp);
+  const normalizedComposition = normalizeMaterialComposition(normalizedIdentifiers.dpp);
+
+  return {
+    dpp: normalizedComposition.dpp,
+    warnings: [...normalizedIdentifiers.warnings, ...normalizedComposition.warnings],
+  };
 }
 
 function buildSystemPrompt(): string {
@@ -94,8 +208,8 @@ Return only JSON with this exact shape:
       "waterFootprintLiters": 0,
       "impactNotes": "optional string"
     },
-    "upi": "string",
-    "gtin": "valid GTIN-8/12/13/14 string",
+    "upi": "string or PENDING_EXTERNAL_MATCH if not explicitly found",
+    "gtin": "valid GTIN-8/12/13/14 string or PENDING_EXTERNAL_MATCH if not explicitly found",
     "materialComposition": [{ "material": "string", "percentage": 0 }],
     "recycledContent": [{ "material": "string", "percentage": 0 }],
     "carbonFootprint": {
@@ -117,7 +231,11 @@ Use null-free JSON. If a required value is not in the document, use an empty str
 Extraction robustness rules:
 - Handle OCR noise, broken line breaks, and multilingual labels (DE/EN) like UPI, GTIN, batch/lot, composition/material mix, recycled content, carbon footprint, substances of concern.
 - Normalize percentages from formats like "12,5%", "12.5 %", "0.125" (if clearly percentage context convert to 12.5).
-- materialComposition must represent full composition (virgin + recycled shares) and should target ~100%.
+- If composition values are ranges like "20-<40%", use the midpoint (e.g. 30) for calculation.
+- materialComposition must represent full composition (virgin + recycled shares) and should target 100%.
+- For safety data sheets: scan materialComposition primarily from SECTION 3 and disposal instructions/wasteCode primarily from SECTION 13.
+- If SECTION 3 only lists hazardous substances and total is below 100, add synthetic entry:
+  { "material": "Nicht deklarationspflichtige Stoffe / Fuellstoffe", "percentage": <difference to 100> }.
 - recycledContent is a subset breakdown and MUST NOT be added on top of materialComposition total.
 - If units or values are ambiguous, keep safest value and add a warning describing ambiguity.
 - For adhesives, coatings, chemicals and technical data sheets, prefer extracting named formulation components, fillers, binders, diluents, modifiers, additives and hazardous substances.
@@ -125,6 +243,8 @@ Extraction robustness rules:
 - If a CAS number is visible for a material or substance, copy it exactly.
 - productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
 - wasteCode should capture any explicit EAK/EWC waste code or European waste catalogue code shown in disposal, recycling or safety sections.
+- Never hallucinate identifiers. If UPI or GTIN are not explicit in document, set them to "${PENDING_EXTERNAL_MATCH}".
+- For UPI prioritization, scan the header first for SDB-Nr, Artikelnummer, product code, item number.
 - manufacturer should identify the legal manufacturer or brand owner when visible.
 - countryOfOrigin and countryOfManufacturing may differ; extract both separately when the document distinguishes them.
 - supplierAndProcessInformation should capture supplier/process details only when the document clearly states the level or stage.
@@ -224,6 +344,10 @@ Map common synonyms:
 - carbon footprint = CO2-Fußabdruck, carbon footprint, kg CO2e
 - UPI = Unique Product Identifier, Produktkennung, product identifier
 - GTIN = EAN, barcode number, Artikelnummer with 8/12/13/14 digits when clearly identified
+- For UPI first inspect header labels such as "SDB-Nr", "Artikelnummer", "Produktnummer", "Item No."
+- If UPI/GTIN are absent, return "${PENDING_EXTERNAL_MATCH}" instead of fabricating numbers.
+- For materialComposition prioritize only section 3 (composition/information on ingredients).
+- For wasteCode and disposal instructions prioritize section 13 (disposal considerations).
 - adhesives may use terms such as epoxy resin, hardener, filler, reactive diluent, modifier, additive, binder
 
 ${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
@@ -234,7 +358,7 @@ function buildVisionPrompt(productTypeHint?: string): string {
 
   return `${hint}
 
-The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Handle titles, manufacturer blocks, country-of-origin labels, supplier or process tables, care or repair sections, ingredient lists, composition blocks, hazard sections, barcode/GTIN fields and OCR noise. Do not invent missing values. Return only the required JSON object.`;
+The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Prioritize section 3 for materialComposition and section 13 for disposal and waste code. Handle titles, manufacturer blocks, country-of-origin labels, supplier or process tables, care or repair sections, ingredient lists, composition blocks, hazard sections, barcode/GTIN fields and OCR noise. Do not invent missing values. Return only the required JSON object.`;
 }
 
 function truncate(value: string, maxLength: number): string {
@@ -315,16 +439,17 @@ export class AzureOpenAiDppExtractor implements SemanticDppExtractionPort {
     }
 
     const envelope = parseExtractionEnvelope(content);
+    const normalized = normalizeExtractedDpp(envelope.dpp);
 
     this.logger.info('azure_openai_extraction_completed', {
       confidence: envelope.confidence ?? 0,
-      warningCount: envelope.warnings?.length ?? 0,
+      warningCount: (envelope.warnings?.length ?? 0) + normalized.warnings.length,
     });
 
     return {
-      dpp: envelope.dpp,
+      dpp: normalized.dpp,
       confidence: envelope.confidence ?? 0,
-      warnings: envelope.warnings ?? [],
+      warnings: [...(envelope.warnings ?? []), ...normalized.warnings],
       pageCount: preparedInput.pageCount,
     };
   }

@@ -3,6 +3,7 @@ import {
   type DppProductPassport,
   type DppValidationIssue,
 } from '@/app/domain/dpp/dppSchema';
+import { DppEnrichmentAgent } from '@/app/application/services/DppEnrichmentAgent';
 import { WasteCodeService } from '@/app/application/services/WasteCodeService';
 import type { DppValidationService } from '@/app/domain/dpp/validation/DppValidationService';
 import type { ValidationResult } from '@/app/domain/dpp/validation/DppValidationTypes';
@@ -29,6 +30,8 @@ interface DppExtractionServiceDependencies {
   readonly dppValidationService: DppValidationService;
   readonly logger: SafeLoggerPort;
 }
+
+const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
 
 function enrichWasteCode(dpp: DppProductPassport): {
   readonly dpp: DppProductPassport;
@@ -58,8 +61,61 @@ function enrichWasteCode(dpp: DppProductPassport): {
   };
 }
 
+function needsIdentifierEnrichment(dpp: DppProductPassport): boolean {
+  return !dpp.gtin || dpp.gtin === PENDING_EXTERNAL_MATCH;
+}
+
+function withAppliedEnrichment(
+  dpp: DppProductPassport,
+  enrichment: { readonly gtin?: string; readonly origin?: string; readonly confidence: number; readonly sourceUrls: readonly string[] },
+): DppProductPassport {
+  return {
+    ...dpp,
+    gtin: enrichment.gtin ?? dpp.gtin,
+    countryOfOrigin: enrichment.origin ?? dpp.countryOfOrigin,
+  };
+}
+
 export class DppExtractionService {
   constructor(private readonly dependencies: DppExtractionServiceDependencies) {}
+
+  private async enrichIdentifiersIfNeeded(dpp: DppProductPassport): Promise<{
+    readonly dpp: DppProductPassport;
+    readonly warnings: readonly string[];
+  }> {
+    if (!needsIdentifierEnrichment(dpp)) {
+      return { dpp, warnings: [] };
+    }
+
+    try {
+      const enrichment = await DppEnrichmentAgent.enrich({
+        productName: dpp.productName,
+        manufacturer: dpp.manufacturer?.name,
+      });
+
+      const enrichedDpp = withAppliedEnrichment(dpp, enrichment);
+      const enrichmentWarnings = enrichment.gtin || enrichment.origin
+        ? []
+        : ['identifierEnrichment: No matching GTIN/origin found from web sources.'];
+
+      return {
+        dpp: enrichedDpp,
+        warnings: [
+          ...enrichmentWarnings,
+          ...enrichment.sourceUrls.map((url) => `identifierEnrichmentSource: ${url}`),
+        ],
+      };
+    } catch (error) {
+      this.dependencies.logger.warn('dpp_identifier_enrichment_failed', {
+        message: error instanceof Error ? error.message : 'unknown',
+      });
+
+      return {
+        dpp,
+        warnings: ['identifierEnrichment: External enrichment skipped due to provider error.'],
+      };
+    }
+  }
 
   async extractFromPdf(request: DppExtractionRequest): Promise<DppExtractionResponse> {
     const startedAt = Date.now();
@@ -74,7 +130,8 @@ export class DppExtractionService {
       fileName: request.fileName,
       productTypeHint: request.productTypeHint,
     });
-    const wasteCodeEnrichment = enrichWasteCode(semanticResult.dpp);
+    const identifierEnrichment = await this.enrichIdentifiersIfNeeded(semanticResult.dpp);
+    const wasteCodeEnrichment = enrichWasteCode(identifierEnrichment.dpp);
 
     const validation = this.dependencies.dppValidationService.validate(wasteCodeEnrichment.dpp);
 
@@ -105,7 +162,12 @@ export class DppExtractionService {
     return {
       dpp: wasteCodeEnrichment.dpp,
       confidence: semanticResult.confidence,
-      warnings: [...semanticResult.warnings, ...wasteCodeEnrichment.warnings, ...validation.warnings],
+      warnings: [
+        ...semanticResult.warnings,
+        ...identifierEnrichment.warnings,
+        ...wasteCodeEnrichment.warnings,
+        ...validation.warnings,
+      ],
       validationIssues: [],
       validationResult: validation,
       pageCount: semanticResult.pageCount,

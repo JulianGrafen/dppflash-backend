@@ -61,6 +61,7 @@ Return only JSON with this exact shape:
   "dpp": {
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "optional string such as Klebstoff, adhesive, battery or textile",
+    "productName": "clear commercial or technical product name",
     "upi": "string",
     "gtin": "valid GTIN-8/12/13/14 string",
     "materialComposition": [{ "material": "string", "percentage": 0 }],
@@ -86,7 +87,46 @@ Extraction robustness rules:
 - Normalize percentages from formats like "12,5%", "12.5 %", "0.125" (if clearly percentage context convert to 12.5).
 - materialComposition must represent full composition (virgin + recycled shares) and should target ~100%.
 - recycledContent is a subset breakdown and MUST NOT be added on top of materialComposition total.
-- If units or values are ambiguous, keep safest value and add a warning describing ambiguity.`;
+- If units or values are ambiguous, keep safest value and add a warning describing ambiguity.
+- For adhesives, coatings, chemicals and technical data sheets, prefer extracting named formulation components, fillers, binders, diluents, modifiers, additives and hazardous substances.
+- Preserve original business wording of materials and substances where possible.
+- If a CAS number is visible for a material or substance, copy it exactly.
+- productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
+
+Example target output for an adhesive product sheet:
+{
+  "dpp": {
+    "schemaVersion": "${DPP_SCHEMA_VERSION}",
+    "declaredProductType": "Industriekleber",
+    "productName": "Industriekleber UltraFix 5000",
+    "upi": "DE-HEN-992834-UF5000-B2",
+    "gtin": "4005800012345",
+    "materialComposition": [
+      { "material": "Epoxidharz (Bisphenol-A)", "percentage": 65 },
+      { "material": "Aluminiumoxid (Füllstoff)", "percentage": 25 },
+      { "material": "Reaktivverdünner", "percentage": 8.5 },
+      { "material": "Modifikatoren/Additive", "percentage": 1.5 }
+    ],
+    "recycledContent": [
+      { "material": "Aluminiumoxid (Füllstoff)", "percentage": 25 }
+    ],
+    "carbonFootprint": {
+      "valueKgCo2e": 0,
+      "lifecycleStage": "",
+      "calculationMethod": ""
+    },
+    "substancesOfConcern": [
+      {
+        "name": "Epoxidharz (Bisphenol-A)",
+        "casNumber": "25068-38-6",
+        "concentrationPercent": 65,
+        "hazardClass": ""
+      }
+    ]
+  },
+  "confidence": 0.95,
+  "warnings": []
+}`;
 }
 
 function buildUserPrompt(documentText: string, productTypeHint?: string): string {
@@ -96,10 +136,14 @@ function buildUserPrompt(documentText: string, productTypeHint?: string): string
 
 Extract the ESPR DPP fields from this PDF-derived document text. The PDF was converted locally before this Azure OpenAI call, so treat the text as the source of truth and never invent missing values.
 Map common synonyms:
+- product name = Produktname, Handelsname, trade name, product designation, technical name, Produktbezeichnung
 - material composition = Zusammensetzung, Materialmix, composition, ingredients
 - recycled content = Rezyklatanteil, recycled share, PCR/PIR
 - substances of concern = SVHC, hazardous substances, besorgniserregende Stoffe
 - carbon footprint = CO2-Fußabdruck, carbon footprint, kg CO2e
+- UPI = Unique Product Identifier, Produktkennung, product identifier
+- GTIN = EAN, barcode number, Artikelnummer with 8/12/13/14 digits when clearly identified
+- adhesives may use terms such as epoxy resin, hardener, filler, reactive diluent, modifier, additive, binder
 
 ${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;
 }
@@ -109,7 +153,7 @@ function buildVisionPrompt(productTypeHint?: string): string {
 
   return `${hint}
 
-The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Do not invent missing values. Return only the required JSON object.`;
+The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Handle tables, ingredient lists, composition blocks, hazard sections, barcode/GTIN fields and OCR noise. Do not invent missing values. Return only the required JSON object.`;
 }
 
 function truncate(value: string, maxLength: number): string {

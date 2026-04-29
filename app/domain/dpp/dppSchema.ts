@@ -26,6 +26,7 @@ export interface SubstanceOfConcern {
 export interface DppProductPassport {
   readonly schemaVersion: typeof DPP_SCHEMA_VERSION;
   readonly declaredProductType?: string;
+  readonly productName: string;
   readonly upi: string;
   readonly gtin: string;
   readonly materialComposition: readonly MaterialComponent[];
@@ -112,6 +113,10 @@ export function validateDppProductPassport(data: DppProductPassport): DppValidat
 
   if (!isNonEmptyString(data.upi)) {
     issues.push({ field: 'upi', message: 'UPI is required.' });
+  }
+
+  if (!isNonEmptyString(data.productName)) {
+    issues.push({ field: 'productName', message: 'Product name is required.' });
   }
 
   if (!GTIN_PATTERN.test(data.gtin) || !hasValidGtinChecksum(data.gtin)) {

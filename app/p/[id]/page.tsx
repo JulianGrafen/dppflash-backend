@@ -44,14 +44,159 @@ function Pct({ label, value }: { label: string; value?: number }) {
   return <Field label={label} value={`${value} %`} />;
 }
 
-function formatComplexValue(value: unknown): string | undefined {
-  if (value === undefined || value === null || value === '') {
+function formatPercentage(value: unknown): string | undefined {
+  if (typeof value !== 'number') {
     return undefined;
   }
-  if (typeof value === 'string' || typeof value === 'number') {
-    return String(value);
+
+  return `${value} %`;
+}
+
+function renderKeyValueList(
+  label: string,
+  entries: readonly { readonly title: string; readonly details?: string }[],
+) {
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="flex justify-between items-start gap-4 px-5 py-3">
+      <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
+      <dd className="text-sm font-medium text-gray-900 text-right space-y-1">
+        {entries.map((entry) => (
+          <div key={`${label}-${entry.title}-${entry.details ?? ''}`}>
+            <div>{entry.title}</div>
+            {entry.details ? (
+              <div className="text-xs text-gray-500">{entry.details}</div>
+            ) : null}
+          </div>
+        ))}
+      </dd>
+    </div>
+  );
+}
+
+function renderMaterialComposition(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+
+    const material = 'material' in entry && typeof entry.material === 'string'
+      ? entry.material
+      : undefined;
+    const percentage = 'percentage' in entry ? formatPercentage(entry.percentage) : undefined;
+
+    if (!material) return [];
+
+    return [{
+      title: material,
+      details: percentage,
+    }];
+  });
+
+  return renderKeyValueList('Materialzusammensetzung', entries);
+}
+
+function renderRecycledContent(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+
+    const material = 'material' in entry && typeof entry.material === 'string'
+      ? entry.material
+      : undefined;
+    const percentage = 'percentage' in entry ? formatPercentage(entry.percentage) : undefined;
+
+    if (!material) return [];
+
+    return [{
+      title: material,
+      details: percentage,
+    }];
+  });
+
+  return renderKeyValueList('Rezyklatanteil', entries);
+}
+
+function renderCarbonFootprint(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+
+  const entries = [
+    'valueKgCo2e' in value && typeof value.valueKgCo2e === 'number'
+      ? { title: `${value.valueKgCo2e} kg CO₂e` }
+      : null,
+    'lifecycleStage' in value && typeof value.lifecycleStage === 'string' && value.lifecycleStage
+      ? { title: 'Lebenszyklusphase', details: value.lifecycleStage }
+      : null,
+    'calculationMethod' in value && typeof value.calculationMethod === 'string' && value.calculationMethod
+      ? { title: 'Berechnungsmethode', details: value.calculationMethod }
+      : null,
+  ].filter((entry): entry is { title: string; details?: string } => entry !== null);
+
+  return renderKeyValueList('CO₂-Fußabdruck', entries);
+}
+
+function renderSubstancesOfConcern(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+
+    const name = 'name' in entry && typeof entry.name === 'string' ? entry.name : undefined;
+    const casNumber = 'casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined;
+    const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
+    const hazardClass = 'hazardClass' in entry && typeof entry.hazardClass === 'string' && entry.hazardClass
+      ? entry.hazardClass
+      : undefined;
+
+    if (!name) return [];
+
+    const details = [casNumber, concentration, hazardClass].filter(Boolean).join(' · ');
+
+    return [{
+      title: name,
+      details: details || undefined,
+    }];
+  });
+
+  return renderKeyValueList('Besorgniserregende Stoffe', entries);
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData): string {
+  const candidateValues = [
+    raw.productName,
+    raw.modellname,
+    raw.model,
+    p.modellname,
+    p.model,
+  ];
+
+  for (const candidate of candidateValues) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate;
+    }
   }
-  return JSON.stringify(value);
+
+  return 'Digitaler Produktpass';
 }
 
 function ConfidenceBadge({ score }: { score: number }) {
@@ -74,7 +219,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const { d } = await searchParams;
 
   // Primary: store lookup
-  let raw = await getProductById(id) as any;
+  let raw: Record<string, unknown> | undefined = await getProductById(id) as unknown as Record<string, unknown> | undefined;
 
   // Fallback: product data encoded in QR URL (?d=…)
   if (!raw && d) {
@@ -88,59 +233,92 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
   if (!raw) return notFound();
 
+  const manufacturer = asRecord(raw.manufacturer);
+  const carbonFootprint = asRecord(raw.carbonFootprint);
+  const recycledContent = asRecord(raw.recycledContent);
+  const lifecycle = asRecord(raw.lifecycle);
+  const endOfLife = asRecord(raw.endOfLife);
+  const productType = asString(raw.type) as EsprProductData['type'] | undefined;
+
   // Map to EsprProductData — handles both new schema and legacy BatteryDPP
   const p: EsprProductData = {
-    id:        raw.id,
-    createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : (raw.createdAt ?? new Date().toISOString()),
-    language:  raw.language ?? 'de',
-    type:      raw.type ?? 'BATTERY',
+    id:        asString(raw.id) ?? id,
+    createdAt: raw.createdAt instanceof Date ? raw.createdAt.toISOString() : (asString(raw.createdAt) ?? new Date().toISOString()),
+    language:  asString(raw.language) ?? 'de',
+    type:      productType ?? 'BATTERY',
 
-    manufacturer:  raw.manufacturer ?? { name: raw.hersteller ?? '' },
-    hersteller:    raw.hersteller   ?? raw.manufacturer?.name ?? '',
-    model:         raw.model        ?? raw.modellname         ?? '',
-    modellname:    raw.modellname   ?? raw.model              ?? '',
+    manufacturer: manufacturer
+      ? {
+          name: asString(manufacturer.name) ?? asString(raw.hersteller) ?? '',
+          address: asString(manufacturer.address),
+          country: asString(manufacturer.country),
+        }
+      : { name: asString(raw.hersteller) ?? '' },
+    hersteller:    asString(raw.hersteller)   ?? asString(manufacturer?.name) ?? '',
+    model:         asString(raw.model)        ?? asString(raw.modellname) ?? '',
+    modellname:    asString(raw.modellname)   ?? asString(raw.model) ?? '',
 
-    serialNumber:   raw.serialNumber   ?? raw.seriennummer,
-    batchNumber:    raw.batchNumber,
-    productionDate: raw.productionDate ?? raw.produktionsdatum,
+    serialNumber:   asString(raw.serialNumber)   ?? asString(raw.seriennummer),
+    batchNumber:    asString(raw.batchNumber),
+    productionDate: asString(raw.productionDate) ?? asString(raw.produktionsdatum),
 
-    capacityKwh:    raw.capacityKwh    ?? raw.kapazitaetKWh,
-    chemistry:      raw.chemistry      ?? raw.chemischesSystem,
-    batteryType:    raw.batteryType    ?? raw.batterietyp,
-    nominalVoltageV: raw.nominalVoltageV ?? raw.nennspannungV,
-    weightKg:       raw.weightKg       ?? raw.gewichtKg,
+    capacityKwh:    asNumber(raw.capacityKwh)    ?? asNumber(raw.kapazitaetKWh),
+    chemistry:      asString(raw.chemistry)      ?? asString(raw.chemischesSystem),
+    batteryType:    asString(raw.batteryType)    ?? asString(raw.batterietyp),
+    nominalVoltageV: asNumber(raw.nominalVoltageV) ?? asNumber(raw.nennspannungV),
+    weightKg:       asNumber(raw.weightKg)       ?? asNumber(raw.gewichtKg),
 
-    carbonFootprint: raw.carbonFootprint ?? {
-      totalKg:   raw.co2FussabdruckKgGesamt,
-      perKwhKg:  raw.co2FussabdruckKgProKwh,
+    carbonFootprint: carbonFootprint ? {
+      totalKg:   asNumber(carbonFootprint.totalKg) ?? asNumber(raw.co2FussabdruckKgGesamt),
+      perKwhKg:  asNumber(carbonFootprint.perKwhKg) ?? asNumber(raw.co2FussabdruckKgProKwh),
+      methodology: asString(carbonFootprint.methodology),
+      certificationBody: asString(carbonFootprint.certificationBody),
+    } : {
+      totalKg:   asNumber(raw.co2FussabdruckKgGesamt),
+      perKwhKg:  asNumber(raw.co2FussabdruckKgProKwh),
     },
 
-    recycledContent: raw.recycledContent ?? {
-      cobaltPct:  raw.recyclinganteilKobalt,
-      lithiumPct: raw.recyclinganteilLithium,
-      nickelPct:  raw.recyclinganteilNickel,
+    recycledContent: recycledContent ? {
+      cobaltPct:  asNumber(recycledContent.cobaltPct) ?? asNumber(raw.recyclinganteilKobalt),
+      lithiumPct: asNumber(recycledContent.lithiumPct) ?? asNumber(raw.recyclinganteilLithium),
+      nickelPct:  asNumber(recycledContent.nickelPct) ?? asNumber(raw.recyclinganteilNickel),
+      leadPct: asNumber(recycledContent.leadPct),
+    } : {
+      cobaltPct:  asNumber(raw.recyclinganteilKobalt),
+      lithiumPct: asNumber(raw.recyclinganteilLithium),
+      nickelPct:  asNumber(raw.recyclinganteilNickel),
     },
 
-    lifecycle: raw.lifecycle ?? {
-      expectedCycles:          raw.erwarteteLebensdauerLadezyklen,
-      repairabilityScore:      raw.reparierbarkeitsIndex,
-      sparePartsAvailableYears: raw.ersatzteileVerfuegbarkeitJahre,
+    lifecycle: lifecycle ? {
+      expectedCycles:          asNumber(lifecycle.expectedCycles) ?? asNumber(raw.erwarteteLebensdauerLadezyklen),
+      repairabilityScore:      asNumber(lifecycle.repairabilityScore) ?? asNumber(raw.reparierbarkeitsIndex),
+      sparePartsAvailableYears: asNumber(lifecycle.sparePartsAvailableYears) ?? asNumber(raw.ersatzteileVerfuegbarkeitJahre),
+      warrantyYears: asNumber(lifecycle.warrantyYears),
+    } : {
+      expectedCycles:          asNumber(raw.erwarteteLebensdauerLadezyklen),
+      repairabilityScore:      asNumber(raw.reparierbarkeitsIndex),
+      sparePartsAvailableYears: asNumber(raw.ersatzteileVerfuegbarkeitJahre),
     },
 
-    endOfLife: raw.endOfLife ?? {
-      recyclingInstructions: raw.recyclingAnweisungen,
+    endOfLife: endOfLife ? {
+      recyclingInstructions: asString(endOfLife.recyclingInstructions) ?? asString(raw.recyclingAnweisungen),
+      disposalInstructions: asString(endOfLife.disposalInstructions),
+      hazardousSubstances: asStringArray(endOfLife.hazardousSubstances),
+    } : {
+      recyclingInstructions: asString(raw.recyclingAnweisungen),
     },
 
-    certificationBody:   raw.certificationBody   ?? raw.zertifizierungsstelle,
-    regulatoryReference: raw.regulatoryReference ?? raw.referenznummer,
-    legalNotes:          raw.legalNotes          ?? raw.rechtlicheHinweise,
+    certificationBody:   asString(raw.certificationBody)   ?? asString(raw.zertifizierungsstelle),
+    regulatoryReference: asString(raw.regulatoryReference) ?? asString(raw.referenznummer),
+    legalNotes:          asString(raw.legalNotes)          ?? asString(raw.rechtlicheHinweise),
 
-    extractionConfidence: raw.extractionConfidence ?? 1,
-    extractionWarnings:   raw.extractionWarnings   ?? [],
+    extractionConfidence: asNumber(raw.extractionConfidence) ?? 1,
+    extractionWarnings:   asStringArray(raw.extractionWarnings),
   };
 
   const hasWarnings = p.extractionWarnings.length > 0;
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
+  const displayProductName = readDisplayProductName(raw, p);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
@@ -150,9 +328,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
           <ShieldCheck size={14} /> EU-Konform · ESPR 2024/1781
         </div>
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">
-          Digitaler Produktpass
-        </h1>
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">{displayProductName}</h1>
+        <p className="text-gray-500 text-sm mt-1">Digitaler Produktpass</p>
         <p className="text-gray-400 text-xs mt-2">
           <code className="bg-gray-100 px-2 py-1 rounded">{p.id}</code>
         </p>
@@ -209,12 +386,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="DPP-Kernfelder (ESPR)">
-          <Field label="UPI" value={formatComplexValue(raw.upi)} />
-          <Field label="GTIN" value={formatComplexValue(raw.gtin)} />
-          <Field label="Materialzusammensetzung" value={formatComplexValue(raw.materialComposition)} />
-          <Field label="Rezyklatanteil" value={formatComplexValue(raw.recycledContent)} />
-          <Field label="CO₂-Fußabdruck" value={formatComplexValue(raw.carbonFootprint)} />
-          <Field label="Besorgniserregende Stoffe" value={formatComplexValue(raw.substancesOfConcern)} />
+          <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
+          <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
+          <Field label="GTIN" value={typeof raw.gtin === 'string' ? raw.gtin : undefined} />
+          {renderMaterialComposition(raw.materialComposition)}
+          {renderRecycledContent(raw.recycledContent)}
+          {renderCarbonFootprint(raw.carbonFootprint)}
+          {renderSubstancesOfConcern(raw.substancesOfConcern)}
         </Section>
 
         {/* ── Carbon footprint (Art. 7) ── */}

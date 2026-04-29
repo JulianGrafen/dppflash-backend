@@ -1,8 +1,13 @@
 import { ZodError } from 'zod';
+import {
+  checkComplianceGaps,
+  getRecyclingInstructionsByEwcCode,
+} from '@/app/domain/models/DppModel';
 import type {
   DppValidationRule,
   DppWarningRule,
   GuardedDppPayload,
+  RecyclingInstructionResolver,
   ValidationMessage,
   ValidationReport,
   ValidationStatus,
@@ -21,6 +26,13 @@ const WARNING_SCORE_PENALTY = 5;
 export interface DppValidationServiceOptions {
   readonly validationRules?: readonly DppValidationRule[];
   readonly warningRules?: readonly DppWarningRule[];
+  readonly recyclingInstructionResolver?: RecyclingInstructionResolver;
+}
+
+class StaticRecyclingInstructionResolver implements RecyclingInstructionResolver {
+  getInstructions(ewcCode: string): string | undefined {
+    return getRecyclingInstructionsByEwcCode(ewcCode);
+  }
 }
 
 function toSchemaErrors(error: ZodError): readonly ValidationMessage[] {
@@ -29,6 +41,41 @@ function toSchemaErrors(error: ZodError): readonly ValidationMessage[] {
     path: issue.path.join('.'),
     message: issue.message,
   }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function extractComplianceGapInput(payload: unknown): {
+  readonly identification?: { readonly upi?: string; readonly gtin?: string };
+  readonly composition?: readonly unknown[];
+  readonly circularity?: { readonly disposalInstructions?: string };
+} {
+  if (!isRecord(payload)) {
+    return {};
+  }
+
+  const identification = isRecord(payload.identification)
+    ? {
+        upi: typeof payload.identification.upi === 'string' ? payload.identification.upi : undefined,
+        gtin: typeof payload.identification.gtin === 'string' ? payload.identification.gtin : undefined,
+      }
+    : undefined;
+
+  const circularity = isRecord(payload.circularity)
+    ? {
+        disposalInstructions: typeof payload.circularity.disposalInstructions === 'string'
+          ? payload.circularity.disposalInstructions
+          : undefined,
+      }
+    : undefined;
+
+  return {
+    identification,
+    composition: Array.isArray(payload.composition) ? payload.composition : undefined,
+    circularity,
+  };
 }
 
 function calculateConfidenceScore(
@@ -56,14 +103,80 @@ function getStatus(errors: readonly ValidationMessage[], warnings: readonly Vali
   return 'PASSED';
 }
 
+function createGapMessages(dpp: {
+  readonly identification?: { readonly upi?: string; readonly gtin?: string };
+  readonly composition?: readonly unknown[];
+  readonly circularity?: { readonly disposalInstructions?: string };
+}): readonly ValidationMessage[] {
+  const complianceGaps = checkComplianceGaps(dpp);
+
+  return complianceGaps.map((gap) => ({
+    code: 'DPP_COMPLIANCE_GAP',
+    path: gap,
+    message: `Mandatory ESPR field "${gap}" is missing and requires manual completion.`,
+  }));
+}
+
+function splitGapMessages(
+  gapMessages: readonly ValidationMessage[],
+): { readonly errors: readonly ValidationMessage[]; readonly warnings: readonly ValidationMessage[] } {
+  return {
+    errors: gapMessages.filter((gap) => gap.path === 'identification.upi' || gap.path === 'composition'),
+    warnings: gapMessages.filter((gap) => gap.path !== 'identification.upi' && gap.path !== 'composition'),
+  };
+}
+
+function createRecyclingMessages(
+  dpp: GuardedDppPayload,
+  resolver: RecyclingInstructionResolver,
+): readonly ValidationMessage[] {
+  const ewcCode = dpp.circularity.ewcCode;
+  const instructions = ewcCode ? resolver.getInstructions(ewcCode) : undefined;
+
+  if (!ewcCode || !instructions) {
+    return [];
+  }
+
+  return [{
+    code: 'DPP_RECYCLING_GUIDANCE',
+    path: 'circularity.ewcCode',
+    message: instructions,
+  }];
+}
+
+function toRequiredActions(messages: readonly ValidationMessage[]): readonly string[] {
+  return [...new Set(messages.map((message) => message.message))];
+}
+
+function buildSchemaFailureReport(payload: unknown, errors: readonly ValidationMessage[]): ValidationReport {
+  const gapInput = extractComplianceGapInput(payload);
+  const complianceGaps = checkComplianceGaps(gapInput);
+  const gapMessages = createGapMessages(gapInput);
+  const splitGaps = splitGapMessages(gapMessages);
+  const mergedErrors = [...errors, ...splitGaps.errors];
+  const mergedWarnings = splitGaps.warnings;
+
+  return {
+    status: getStatus(mergedErrors, mergedWarnings),
+    errors: mergedErrors,
+    warnings: mergedWarnings,
+    confidenceScore: calculateConfidenceScore(errors.length, splitGaps.errors.length, splitGaps.warnings.length),
+    requiredActions: toRequiredActions([...mergedErrors, ...mergedWarnings]),
+    complianceGaps,
+  };
+}
+
 export class DppValidationService {
   private readonly validationRules: readonly DppValidationRule[];
 
   private readonly warningRules: readonly DppWarningRule[];
 
+  private readonly recyclingInstructionResolver: RecyclingInstructionResolver;
+
   constructor(options: DppValidationServiceOptions = {}) {
     this.validationRules = options.validationRules ?? DppValidationService.createDefaultValidationRules();
     this.warningRules = options.warningRules ?? DppValidationService.createDefaultWarningRules();
+    this.recyclingInstructionResolver = options.recyclingInstructionResolver ?? new StaticRecyclingInstructionResolver();
   }
 
   validate(extractedJson: unknown): ValidationReport {
@@ -71,24 +184,27 @@ export class DppValidationService {
 
     if (!schemaResult.success) {
       const errors = toSchemaErrors(schemaResult.error);
-
-      return {
-        status: 'FAILED',
-        errors,
-        warnings: [],
-        confidenceScore: calculateConfidenceScore(errors.length, 0, 0),
-      };
+      return buildSchemaFailureReport(extractedJson, errors);
     }
 
     const dpp = schemaResult.data as GuardedDppPayload;
-    const errors = this.validationRules.flatMap((rule) => rule.validate(dpp));
-    const warnings = this.warningRules.flatMap((rule) => rule.validate(dpp));
+    const ruleErrors = this.validationRules.flatMap((rule) => rule.validate(dpp));
+    const ruleWarnings = this.warningRules.flatMap((rule) => rule.validate(dpp));
+    const gapMessages = createGapMessages(dpp);
+    const splitGaps = splitGapMessages(gapMessages);
+    const recyclingMessages = createRecyclingMessages(dpp, this.recyclingInstructionResolver);
+    const errors = [...ruleErrors, ...splitGaps.errors];
+    const warnings = [...ruleWarnings, ...splitGaps.warnings, ...recyclingMessages];
+    const complianceGaps = checkComplianceGaps(dpp);
+    const requiredActions = toRequiredActions([...errors, ...warnings]);
 
     return {
       status: getStatus(errors, warnings),
       errors,
       warnings,
       confidenceScore: calculateConfidenceScore(0, errors.length, warnings.length),
+      requiredActions,
+      complianceGaps,
     };
   }
 

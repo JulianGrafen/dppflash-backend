@@ -23,10 +23,51 @@ export interface SubstanceOfConcern {
   readonly hazardClass?: string;
 }
 
+export interface ManufacturerInfo {
+  readonly name: string;
+  readonly address?: string;
+  readonly country?: string;
+}
+
+export interface SupplyChainEntry {
+  readonly level: string;
+  readonly supplierName?: string;
+  readonly supplierId?: string;
+  readonly supplierCountry?: string;
+  readonly processName?: string;
+  readonly processDescription?: string;
+}
+
+export interface CareRepairDurability {
+  readonly careInstructions?: string;
+  readonly repairInstructions?: string;
+  readonly durabilityGuidance?: string;
+}
+
+export interface ChemicalCompositionEntry {
+  readonly substance: string;
+  readonly casNumber?: string;
+  readonly concentrationPercent?: number;
+  readonly function?: string;
+}
+
+export interface EnvironmentalImpactSummary {
+  readonly waterFootprintLiters?: number;
+  readonly impactNotes?: string;
+}
+
 export interface DppProductPassport {
   readonly schemaVersion: typeof DPP_SCHEMA_VERSION;
   readonly declaredProductType?: string;
   readonly productName: string;
+  readonly manufacturer?: ManufacturerInfo;
+  readonly countryOfOrigin?: string;
+  readonly countryOfManufacturing?: string;
+  readonly supplierAndProcessInformation?: readonly SupplyChainEntry[];
+  readonly careRepairDurability?: CareRepairDurability;
+  readonly endOfLifeInstructions?: string;
+  readonly chemicalComposition?: readonly ChemicalCompositionEntry[];
+  readonly environmentalImpact?: EnvironmentalImpactSummary;
   readonly upi: string;
   readonly gtin: string;
   readonly materialComposition: readonly MaterialComponent[];
@@ -104,6 +145,72 @@ function validateMaterialList(
   });
 }
 
+function validateOptionalSupplyChainEntries(
+  entries: readonly SupplyChainEntry[] | undefined,
+): DppValidationIssue[] {
+  if (entries === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(entries)) {
+    return [{
+      field: 'supplierAndProcessInformation',
+      message: 'Supplier and process information must be an array.',
+    }];
+  }
+
+  return entries.flatMap((entry, index) => {
+    const issues: DppValidationIssue[] = [];
+
+    if (!isNonEmptyString(entry.level)) {
+      issues.push({
+        field: `supplierAndProcessInformation[${index}].level`,
+        message: 'Supply chain level is required when supplier/process information is present.',
+      });
+    }
+
+    return issues;
+  });
+}
+
+function validateOptionalChemicalComposition(
+  entries: readonly ChemicalCompositionEntry[] | undefined,
+): DppValidationIssue[] {
+  if (entries === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(entries)) {
+    return [{
+      field: 'chemicalComposition',
+      message: 'Chemical composition must be an array.',
+    }];
+  }
+
+  return entries.flatMap((entry, index) => {
+    const issues: DppValidationIssue[] = [];
+
+    if (!isNonEmptyString(entry.substance)) {
+      issues.push({
+        field: `chemicalComposition[${index}].substance`,
+        message: 'Chemical substance name is required.',
+      });
+    }
+
+    if (
+      entry.concentrationPercent !== undefined
+      && !isPercentage(entry.concentrationPercent)
+    ) {
+      issues.push({
+        field: `chemicalComposition[${index}].concentrationPercent`,
+        message: 'Chemical composition percentage must be between 0 and 100.',
+      });
+    }
+
+    return issues;
+  });
+}
+
 export function validateDppProductPassport(data: DppProductPassport): DppValidationResult {
   const issues: DppValidationIssue[] = [];
 
@@ -125,6 +232,26 @@ export function validateDppProductPassport(data: DppProductPassport): DppValidat
 
   issues.push(...validateMaterialList('materialComposition', data.materialComposition));
   issues.push(...validateMaterialList('recycledContent', data.recycledContent));
+  issues.push(...validateOptionalSupplyChainEntries(data.supplierAndProcessInformation));
+  issues.push(...validateOptionalChemicalComposition(data.chemicalComposition));
+
+  if (data.manufacturer && !isNonEmptyString(data.manufacturer.name)) {
+    issues.push({ field: 'manufacturer.name', message: 'Manufacturer name must not be empty when manufacturer data is present.' });
+  }
+
+  if (
+    data.environmentalImpact?.waterFootprintLiters !== undefined
+    && (
+      typeof data.environmentalImpact.waterFootprintLiters !== 'number'
+      || !Number.isFinite(data.environmentalImpact.waterFootprintLiters)
+      || data.environmentalImpact.waterFootprintLiters < 0
+    )
+  ) {
+    issues.push({
+      field: 'environmentalImpact.waterFootprintLiters',
+      message: 'Water footprint must be a non-negative numeric value.',
+    });
+  }
 
   if (
     typeof data.carbonFootprint?.valueKgCo2e !== 'number'

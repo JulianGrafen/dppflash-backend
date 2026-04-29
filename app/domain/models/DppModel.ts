@@ -44,6 +44,7 @@ export interface EnvironmentalImpact {
 
 export interface Circularity {
   readonly shelfLifeInMonths: number;
+  readonly ewcCode?: string;
   readonly disposalInstructions: string;
 }
 
@@ -61,6 +62,62 @@ export interface DppSchemaValidationResult {
   readonly success: boolean;
   readonly data?: DigitalProductPassport;
   readonly errors: readonly string[];
+}
+
+export type ComplianceGapField =
+  | 'identification.upi'
+  | 'identification.gtin'
+  | 'composition'
+  | 'circularity.disposalInstructions';
+
+type ComplianceGapInput = {
+  readonly identification?: {
+    readonly upi?: string;
+    readonly gtin?: string;
+  };
+  readonly composition?: readonly unknown[];
+  readonly circularity?: {
+    readonly disposalInstructions?: string;
+  };
+};
+
+const CHEMICAL_INDUSTRY_EWC_INSTRUCTIONS: Readonly<Record<string, string>> = {
+  '08 04 09*': 'Gefährlicher Abfall aus Kleb- und Dichtmassen: getrennt sammeln und nur über zugelassene Entsorgungswege behandeln.',
+  '08 04 10': 'Kleb- und Dichtmassenabfälle ohne gefaehrliche Stoffe koennen nach lokaler Gewerbeabfallvorgabe verwertet oder entsorgt werden.',
+  '15 01 10*': 'Verpackungen mit Rueckstaenden gefaehrlicher Stoffe muessen als gefaehrlicher Verpackungsabfall entsorgt werden.',
+  '15 01 02': 'Kunststoffverpackungen restentleert sammeln und dem werkstofflichen Recycling zufuehren, sofern lokal zulaessig.',
+  '16 03 05*': 'Organische Abfaelle mit gefaehrlichen Stoffen duerfen nur ueber spezialisierte Entsorger behandelt werden.',
+  '16 03 06': 'Organische Abfaelle ohne gefaehrliche Stoffe gemaess betrieblichem Entsorgungskonzept entsorgen.',
+};
+
+function hasText(value: string | undefined): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function checkComplianceGaps(dppData: ComplianceGapInput): readonly ComplianceGapField[] {
+  const gaps: Array<ComplianceGapField | null> = [
+    !hasText(dppData.identification?.upi) ? 'identification.upi' : null,
+    !hasText(dppData.identification?.gtin) ? 'identification.gtin' : null,
+    !dppData.composition || dppData.composition.length === 0 ? 'composition' : null,
+    !hasText(dppData.circularity?.disposalInstructions) ? 'circularity.disposalInstructions' : null,
+  ];
+
+  return gaps.flatMap((gap) => (gap ? [gap] : []));
+}
+
+export function getRecyclingInstructionsByEwcCode(ewcCode: string): string | undefined {
+  const normalizedCode = ewcCode.trim().replace(/\s+/g, ' ');
+
+  if (!normalizedCode) {
+    return undefined;
+  }
+
+  const baseInstruction = CHEMICAL_INDUSTRY_EWC_INSTRUCTIONS[normalizedCode];
+  const hazardousWasteNote = normalizedCode.endsWith('*')
+    ? 'Gefaehrlicher Abfall: Fachgerechte Entsorgung ueber zertifizierte Entsorgungsfachbetriebe erforderlich.'
+    : undefined;
+
+  return [baseInstruction, hazardousWasteNote].filter((value): value is string => Boolean(value)).join(' ') || undefined;
 }
 
 export class DppModelValidationError extends Error {
@@ -318,6 +375,12 @@ function parseCircularity(source: Record<string, unknown>, errors: string[]): Ci
 
   return {
     shelfLifeInMonths,
+    ewcCode: readOptionalString(
+      source,
+      'ewcCode',
+      'circularity.ewcCode',
+      errors,
+    ),
     disposalInstructions: readRequiredString(
       source,
       'disposalInstructions',

@@ -48,6 +48,7 @@ export const dppPayloadSchema = z.object({
   }),
   circularity: z.object({
     shelfLifeInMonths: z.number().finite().nonnegative('Shelf life must not be negative.'),
+    ewcCode: optionalNonEmptyStringSchema,
     disposalInstructions: z.string().trim().min(1, 'Disposal instructions are required.'),
   }),
 });

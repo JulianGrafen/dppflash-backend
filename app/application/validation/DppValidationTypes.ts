@@ -1,4 +1,5 @@
 import type { DigitalProductPassport } from '@/app/domain/models/DppModel';
+import type { ComplianceGapField } from '@/app/domain/models/DppModel';
 
 export type GuardedDppPayload = Omit<DigitalProductPassport, 'environmentalImpact'> & {
   readonly environmentalImpact: {
@@ -20,6 +21,8 @@ export interface ValidationReport {
   readonly errors: readonly ValidationMessage[];
   readonly warnings: readonly ValidationMessage[];
   readonly confidenceScore: number;
+  readonly requiredActions: readonly string[];
+  readonly complianceGaps: readonly ComplianceGapField[];
 }
 
 export interface DppValidationRule {
@@ -30,4 +33,8 @@ export interface DppValidationRule {
 export interface DppWarningRule {
   readonly name: string;
   validate(dpp: GuardedDppPayload): readonly ValidationMessage[];
+}
+
+export interface RecyclingInstructionResolver {
+  getInstructions(ewcCode: string): string | undefined;
 }

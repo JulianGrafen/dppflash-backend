@@ -4,22 +4,29 @@ import type {
   ValidationFinding,
 } from '@/app/domain/dpp/validation/DppValidationTypes';
 
-const MIN_SUBSTANCE_OF_CONCERN_PERCENTAGE = 0.1;
+const MAX_SUBSTANCE_OF_CONCERN_PERCENTAGE = 1.5;
 
 export class SubstanceOfConcernThresholdRule implements DppValidationRule {
   readonly name = 'SubstanceOfConcernThresholdRule';
 
   validate(dpp: DppProductPassport): readonly ValidationFinding[] {
     return dpp.substancesOfConcern
-      .filter((substance) => (
-        substance.concentrationPercent !== undefined
-        && substance.concentrationPercent <= MIN_SUBSTANCE_OF_CONCERN_PERCENTAGE
-      ))
-      .map((substance): ValidationFinding => ({
-        severity: 'warning',
-        code: 'DPP_SUBSTANCE_OF_CONCERN_BELOW_THRESHOLD',
+      .flatMap((substance): ValidationFinding[] => {
+        const concentrationPercent = substance.concentrationPercent;
+
+        if (
+          concentrationPercent === undefined
+          || concentrationPercent <= MAX_SUBSTANCE_OF_CONCERN_PERCENTAGE
+        ) {
+          return [];
+        }
+
+        return [{
+        severity: 'error',
+        code: 'DPP_SUBSTANCE_OF_CONCERN_EXCEEDS_THRESHOLD',
         field: 'substancesOfConcern.concentrationPercent',
-        message: `Substance "${substance.name}" is marked as concerning but has concentration <= ${MIN_SUBSTANCE_OF_CONCERN_PERCENTAGE}%. Manual review required.`,
-      }));
+        message: `Substance "${substance.name}" exceeds the allowed threshold of ${MAX_SUBSTANCE_OF_CONCERN_PERCENTAGE}%. Current concentration is ${concentrationPercent.toFixed(2)}%.`,
+        }];
+      });
   }
 }

@@ -52,9 +52,15 @@ function formatPercentage(value: unknown): string | undefined {
   return `${value} %`;
 }
 
+type KeyValueEntry = { readonly title: string; readonly details?: string };
+
+function compactEntries(entries: Array<KeyValueEntry | null>): KeyValueEntry[] {
+  return entries.flatMap((entry) => entry ? [entry] : []);
+}
+
 function renderKeyValueList(
   label: string,
-  entries: readonly { readonly title: string; readonly details?: string }[],
+  entries: readonly KeyValueEntry[],
 ) {
   if (entries.length === 0) return null;
 
@@ -122,7 +128,7 @@ function renderRecycledContent(value: unknown) {
 function renderCarbonFootprint(value: unknown) {
   if (!value || typeof value !== 'object') return null;
 
-  const entries = [
+  const entries = compactEntries([
     'valueKgCo2e' in value && typeof value.valueKgCo2e === 'number'
       ? { title: `${value.valueKgCo2e} kg CO₂e` }
       : null,
@@ -132,7 +138,7 @@ function renderCarbonFootprint(value: unknown) {
     'calculationMethod' in value && typeof value.calculationMethod === 'string' && value.calculationMethod
       ? { title: 'Berechnungsmethode', details: value.calculationMethod }
       : null,
-  ].filter((entry): entry is { title: string; details?: string } => entry !== null);
+  ]);
 
   return renderKeyValueList('CO₂-Fußabdruck', entries);
 }
@@ -161,6 +167,121 @@ function renderSubstancesOfConcern(value: unknown) {
   });
 
   return renderKeyValueList('Besorgniserregende Stoffe', entries);
+}
+
+function renderManufacturerDetails(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+
+  const entries = compactEntries([
+    'name' in value && typeof value.name === 'string' && value.name
+      ? { title: value.name }
+      : null,
+    'address' in value && typeof value.address === 'string' && value.address
+      ? { title: 'Adresse', details: value.address }
+      : null,
+    'country' in value && typeof value.country === 'string' && value.country
+      ? { title: 'Land', details: value.country }
+      : null,
+  ]);
+
+  return renderKeyValueList('Herstellerdetails', entries);
+}
+
+function renderSupplierAndProcessInformation(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+
+    const level = 'level' in entry && typeof entry.level === 'string' ? entry.level : undefined;
+    const supplierName = 'supplierName' in entry && typeof entry.supplierName === 'string'
+      ? entry.supplierName
+      : undefined;
+    const supplierCountry = 'supplierCountry' in entry && typeof entry.supplierCountry === 'string'
+      ? entry.supplierCountry
+      : undefined;
+    const processName = 'processName' in entry && typeof entry.processName === 'string'
+      ? entry.processName
+      : undefined;
+    const processDescription = 'processDescription' in entry && typeof entry.processDescription === 'string'
+      ? entry.processDescription
+      : undefined;
+
+    if (!level && !supplierName && !processName) return [];
+
+    const title = [level, supplierName, processName].filter(Boolean).join(' · ');
+    const details = [supplierCountry, processDescription].filter(Boolean).join(' · ');
+
+    return [{
+      title,
+      details: details || undefined,
+    }];
+  });
+
+  return renderKeyValueList('Lieferanten- & Prozessinfos', entries);
+}
+
+function renderCareRepairDurability(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+
+  const entries = compactEntries([
+    'careInstructions' in value && typeof value.careInstructions === 'string' && value.careInstructions
+      ? { title: 'Pflegehinweise', details: value.careInstructions }
+      : null,
+    'repairInstructions' in value && typeof value.repairInstructions === 'string' && value.repairInstructions
+      ? { title: 'Reparaturhinweise', details: value.repairInstructions }
+      : null,
+    'durabilityGuidance' in value && typeof value.durabilityGuidance === 'string' && value.durabilityGuidance
+      ? { title: 'Haltbarkeit', details: value.durabilityGuidance }
+      : null,
+  ]);
+
+  return renderKeyValueList('Pflege, Reparatur & Haltbarkeit', entries);
+}
+
+function renderChemicalComposition(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const entries = value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+
+    const substance = 'substance' in entry && typeof entry.substance === 'string'
+      ? entry.substance
+      : undefined;
+    const casNumber = 'casNumber' in entry && typeof entry.casNumber === 'string'
+      ? entry.casNumber
+      : undefined;
+    const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
+    const substanceFunction = 'function' in entry && typeof entry.function === 'string' && entry.function
+      ? entry.function
+      : undefined;
+
+    if (!substance) return [];
+
+    const details = [casNumber, concentration, substanceFunction].filter(Boolean).join(' · ');
+
+    return [{
+      title: substance,
+      details: details || undefined,
+    }];
+  });
+
+  return renderKeyValueList('Chemische Zusammensetzung', entries);
+}
+
+function renderEnvironmentalImpact(value: unknown) {
+  if (!value || typeof value !== 'object') return null;
+
+  const entries = compactEntries([
+    'waterFootprintLiters' in value && typeof value.waterFootprintLiters === 'number'
+      ? { title: 'Wasserfußabdruck', details: `${value.waterFootprintLiters} l` }
+      : null,
+    'impactNotes' in value && typeof value.impactNotes === 'string' && value.impactNotes
+      ? { title: 'Umwelthinweise', details: value.impactNotes }
+      : null,
+  ]);
+
+  return renderKeyValueList('Umweltwirkung', entries);
 }
 
 function asString(value: unknown): string | undefined {
@@ -368,6 +489,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Hersteller"        value={p.manufacturer.name || p.hersteller} />
           <Field label="Adresse"           value={p.manufacturer.address} />
           <Field label="Land"              value={p.manufacturer.country} />
+          <Field label="Ursprungsland"     value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined} />
+          <Field label="Herstellungsland"  value={typeof raw.countryOfManufacturing === 'string' ? raw.countryOfManufacturing : undefined} />
           <Field label="Modell"            value={p.modellname} />
           <Field label="Seriennummer"      value={p.serialNumber} />
           <Field label="Chargennummer"     value={p.batchNumber} />
@@ -389,10 +512,16 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
           <Field label="GTIN" value={typeof raw.gtin === 'string' ? raw.gtin : undefined} />
+          {renderManufacturerDetails(raw.manufacturer)}
           {renderMaterialComposition(raw.materialComposition)}
+          {renderChemicalComposition(raw.chemicalComposition)}
           {renderRecycledContent(raw.recycledContent)}
           {renderCarbonFootprint(raw.carbonFootprint)}
+          {renderEnvironmentalImpact(raw.environmentalImpact)}
           {renderSubstancesOfConcern(raw.substancesOfConcern)}
+          {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
+          {renderCareRepairDurability(raw.careRepairDurability)}
+          <Field label="End-of-Life-Hinweise" value={typeof raw.endOfLifeInstructions === 'string' ? raw.endOfLifeInstructions : undefined} />
         </Section>
 
         {/* ── Carbon footprint (Art. 7) ── */}

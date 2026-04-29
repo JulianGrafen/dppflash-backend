@@ -62,6 +62,37 @@ Return only JSON with this exact shape:
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "optional string such as Klebstoff, adhesive, battery or textile",
     "productName": "clear commercial or technical product name",
+    "manufacturer": {
+      "name": "string",
+      "address": "optional string",
+      "country": "optional ISO country code or country name"
+    },
+    "countryOfOrigin": "optional string",
+    "countryOfManufacturing": "optional string",
+    "supplierAndProcessInformation": [{
+      "level": "string such as raw material, component, assembly",
+      "supplierName": "optional string",
+      "supplierId": "optional string",
+      "supplierCountry": "optional string",
+      "processName": "optional string",
+      "processDescription": "optional string"
+    }],
+    "careRepairDurability": {
+      "careInstructions": "optional string",
+      "repairInstructions": "optional string",
+      "durabilityGuidance": "optional string"
+    },
+    "endOfLifeInstructions": "optional string",
+    "chemicalComposition": [{
+      "substance": "string",
+      "casNumber": "optional string",
+      "concentrationPercent": 0,
+      "function": "optional string"
+    }],
+    "environmentalImpact": {
+      "waterFootprintLiters": 0,
+      "impactNotes": "optional string"
+    },
     "upi": "string",
     "gtin": "valid GTIN-8/12/13/14 string",
     "materialComposition": [{ "material": "string", "percentage": 0 }],
@@ -92,6 +123,12 @@ Extraction robustness rules:
 - Preserve original business wording of materials and substances where possible.
 - If a CAS number is visible for a material or substance, copy it exactly.
 - productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
+- manufacturer should identify the legal manufacturer or brand owner when visible.
+- countryOfOrigin and countryOfManufacturing may differ; extract both separately when the document distinguishes them.
+- supplierAndProcessInformation should capture supplier/process details only when the document clearly states the level or stage.
+- careRepairDurability should summarize care, repair, maintenance, service life or durability guidance in concise business wording.
+- chemicalComposition should focus on named chemical substances/components; materialComposition remains the broader product/material mix.
+- environmentalImpact should include additional environmental metrics or notes beyond the dedicated carbonFootprint object.
 
 Example target output for an adhesive product sheet:
 {
@@ -99,6 +136,38 @@ Example target output for an adhesive product sheet:
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "Industriekleber",
     "productName": "Industriekleber UltraFix 5000",
+    "manufacturer": {
+      "name": "Henkel",
+      "address": "Düsseldorf, Germany",
+      "country": "DE"
+    },
+    "countryOfOrigin": "Germany",
+    "countryOfManufacturing": "Germany",
+    "supplierAndProcessInformation": [
+      {
+        "level": "formulation",
+        "processName": "Epoxy adhesive mixing",
+        "processDescription": "Two-component epoxy formulation and filling"
+      }
+    ],
+    "careRepairDurability": {
+      "careInstructions": "Store cool and dry. Protect from moisture.",
+      "repairInstructions": "Follow technical data sheet curing and surface preparation steps.",
+      "durabilityGuidance": "Observe stated shelf life and curing conditions."
+    },
+    "endOfLifeInstructions": "Dispose cured residues according to local hazardous waste rules.",
+    "chemicalComposition": [
+      {
+        "substance": "Epoxidharz (Bisphenol-A)",
+        "casNumber": "25068-38-6",
+        "concentrationPercent": 65,
+        "function": "binder"
+      }
+    ],
+    "environmentalImpact": {
+      "waterFootprintLiters": 0,
+      "impactNotes": "No separate water footprint stated in the sheet."
+    },
     "upi": "DE-HEN-992834-UF5000-B2",
     "gtin": "4005800012345",
     "materialComposition": [
@@ -137,6 +206,14 @@ function buildUserPrompt(documentText: string, productTypeHint?: string): string
 Extract the ESPR DPP fields from this PDF-derived document text. The PDF was converted locally before this Azure OpenAI call, so treat the text as the source of truth and never invent missing values.
 Map common synonyms:
 - product name = Produktname, Handelsname, trade name, product designation, technical name, Produktbezeichnung
+- manufacturer = Hersteller, manufacturer, brand owner, legal manufacturer
+- country of origin = Ursprungsland, origin, made in, country of origin
+- country of manufacturing = Herstellungsland, manufacturing country, produced in, assembled in
+- supplier/process information = supplier, Lieferant, process step, manufacturing step, process stage, supply chain level
+- care/repair/durability = Pflegehinweise, repair, maintenance, durability, service life, shelf life, care instructions
+- end-of-life = disposal, recycling, end of life, Entsorgung, Rücknahme, recycling instructions
+- chemical composition = chemische Zusammensetzung, ingredients, formulation, constituents, substances
+- environmental impact = Umweltwirkung, environmental impact, water footprint, LCA, environmental notes
 - material composition = Zusammensetzung, Materialmix, composition, ingredients
 - recycled content = Rezyklatanteil, recycled share, PCR/PIR
 - substances of concern = SVHC, hazardous substances, besorgniserregende Stoffe
@@ -153,7 +230,7 @@ function buildVisionPrompt(productTypeHint?: string): string {
 
   return `${hint}
 
-The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Handle tables, ingredient lists, composition blocks, hazard sections, barcode/GTIN fields and OCR noise. Do not invent missing values. Return only the required JSON object.`;
+The attached images are rendered pages from a PDF technical data sheet. Read the visible content and extract the ESPR Digital Product Passport fields. Handle titles, manufacturer blocks, country-of-origin labels, supplier or process tables, care or repair sections, ingredient lists, composition blocks, hazard sections, barcode/GTIN fields and OCR noise. Do not invent missing values. Return only the required JSON object.`;
 }
 
 function truncate(value: string, maxLength: number): string {

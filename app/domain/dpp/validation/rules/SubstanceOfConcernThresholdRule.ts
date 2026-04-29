@@ -22,10 +22,10 @@ export class SubstanceOfConcernThresholdRule implements DppValidationRule {
         }
 
         return [{
-        severity: 'error',
+        severity: 'warning',
         code: 'DPP_SUBSTANCE_OF_CONCERN_EXCEEDS_THRESHOLD',
         field: 'substancesOfConcern.concentrationPercent',
-        message: `Substance "${substance.name}" exceeds the allowed threshold of ${MAX_SUBSTANCE_OF_CONCERN_PERCENTAGE}%. Current concentration is ${concentrationPercent.toFixed(2)}%.`,
+        message: `Substance "${substance.name}" exceeds the allowed threshold of ${MAX_SUBSTANCE_OF_CONCERN_PERCENTAGE}%. Current concentration is ${concentrationPercent.toFixed(2)}%. Please review manually.`,
         }];
       });
   }

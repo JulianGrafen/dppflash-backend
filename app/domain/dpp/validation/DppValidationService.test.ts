@@ -63,7 +63,7 @@ describe('DppValidationService', () => {
     );
   });
 
-  it('rejects substances of concern above the 1.5% threshold', () => {
+  it('keeps substances of concern above the 1.5% threshold as a warning', () => {
     const service = new DppValidationService();
 
     const result = service.validate(createValidPassport({
@@ -77,9 +77,10 @@ describe('DppValidationService', () => {
       ],
     }));
 
-    expect(result.isValid).toBe(false);
-    expect(result.errors).toContain(
-      'DPP_SUBSTANCE_OF_CONCERN_EXCEEDS_THRESHOLD: Substance "Bisphenol-A" exceeds the allowed threshold of 1.5%. Current concentration is 65.00%.',
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toContain(
+      'DPP_SUBSTANCE_OF_CONCERN_EXCEEDS_THRESHOLD: Substance "Bisphenol-A" exceeds the allowed threshold of 1.5%. Current concentration is 65.00%. Please review manually.',
     );
   });
 });

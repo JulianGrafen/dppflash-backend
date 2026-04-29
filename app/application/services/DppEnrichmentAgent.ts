@@ -3,6 +3,8 @@ import { SerperSearchService } from '@/app/application/services/SerperSearchServ
 import { SimpleReaderService } from '@/app/application/services/SimpleReaderService';
 
 const MAX_WEB_CONTEXT_CHARS = 30_000;
+const GTIN_OR_EAN_CONTEXT_PATTERN = /\b(gtin|ean|barcode)\b/i;
+const GTIN_FORMAT_PATTERN = /^(?:\d{8}|\d{13}|\d{14})$/;
 
 interface AzureChatResponse {
   readonly choices?: readonly {
@@ -64,7 +66,12 @@ ${webMarkdown.slice(0, MAX_WEB_CONTEXT_CHARS)}`;
 }
 
 function parseEnrichmentPayload(content: string): EnrichmentPayload {
-  const parsed = JSON.parse(content) as unknown;
+  const normalizedContent = content
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/, '');
+  const parsed = JSON.parse(normalizedContent) as unknown;
 
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('Enrichment response must be a JSON object.');
@@ -98,11 +105,38 @@ function normalizeGtin(value: string): string | undefined {
   }
 
   const digitsOnly = compact.replace(/\D/g, '');
-  if (/^\d{8}$|^\d{13}$|^\d{14}$/.test(digitsOnly)) {
+  if (GTIN_FORMAT_PATTERN.test(digitsOnly)) {
     return digitsOnly;
   }
 
   return undefined;
+}
+
+function extractGtinOrEanFromMarkdown(markdownParts: readonly string[]): string | undefined {
+  const rankedCandidates = new Map<string, number>();
+
+  for (const part of markdownParts) {
+    const lines = part.split('\n');
+    for (const line of lines) {
+      if (!GTIN_OR_EAN_CONTEXT_PATTERN.test(line)) {
+        continue;
+      }
+
+      const matches = line.match(/\b\d[\d\s-]{6,20}\d\b/g) ?? [];
+      for (const match of matches) {
+        const normalized = normalizeGtin(match);
+        if (!normalized) {
+          continue;
+        }
+        // Prefer longer identifiers (13/14) while still allowing GTIN-8.
+        const score = normalized.length >= 13 ? 3 : 1;
+        rankedCandidates.set(normalized, (rankedCandidates.get(normalized) ?? 0) + score);
+      }
+    }
+  }
+
+  const best = [...rankedCandidates.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best?.[0];
 }
 
 function chatCompletionsUrl(): string {
@@ -181,14 +215,20 @@ export class DppEnrichmentAgent {
     }
 
     const enrichment = parseEnrichmentPayload(content);
+    const fallbackGtin = extractGtinOrEanFromMarkdown(markdownParts);
+    const resolvedGtin = enrichment.gtin ?? fallbackGtin;
+    const usedFallback = !enrichment.gtin && Boolean(fallbackGtin);
+    const fallbackReviewReason = usedFallback
+      ? 'GTIN wurde aus GTIN/EAN-kontextuellen Web-Treffern ermittelt und sollte manuell geprueft werden.'
+      : null;
 
     return {
-      gtin: enrichment.gtin,
+      gtin: resolvedGtin,
       origin: enrichment.origin,
       confidence: enrichment.confidence ?? 0,
       sourceUrls: urls,
-      requiresManualReview: enrichment.requiresManualReview ?? false,
-      reviewReason: enrichment.reviewReason ?? null,
+      requiresManualReview: (enrichment.requiresManualReview ?? false) || usedFallback,
+      reviewReason: enrichment.reviewReason ?? fallbackReviewReason,
     };
   }
 }

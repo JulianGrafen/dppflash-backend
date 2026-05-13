@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /**
  * GET /api/rag/stats?tenantId=...
- * Returns chunk count and distinct source file names in the in-process RAG index.
+ * Returns chunk count and distinct source file names in the RAG index (Supabase or in-memory).
  */
 export async function GET(request: NextRequest) {
   const tenantParam = request.nextUrl.searchParams.get('tenantId');
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   }
 
   getRagComplianceOrchestrator();
-  const indexStats = getRagIndexStatsForTenant(tenantId);
+  const indexStats = await getRagIndexStatsForTenant(tenantId);
 
   return NextResponse.json({ tenantId, indexStats });
 }

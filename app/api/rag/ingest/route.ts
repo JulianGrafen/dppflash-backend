@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
  * POST /api/rag/ingest?tenantId=...
  *
  * Multipart body: one or more PDFs under field name `files` (or repeated `file`).
- * Ingests into the shared in-memory hybrid index for this Node process.
+ * Ingests into the shared hybrid index (Supabase `rag_chunks` when configured, else in-memory).
  */
 export async function POST(request: NextRequest) {
   const tenantParam = request.nextUrl.searchParams.get('tenantId');
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const indexStats = getRagIndexStatsForTenant(tenantId);
+  const indexStats = await getRagIndexStatsForTenant(tenantId);
   const totalChunksAdded = results.filter((r) => r.ok).reduce((sum, r) => sum + r.chunkCount, 0);
 
   return NextResponse.json({

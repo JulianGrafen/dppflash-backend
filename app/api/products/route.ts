@@ -28,24 +28,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as Partial<ProductPassport>;
 
-    console.log('📥 POST /api/products - Vollständiger Body:', JSON.stringify(body, null, 2));
-    console.log('📥 Felder-Details:');
-    console.log('  id:', body.id);
-    console.log('  type:', body.type);
-    console.log('  hersteller:', body.hersteller);
-    console.log('  modellname:', body.modellname);
-    console.log('  (typeof hersteller):', typeof body.hersteller);
-    console.log('  (typeof modellname):', typeof body.modellname);
-
     // Validiere erforderliche Felder mit besserer Fehler-Ausgabe
     const hasType = Boolean(body.type);
     const hasHersteller = Boolean(body.hersteller) && body.hersteller !== '';
     const hasModellname = Boolean(body.modellname) && body.modellname !== '';
 
-    console.log(`✓ Validierung: type=${hasType}, hersteller=${hasHersteller}, modellname=${hasModellname}`);
-
     if (!hasType || !hasHersteller || !hasModellname) {
-      console.log('❌ Validierung fehlgeschlagen - fehlendes Feld(er)');
       return NextResponse.json(
         { error: 'Erforderlich: type, hersteller, modellname' },
         { status: 400 }
@@ -55,14 +43,16 @@ export async function POST(request: NextRequest) {
     // Speichere Produkt
     const savedProduct = await saveProduct(body);
 
-    console.log('✅ Produto salvo com sucesso:', {
+    console.info('[api/products] product_saved', {
       id: savedProduct.id,
       type: savedProduct.type,
     });
 
     return NextResponse.json(savedProduct, { status: 201 });
   } catch (error) {
-    console.error('❌ Erro ao salvar:', error);
+    console.error('[api/products] save_failed', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
     return NextResponse.json(
       {
         error: 'Fehler beim Speichern',

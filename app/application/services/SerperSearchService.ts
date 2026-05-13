@@ -1,7 +1,10 @@
+import { assertSafePublicHttpUrl } from '@/app/lib/security/safeHttpUrl';
+
 const SERPER_SEARCH_URL = 'https://google.serper.dev/search';
 const SERPER_API_KEY_ENV = 'SERPER_API_KEY';
 const SEARCH_QUERY_SUFFIX = 'GTIN EAN';
 const FINAL_RESULT_LIMIT = 3;
+const MAX_PRODUCT_NAME_CHARS = 180;
 
 interface SerperOrganicResult {
   readonly link?: string;
@@ -19,7 +22,8 @@ export class SerperSearchService {
       throw new Error(`${SERPER_API_KEY_ENV} is not configured.`);
     }
 
-    const query = `${productName.trim()} ${SEARCH_QUERY_SUFFIX}`.trim();
+    const safeName = productName.trim().slice(0, MAX_PRODUCT_NAME_CHARS);
+    const query = `${safeName} ${SEARCH_QUERY_SUFFIX}`.trim();
     const response = await fetch(SERPER_SEARCH_URL, {
       method: 'POST',
       headers: {
@@ -39,7 +43,15 @@ export class SerperSearchService {
     const payload = await response.json() as SerperSearchResponse;
     const links = (payload.organic ?? [])
       .map((entry) => entry.link)
-      .filter((link): link is string => typeof link === 'string' && link.length > 0);
+      .filter((link): link is string => typeof link === 'string' && link.length > 0)
+      .filter((link) => {
+        try {
+          assertSafePublicHttpUrl(link);
+          return true;
+        } catch {
+          return false;
+        }
+      });
 
     return [...new Set(links)].slice(0, FINAL_RESULT_LIMIT);
   }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateProduct } from '@/app/services/productService';
+import { assertSafeProductId } from '@/app/lib/security/safeProductId';
+import { safeRelativeRedirectPath } from '@/app/lib/security/safeRedirectPath';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +13,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'productId is required' }, { status: 400 });
     }
 
-    await updateProduct(productId, {
+    let safeProductId: string;
+
+    try {
+      safeProductId = assertSafeProductId(productId);
+    } catch {
+      return NextResponse.json({ error: 'Invalid productId' }, { status: 400 });
+    }
+
+    await updateProduct(safeProductId, {
       complianceStatus: 'COMPLIANT',
       enrichmentReview: {
         required: false,
@@ -20,11 +30,12 @@ export async function POST(request: NextRequest) {
       },
     } as never);
 
-    const redirectTarget = typeof returnUrl === 'string' && returnUrl.trim()
-      ? returnUrl
-      : `/p/${productId}`;
+    const fallbackPath = `/p/${safeProductId}`;
+    const redirectPath = typeof returnUrl === 'string'
+      ? safeRelativeRedirectPath(returnUrl, fallbackPath)
+      : fallbackPath;
 
-    return NextResponse.redirect(new URL(redirectTarget, request.url));
+    return NextResponse.redirect(new URL(redirectPath, request.url));
   } catch (error) {
     return NextResponse.json(
       {

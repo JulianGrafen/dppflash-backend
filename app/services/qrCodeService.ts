@@ -94,11 +94,11 @@ function constructDppUrl(productId: string, gtin?: string): string {
   if (gtin) {
     // GS1 Digital Link Format (zukünftig)
     // Beispiel: https://gs1.example.com/01/{gtin}/
-    return `${BASE_URL}/p/${productId}?gtin=${gtin}`;
+    return `${BASE_URL}/p/${encodeURIComponent(productId)}?gtin=${encodeURIComponent(gtin)}`;
   }
 
   // Standard DPP-Link
-  return `${BASE_URL}/p/${productId}`;
+  return `${BASE_URL}/p/${encodeURIComponent(productId)}`;
 }
 
 /**

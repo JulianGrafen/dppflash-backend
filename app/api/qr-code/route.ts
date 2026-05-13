@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateQRCode } from '@/app/services/qrCodeService';
+import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 
 /**
  * POST /api/qr-code
@@ -20,11 +21,17 @@ export async function POST(request: NextRequest) {
   try {
     const { productId, gtin } = await request.json();
 
-    if (!productId) {
+    if (!productId || typeof productId !== 'string') {
       return NextResponse.json(
         { error: 'productId erforderlich' },
         { status: 400 }
       );
+    }
+
+    try {
+      assertSafeProductId(productId);
+    } catch {
+      return NextResponse.json({ error: 'Ungültige productId' }, { status: 400 });
     }
 
     const qrCodeDataUrl = await generateQRCode(productId, {

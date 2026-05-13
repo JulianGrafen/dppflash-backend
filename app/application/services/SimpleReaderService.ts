@@ -1,3 +1,5 @@
+import { assertSafePublicHttpUrl } from '@/app/lib/security/safeHttpUrl';
+
 const JINA_PROXY_BASE_URL = 'https://r.jina.ai/';
 const USER_AGENT = 'dppf-backend-simple-reader/1.0';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -10,7 +12,8 @@ export class SimpleReaderService {
       throw new Error('URL is required.');
     }
 
-    const encodedTargetUrl = encodeURI(trimmedUrl);
+    const safeUrl = assertSafePublicHttpUrl(trimmedUrl);
+    const encodedTargetUrl = encodeURI(safeUrl.toString());
     const proxyUrl = `${JINA_PROXY_BASE_URL}${encodedTargetUrl}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

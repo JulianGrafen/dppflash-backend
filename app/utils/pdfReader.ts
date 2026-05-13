@@ -263,6 +263,65 @@ export async function readPdf(
   };
 }
 
+export interface PdfPageText {
+  readonly pageNumber: number;
+  readonly text: string;
+}
+
+/**
+ * Prefer per-page extraction via pdfjs (better provenance for RAG chunk metadata).
+ * Falls back to {@link readPdf} as a single synthetic page when pdfjs fails or yields no text.
+ */
+export async function readPdfPerPage(
+  buffer: Buffer,
+  fileName: string,
+): Promise<readonly PdfPageText[]> {
+  try {
+    const pdfjsLib = (await import(
+      'pdfjs-dist/legacy/build/pdf.mjs'
+    )) as typeof import('pdfjs-dist');
+    configurePdfJsForServer(pdfjsLib);
+
+    const documentParameters = {
+      data: new Uint8Array(buffer),
+      disableWorker: true,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+      disableFontFace: true,
+      verbosity: 0,
+    } as unknown as PdfJsGetDocumentInput;
+
+    const pdf = await pdfjsLib.getDocument(documentParameters).promise;
+    const pages: PdfPageText[] = [];
+
+    for (let i = 1; i <= pdf.numPages; i += 1) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const raw = content.items.map((item) => ('str' in item ? item.str : '')).join(' ');
+      let text = stripJunk(raw);
+      if (looksLikeBinary(text)) {
+        text = '';
+      }
+      pages.push({ pageNumber: i, text: text.trim() });
+    }
+
+    const totalLen = pages.reduce((sum, p) => sum + p.text.length, 0);
+    if (totalLen >= MIN_USABLE_LENGTH) {
+      return pages;
+    }
+  } catch (err) {
+    console.warn(
+      `[PdfReader] readPdfPerPage pdfjs failed for "${fileName}": ${
+        err instanceof Error ? err.message : err
+      } — falling back to readPdf`,
+    );
+  }
+
+  const full = await readPdf(buffer, fileName);
+  return [{ pageNumber: 1, text: full.text.trim() }];
+}
+
 /** Best-effort page-count: only pdfjs gives us a reliable number. */
 async function getPageCount(
   buffer: Buffer,

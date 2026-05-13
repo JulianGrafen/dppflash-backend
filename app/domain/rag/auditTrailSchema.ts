@@ -1,0 +1,60 @@
+import { z } from 'zod';
+
+/**
+ * Single provenance bundle: every extracted value must cite exact source context.
+ * (Data provenance / forensic audit trail.)
+ */
+export const SourceAttributionSchema = z.object({
+  fileName: z.string().min(1, 'fileName is required.'),
+  pageNumber: z.number().int().min(1, 'pageNumber must be >= 1.'),
+  contextSnippet: z
+    .string()
+    .min(1, 'contextSnippet must contain the verbatim evidence span.'),
+});
+
+export const AuditedValueSchema = z.object({
+  value: z.union([z.string().min(1), z.null()]),
+  confidence: z.number().min(0).max(1),
+  source: SourceAttributionSchema,
+  requiresManualReview: z.boolean(),
+});
+
+export type AuditedValue = z.infer<typeof AuditedValueSchema>;
+export type SourceAttribution = z.infer<typeof SourceAttributionSchema>;
+
+/**
+ * MVP envelope for compliance extraction. Extend with additional keys as needed.
+ */
+const passportFieldsRecord = z.record(z.string().min(1).max(96), AuditedValueSchema);
+
+export const AuditTrailSchema = z
+  .object({
+    /** Legacy single-field extractions (still supported for narrow queries). */
+    gtin: AuditedValueSchema.optional(),
+    ewcCode: AuditedValueSchema.optional(),
+    /**
+     * DPP/ESPR field keys → audited scalar (string form; numbers are normalized at merge time).
+     * Keys should match camelCase passport field names (e.g. kapazitaetKWh, materialZusammensetzung).
+     */
+    fields: passportFieldsRecord.optional(),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    const n = val.fields ? Object.keys(val.fields).length : 0;
+    if (n > 48) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'fields must contain at most 48 keys.',
+      });
+    }
+  });
+
+export type AuditTrail = z.infer<typeof AuditTrailSchema>;
+
+export function parseAuditTrail(input: unknown): AuditTrail {
+  return AuditTrailSchema.parse(input);
+}
+
+export function safeParseAuditTrail(input: unknown) {
+  return AuditTrailSchema.safeParse(input);
+}

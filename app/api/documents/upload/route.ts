@@ -1,5 +1,9 @@
+import { basename } from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
+import { ProductPassportRagEnrichmentService } from '@/app/application/services/rag/ProductPassportRagEnrichmentService';
+import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { saveProductToStore } from '@/app/lib/server-store';
+import { getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
 import { ProductPassport } from '@/app/types/dpp-types';
 
 /**
@@ -54,8 +58,9 @@ function toPublicExtractedData(
  * 1. Speichern in Supabase Storage
  * 2. Azure AI Document Intelligence analysiert das PDF
  * 3. Azure OpenAI extrahiert das ESPR-DPP-Schema
- * 4. **Speichern aller Daten im Store**
- * 5. Rückgabe strukturierter Daten mit Product-Link
+ * 4. PDF wird in den **RAG-Index** desselben Mandanten eingespeist; forensische LLM-Synthese ergänzt **leere** Passfelder aus den Chunks (mit Audit-Trail auf `ragEnrichment`)
+ * 5. **Speichern aller Daten im Store**
+ * 6. Rückgabe strukturierter Daten mit Product-Link
  * 
  * Query-Parameter:
  * - tenantId: Mandanten-ID (erforderlich für Multi-Tenancy)
@@ -69,14 +74,21 @@ function toPublicExtractedData(
 export async function POST(request: NextRequest) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_DPP_URL || request.nextUrl.origin;
-    const tenantId = request.nextUrl.searchParams.get('tenantId');
+    const tenantParam = request.nextUrl.searchParams.get('tenantId');
     const productTypeParam = request.nextUrl.searchParams.get('productType');
 
-    if (!tenantId) {
+    if (!tenantParam?.trim()) {
       return NextResponse.json(
         { error: 'tenantId erforderlich' },
         { status: 400 }
       );
+    }
+
+    let safeTenantId: string;
+    try {
+      safeTenantId = assertSafeProductId(tenantParam.trim());
+    } catch {
+      return NextResponse.json({ error: 'Ungültiger tenantId' }, { status: 400 });
     }
 
     const formData = await request.formData();
@@ -115,7 +127,7 @@ export async function POST(request: NextRequest) {
     const result = await processPdfDocument(
       buffer,
       file.name,
-      tenantId,
+      safeTenantId,
       productType
     );
 
@@ -144,6 +156,7 @@ export async function POST(request: NextRequest) {
     const productId = generateProductId();
     const hersteller = typeof extractedFields.hersteller === 'string' ? extractedFields.hersteller : '';
     const modellname = typeof extractedFields.modellname === 'string' ? extractedFields.modellname : '';
+    const safeFileName = basename(file.name).slice(0, 255) || 'document.pdf';
     const productPassport: ProductPassport = {
       id: productId,
       type: result.extractedData.productType,
@@ -157,6 +170,47 @@ export async function POST(request: NextRequest) {
       extractionConfidence: result.extractedData.confidence,
       extractionWarnings: result.extractedData.warnings,
     } as ProductPassport;
+
+    const rag = getRagComplianceOrchestrator();
+    try {
+      await rag.ingestPdf({
+        tenantId: safeTenantId,
+        fileName: safeFileName,
+        pdf: buffer,
+      });
+    } catch (ragIngestErr) {
+      console.warn('[DPP] rag_ingest_failed', ragIngestErr);
+    }
+
+    const productLabel = `${hersteller} ${modellname}`.trim() || safeFileName;
+
+    try {
+      const enrichmentSvc = new ProductPassportRagEnrichmentService();
+      const ragOutcome = await enrichmentSvc.enrichFromIndexedChunks(rag, {
+        tenantId: safeTenantId,
+        productType: result.extractedData.productType,
+        productLabel,
+        passport: productPassport,
+      });
+
+      if (ragOutcome.enrichment.cryptoValidation.ok) {
+        Object.assign(productPassport, ragOutcome.passportPatch);
+      }
+
+      productPassport.ragEnrichment = {
+        success: true,
+        appliedFieldKeys: ragOutcome.enrichment.cryptoValidation.ok ? [...ragOutcome.appliedKeys] : [],
+        auditTrail: ragOutcome.enrichment.auditTrail,
+        rawModelJson: ragOutcome.enrichment.rawModelJson,
+        cryptoValidation: ragOutcome.enrichment.cryptoValidation,
+      };
+    } catch (ragEnrichErr) {
+      console.warn('[DPP] rag_enrich_failed', ragEnrichErr);
+      productPassport.ragEnrichment = {
+        success: false,
+        message: ragEnrichErr instanceof Error ? ragEnrichErr.message : String(ragEnrichErr),
+      };
+    }
 
     // Speichere das Produkt
     await saveProductToStore(productPassport);
@@ -174,6 +228,7 @@ export async function POST(request: NextRequest) {
       warnings: result.extractedData.warnings,
       status: result.status,
       message: result.message,
+      ragEnrichment: productPassport.ragEnrichment,
     };
 
     console.info('[DPP] upload_response_ready', { productId, status: result.status });

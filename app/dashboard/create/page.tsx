@@ -232,6 +232,15 @@ export default function CreateDashboard() {
             <p className="text-gray-600">
               Wähle die Produktkategorie aus
             </p>
+            <p className="text-sm mt-3">
+              <a
+                href="/dashboard/rag-ingest"
+                className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+              >
+                RAG-Wissensbasis mit PDFs befüllen
+              </a>
+              <span className="text-gray-500"> — mehrere Zulieferer-Dokumente für Compliance-RAG indexieren</span>
+            </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">

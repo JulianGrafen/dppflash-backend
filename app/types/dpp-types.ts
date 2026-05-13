@@ -16,6 +16,8 @@
  * - Chemikalien ab 2028
  */
 
+import type { AuditTrail } from '@/app/domain/rag/auditTrailSchema';
+
 /**
  * Basis-Interface für alle Produktpässe.
  * Enthält Felder, die für jede EU-Regulierung identisch sind. 
@@ -26,6 +28,19 @@ export interface BaseDPP {
   readonly language: string; // ISO 639-1 Code: 'de', 'en', 'fr', 'it', 'es', etc.
   hersteller: string;
   modellname: string;
+  /** Optional: provenance-aware RAG enrichment snapshot (not part of ESPR schema export). */
+  ragEnrichment?:
+    | {
+        readonly success: true;
+        readonly appliedFieldKeys: readonly string[];
+        readonly auditTrail: AuditTrail;
+        readonly rawModelJson: string;
+        readonly cryptoValidation: { readonly ok: boolean; readonly errors: readonly string[] };
+      }
+    | {
+        readonly success: false;
+        readonly message: string;
+      };
   [key: string]: any; // Dynamische Felder
 }
 

@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
 import { ProductPassportRagEnrichmentService } from '@/app/application/services/rag/ProductPassportRagEnrichmentService';
+import { resolveRequestPublicOrigin } from '@/app/lib/resolveRequestPublicOrigin';
 import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { saveProductToStore } from '@/app/lib/server-store';
 import { getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
@@ -73,7 +74,7 @@ function toPublicExtractedData(
  */
 export async function POST(request: NextRequest) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_DPP_URL || request.nextUrl.origin;
+    const baseUrl = resolveRequestPublicOrigin(request);
     const tenantParam = request.nextUrl.searchParams.get('tenantId');
     const productTypeParam = request.nextUrl.searchParams.get('productType');
 

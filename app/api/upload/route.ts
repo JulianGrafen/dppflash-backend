@@ -8,6 +8,7 @@
  * Persistence uses server-store (Supabase-backed, Vercel-safe).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveRequestPublicOrigin } from '@/app/lib/resolveRequestPublicOrigin';
 import { extractFromPdfBuffer } from '@/app/services/localExtractionService';
 import { saveProductToStore } from '@/app/lib/server-store';
 import { generateQRCode } from '@/app/services/qrCodeService';
@@ -64,7 +65,7 @@ export async function POST(
     // BaseDPP has [key: string]: any, so EsprProductData is structurally compatible
     await saveProductToStore(data as any);
 
-    const baseUrl = request.nextUrl.origin;
+    const baseUrl = resolveRequestPublicOrigin(request);
     const productUrl = `${baseUrl}/p/${data.id}`;
     const qrCodeDataUrl = await generateQRCode(data.id, { size: 300 });
 

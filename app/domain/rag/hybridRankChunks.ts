@@ -1,4 +1,4 @@
-import type { HybridSearchHit, VectorChunkRecord } from '@/app/application/ports/rag/VectorStorePort';
+import type { HybridSearchHit, HybridSearchOptions, VectorChunkRecord } from '@/app/application/ports/rag/VectorStorePort';
 import { tokenizeForRetrieval } from '@/app/domain/rag/textTokenize';
 
 function cosineSimilarity(a: readonly number[], b: readonly number[]): number {
@@ -60,6 +60,34 @@ function normalizeScores(values: number[]): number[] {
 const KEYWORD_WEIGHT = 0.45;
 const VECTOR_WEIGHT = 0.55;
 
+function productIdentityBoost(
+  chunk: VectorChunkRecord,
+  terms: readonly string[],
+  sourceFileName: string | undefined,
+): number {
+  if (terms.length === 0 && !sourceFileName) {
+    return 0;
+  }
+
+  const hay = `${chunk.text} ${chunk.fileName}`.toLowerCase();
+  let hits = 0;
+  for (const t of terms) {
+    const n = t.toLowerCase();
+    if (n.length < 2) {
+      continue;
+    }
+    if (hay.includes(n)) {
+      hits += 1;
+    }
+  }
+
+  const ratio = terms.length === 0 ? 0 : hits / terms.length;
+  const termBoost = Math.min(0.42, ratio * 0.55);
+  const sameFile =
+    sourceFileName && chunk.fileName === sourceFileName ? 0.22 : 0;
+  return Math.min(0.55, termBoost + sameFile);
+}
+
 /**
  * Shared hybrid ranker (BM25-lite + cosine) used by in-memory and Supabase-backed stores.
  */
@@ -68,6 +96,7 @@ export function rankChunksHybrid(
   query: string,
   queryEmbedding: readonly number[],
   limit: number,
+  options?: HybridSearchOptions,
 ): readonly HybridSearchHit[] {
   const queryTokens = tokenizeForRetrieval(query);
 
@@ -77,11 +106,16 @@ export function rankChunksHybrid(
   const keywordNorm = normalizeScores(keywordRaw);
   const vectorNorm = normalizeScores(vectorRaw);
 
+  const terms = options?.productMatchTerms ?? [];
+  const sourceFile = options?.sourceFileName;
+
   const ranked = candidates
     .map((c, index) => {
       const keywordScore = keywordNorm[index] ?? 0;
       const vectorScore = vectorNorm[index] ?? 0;
-      const score = KEYWORD_WEIGHT * keywordScore + VECTOR_WEIGHT * vectorScore;
+      const base = KEYWORD_WEIGHT * keywordScore + VECTOR_WEIGHT * vectorScore;
+      const boost = productIdentityBoost(c, terms, sourceFile);
+      const score = Math.min(1, base + boost);
 
       return {
         id: c.id,

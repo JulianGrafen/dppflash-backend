@@ -183,7 +183,10 @@ export async function POST(request: NextRequest) {
       console.warn('[DPP] rag_ingest_failed', ragIngestErr);
     }
 
-    const productLabel = `${hersteller} ${modellname}`.trim() || safeFileName;
+    const productName =
+      typeof extractedFields.productName === 'string' ? extractedFields.productName.trim() : '';
+    const productLabel =
+      `${hersteller} ${modellname}`.trim() || productName || safeFileName;
 
     try {
       const enrichmentSvc = new ProductPassportRagEnrichmentService();
@@ -192,6 +195,7 @@ export async function POST(request: NextRequest) {
         productType: result.extractedData.productType,
         productLabel,
         passport: productPassport,
+        sourceFileName: safeFileName,
       });
 
       if (ragOutcome.enrichment.cryptoValidation.ok) {
@@ -204,6 +208,7 @@ export async function POST(request: NextRequest) {
         auditTrail: ragOutcome.enrichment.auditTrail,
         rawModelJson: ragOutcome.enrichment.rawModelJson,
         cryptoValidation: ragOutcome.enrichment.cryptoValidation,
+        retrievalMatchConfidence: ragOutcome.retrievalMatchConfidence,
       };
     } catch (ragEnrichErr) {
       console.warn('[DPP] rag_enrich_failed', ragEnrichErr);

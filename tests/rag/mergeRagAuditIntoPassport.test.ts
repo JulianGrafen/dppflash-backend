@@ -71,4 +71,34 @@ describe('mergeRagAuditIntoPassport', () => {
     expect(patch.ewcCode).toBe('08 04 09*');
     expect(patch.wasteCode).toBe('08 04 09*');
   });
+
+  it('treats PENDING_EXTERNAL_MATCH as empty so RAG can fill gtin', () => {
+    const passport = {
+      id: 'p3',
+      type: 'BATTERY',
+      createdAt: new Date(),
+      language: 'de',
+      hersteller: 'X',
+      modellname: 'Y',
+      gtin: 'PENDING_EXTERNAL_MATCH',
+    } as BatteryDPP;
+
+    const trail = parseAuditTrail({
+      gtin: {
+        value: '5901234123457',
+        confidence: 0.9,
+        source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: '5901234123457' },
+        requiresManualReview: false,
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, [
+      'hersteller',
+      'modellname',
+      'gtin',
+    ]);
+
+    expect(appliedKeys).toContain('gtin');
+    expect(patch.gtin).toBe('5901234123457');
+  });
 });

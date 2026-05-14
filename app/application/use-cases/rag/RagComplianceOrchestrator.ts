@@ -4,6 +4,7 @@ import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/Compli
 import type { IngestPdfInput } from '@/app/application/services/rag/DocumentIngestionService';
 import type { HybridRetrievalInput } from '@/app/application/services/rag/HybridRetrievalService';
 import type { ComplianceEnrichmentInput, ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
+import { computeRetrievalMatchConfidence } from '@/app/domain/rag/productBrainMatch';
 
 export interface RagComplianceRunInput {
   readonly tenantId: string;
@@ -12,6 +13,15 @@ export interface RagComplianceRunInput {
   /** When set, the enrichment agent asks for a provenance map under \`fields\` for these passport keys. */
   readonly targetPassportFieldKeys?: readonly string[];
   readonly retrievalTopK?: number;
+  /** Product-line tokens: more overlap with chunk text / fileName → higher rank and match confidence. */
+  readonly productMatchTerms?: readonly string[];
+  /** Basename of the indexed PDF; boosts chunks from that file when it matches stored rows. */
+  readonly sourceFileName?: string;
+}
+
+export interface RagComplianceExtractionOutcome {
+  readonly enrichment: ComplianceEnrichmentResult;
+  readonly retrievalMatchConfidence: number;
 }
 
 /**
@@ -28,20 +38,28 @@ export class RagComplianceOrchestrator {
     return this.ingestion.ingestPdf(input);
   }
 
-  async runComplianceExtraction(input: RagComplianceRunInput): Promise<ComplianceEnrichmentResult> {
+  async runComplianceExtraction(input: RagComplianceRunInput): Promise<RagComplianceExtractionOutcome> {
     const defaultTopK =
       input.retrievalTopK ??
       (input.targetPassportFieldKeys?.length
-        ? Math.min(16, 6 + Math.floor(input.targetPassportFieldKeys.length / 3))
-        : 5);
+        ? Math.min(24, 10 + Math.floor(input.targetPassportFieldKeys.length / 2))
+        : 12);
 
     const retrievalInput: HybridRetrievalInput = {
       tenantId: input.tenantId,
       query: input.query,
       topK: defaultTopK,
+      productMatchTerms: input.productMatchTerms,
+      sourceFileName: input.sourceFileName,
     };
 
     const chunks = await this.retrieval.retrieveTopChunks(retrievalInput);
+
+    const retrievalMatchConfidence = computeRetrievalMatchConfidence(
+      chunks,
+      input.productMatchTerms ?? [],
+      input.sourceFileName,
+    );
 
     const enrichmentInput: ComplianceEnrichmentInput = {
       tenantId: input.tenantId,
@@ -51,6 +69,7 @@ export class RagComplianceOrchestrator {
       targetPassportFieldKeys: input.targetPassportFieldKeys,
     };
 
-    return this.enrichment.synthesize(enrichmentInput);
+    const enrichment = await this.enrichment.synthesize(enrichmentInput);
+    return { enrichment, retrievalMatchConfidence };
   }
 }

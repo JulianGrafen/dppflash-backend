@@ -26,6 +26,9 @@ function isEmptyPassportValue(value: unknown): boolean {
   if (typeof value === 'string' && value.trim() === '') {
     return true;
   }
+  if (typeof value === 'string' && value.trim() === 'PENDING_EXTERNAL_MATCH') {
+    return true;
+  }
   return false;
 }
 

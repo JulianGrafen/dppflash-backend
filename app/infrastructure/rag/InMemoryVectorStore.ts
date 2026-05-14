@@ -1,5 +1,6 @@
 import type {
   HybridSearchHit,
+  HybridSearchOptions,
   VectorChunkRecord,
   VectorStorePort,
   RagChunkListOptions,
@@ -64,8 +65,9 @@ export class InMemoryVectorStore implements VectorStorePort {
     query: string,
     queryEmbedding: readonly number[],
     limit: number,
+    options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]> {
     const candidates = [...this.store.values()].filter((c) => c.tenantId === tenantId);
-    return rankChunksHybrid(candidates, query, queryEmbedding, limit);
+    return rankChunksHybrid(candidates, query, queryEmbedding, limit, options);
   }
 }

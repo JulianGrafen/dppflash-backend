@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   HybridSearchHit,
+  HybridSearchOptions,
   VectorChunkRecord,
   VectorStorePort,
   RagChunkListOptions,
@@ -188,6 +189,7 @@ export class SupabaseRagChunkStore implements VectorStorePort {
     query: string,
     queryEmbedding: readonly number[],
     limit: number,
+    options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]> {
     const { data, error } = await this.client
       .from('rag_chunks')
@@ -200,6 +202,6 @@ export class SupabaseRagChunkStore implements VectorStorePort {
     }
 
     const candidates = (data ?? []).map((row) => toVectorChunkRecord(row as RagChunkRow));
-    return rankChunksHybrid(candidates, query, queryEmbedding, limit);
+    return rankChunksHybrid(candidates, query, queryEmbedding, limit, options);
   }
 }

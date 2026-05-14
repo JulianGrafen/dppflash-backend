@@ -43,6 +43,12 @@ export interface RagChunkListResult {
   readonly total: number;
 }
 
+/** Optional boosts for hybrid search: overlap with product identity tokens and same-PDF preference. */
+export interface HybridSearchOptions {
+  readonly productMatchTerms?: readonly string[];
+  readonly sourceFileName?: string;
+}
+
 export interface VectorStorePort {
   readonly name: string;
 
@@ -57,6 +63,7 @@ export interface VectorStorePort {
     query: string,
     queryEmbedding: readonly number[],
     limit: number,
+    options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]>;
 
   /**

@@ -29,6 +29,8 @@ export interface BaseDPP {
   readonly language: string; // ISO 639-1 Code: 'de', 'en', 'fr', 'it', 'es', etc.
   hersteller: string;
   modellname: string;
+  /** Optional six-pillar audited extraction + Sankey graph (OpenAI path). */
+  regulatoryExtraction?: DppExtractionPayload;
   /** Optional: provenance-aware RAG enrichment snapshot (not part of ESPR schema export). */
   ragEnrichment?:
     | {
@@ -37,6 +39,8 @@ export interface BaseDPP {
         readonly auditTrail: AuditTrail;
         readonly rawModelJson: string;
         readonly cryptoValidation: { readonly ok: boolean; readonly errors: readonly string[] };
+        /** 0–1: overlap of product identity tokens with retrieved chunk text / file names (+ same-PDF hint). */
+        readonly retrievalMatchConfidence?: number;
       }
     | {
         readonly success: false;

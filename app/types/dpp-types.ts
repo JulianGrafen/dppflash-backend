@@ -17,6 +17,7 @@
  */
 
 import type { AuditTrail } from '@/app/domain/rag/auditTrailSchema';
+import type { DppExtractionPayload } from '@/app/domain/dpp/dppExtractionZodSchema';
 
 /**
  * Basis-Interface für alle Produktpässe.
@@ -280,4 +281,6 @@ export interface AIExtractionOutput {
   confidence: number; // 0-1
   extractedFields: Partial<ProductPassport>;
   warnings: string[];
+  /** Six-pillar audited extraction + Sankey graph when OPENAI_API_KEY is set. */
+  regulatoryExtraction?: DppExtractionPayload;
 }

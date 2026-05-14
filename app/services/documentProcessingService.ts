@@ -69,6 +69,7 @@ export async function processPdfDocument(
             ...result.dpp,
           } as Partial<ProductPassport>,
           warnings: [...result.warnings],
+          regulatoryExtraction: result.regulatoryExtraction,
         },
         status: 'SUCCESS',
         message: 'PDF erfolgreich als validierter ESPR-DPP verarbeitet',

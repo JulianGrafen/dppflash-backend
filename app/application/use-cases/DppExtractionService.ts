@@ -9,6 +9,8 @@ import type { DppValidationService } from '@/app/domain/dpp/validation/DppValida
 import type { ValidationResult } from '@/app/domain/dpp/validation/DppValidationTypes';
 import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
 import type { SemanticDppExtractionPort } from '@/app/application/ports/SemanticDppExtractionPort';
+import type { RegulatoryStructuredDppExtractionPort } from '@/app/application/ports/RegulatoryStructuredDppExtractionPort';
+import type { DppExtractionPayload } from '@/app/domain/dpp/dppExtractionZodSchema';
 
 export interface DppExtractionRequest {
   readonly pdf: Buffer;
@@ -23,12 +25,16 @@ export interface DppExtractionResponse {
   readonly validationIssues: readonly DppValidationIssue[];
   readonly validationResult: ValidationResult;
   readonly pageCount: number;
+  /** Audited six-pillar + composition graph (when regulatory extractor is configured). */
+  readonly regulatoryExtraction?: DppExtractionPayload;
 }
 
 interface DppExtractionServiceDependencies {
   readonly semanticExtractor: SemanticDppExtractionPort;
   readonly dppValidationService: DppValidationService;
   readonly logger: SafeLoggerPort;
+  /** Optional OpenAI JSON path for six-pillar audited extraction + Sankey graph. */
+  readonly regulatoryStructuredExtractor?: RegulatoryStructuredDppExtractionPort;
 }
 
 const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
@@ -224,6 +230,22 @@ export class DppExtractionService {
       fileName: request.fileName,
       productTypeHint: request.productTypeHint,
     });
+
+    let regulatoryExtraction: DppExtractionPayload | undefined;
+    const reg = this.dependencies.regulatoryStructuredExtractor;
+    if (reg) {
+      try {
+        regulatoryExtraction = await reg.extract({
+          pdf: request.pdf,
+          sourcePdf: request.fileName,
+        });
+      } catch (err) {
+        this.dependencies.logger.warn('regulatory_structured_extraction_failed', {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     const identifierEnrichment = await this.enrichIdentifiersIfNeeded(semanticResult.dpp);
     const wasteCodeEnrichment = enrichWasteCode(identifierEnrichment.dpp);
 
@@ -265,6 +287,7 @@ export class DppExtractionService {
       validationIssues: [],
       validationResult: validation,
       pageCount: semanticResult.pageCount,
+      regulatoryExtraction,
     };
   }
 }

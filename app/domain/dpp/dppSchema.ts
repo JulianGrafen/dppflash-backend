@@ -310,3 +310,21 @@ export function validateDppProductPassport(data: DppProductPassport): DppValidat
     issues,
   };
 }
+
+/** Zod ESPR six-pillar extraction + Sankey graph (see `dppExtractionZodSchema.ts`). */
+export {
+  DppExtractionSchema,
+  auditedField,
+  auditedStringSchema,
+  auditedNumberSchema,
+  auditedBooleanSchema,
+  compositionGraphSchema,
+  compositionGraphNodeSchema,
+  compositionGraphLinkSchema,
+  safeParseDppExtraction,
+  type DppExtractionPayload,
+  type AuditedString,
+  type CompositionGraphPayload,
+  type CompositionGraphNodePayload,
+  type CompositionGraphLinkPayload,
+} from './dppExtractionZodSchema';

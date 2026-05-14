@@ -1,14 +1,29 @@
 import type { ComplianceLlmPort } from '@/app/application/ports/rag/ComplianceLlmPort';
-import { getAllRagExtractionFieldKeys } from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
-import { parseExtractedAttributesJson } from '@/app/domain/rag/extractedAttributesJson';
+import {
+  eagerExtractionResponseSchema,
+  eagerExtractionResponseToRows,
+} from '@/app/domain/rag/eagerExtractionResponseSchema';
 
 const MAX_DOCUMENT_CHARS = 120_000;
+
+const EAGER_FIELD_KEYS_JSON = JSON.stringify([
+  'hersteller',
+  'modellname',
+  'ewcCode',
+  'wasteCode',
+  'countryOfOrigin',
+  'countryOfManufacturing',
+  'endOfLifeInstructions',
+  'chemicalComposition',
+]);
 
 const SYSTEM = `Du bist ein Daten-Extraktor für technische Produktunterlagen (ESPR / Digital Product Passport).
 Du erhältst den Volltext eines PDFs (mit Seiten-Markern). Extrahiere **nur** Informationen, die wörtlich oder eindeutig im Text stehen. Erfinde nichts.
 
-Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **nur** erlaubte camelCase-Feldnamen aus der vorgegebenen Liste — weglassen, wenn kein belastbarer Wert existiert.
+Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **ausschließlich** die vorgegebene Liste — weglassen, wenn kein belastbarer Wert existiert.
+
+WICHTIG: Nutze für die chemische Zusammensetzung/Materialien IMMER den Key 'chemicalComposition'. Nutze für Entsorgungshinweise IMMER den Key 'endOfLifeInstructions'. Nutze für den Produktnamen IMMER den Key 'modellname'. Übersetze die Keys niemals ins Deutsch!
 
 Jeder vorhandene Key mappt zu diesem Objekt:
 {
@@ -39,11 +54,9 @@ export class BackgroundExtractionAgent {
   constructor(private readonly llm: ComplianceLlmPort) {}
 
   async extractFromDocumentText(input: BackgroundExtractionInput): Promise<Record<string, ExtractedAttributeRow>> {
-    const keys = getAllRagExtractionFieldKeys();
-    const keysJson = JSON.stringify(keys);
     const body = input.documentText.slice(0, MAX_DOCUMENT_CHARS);
 
-    const user = `Erlaubte Feld-Keys (camelCase): ${keysJson}
+    const user = `Erlaubte Top-Level-Feld-Keys (exakt, camelCase, keine anderen Keys): ${EAGER_FIELD_KEYS_JSON}
 
 Quelldatei (sourcePdf in jeder Antwort verwenden): ${input.fileName}
 Produktname-Hinweis (Kontext): ${input.productNameHint}
@@ -57,28 +70,21 @@ ${body}`;
     try {
       parsed = JSON.parse(raw) as unknown;
     } catch {
+      console.warn('[EAGER] JSON.parse failed on LLM response');
       return {};
     }
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.warn('[EAGER] LLM response is not a JSON object');
       return {};
     }
 
-    const allowed = new Set(keys);
-    const filtered: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (allowed.has(k) && v !== null && typeof v === 'object' && !Array.isArray(v)) {
-        filtered[k] = {
-          ...(v as Record<string, unknown>),
-          sourcePdf:
-            typeof (v as Record<string, unknown>).sourcePdf === 'string' &&
-            (v as Record<string, unknown>).sourcePdf
-              ? (v as Record<string, unknown>).sourcePdf
-              : input.fileName,
-        };
-      }
+    const validated = eagerExtractionResponseSchema.safeParse(parsed);
+    if (!validated.success) {
+      console.warn('[EAGER] Zod validation failed (strict keys only):', validated.error.flatten());
+      return {};
     }
 
-    return parseExtractedAttributesJson(filtered);
+    return eagerExtractionResponseToRows(validated.data, input.fileName);
   }
 }

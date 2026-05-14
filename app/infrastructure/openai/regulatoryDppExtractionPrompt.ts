@@ -12,8 +12,9 @@ Rules:
 6. chemicalDeclarations: declarative phrases found or implied in the doc (e.g. "PFAS not intentionally added") — each entry is an audited string object.
 7. environmentalFootprint.energySourcesPercent: rows like electricity mix; if only one source is named, a single row with percent 100 is acceptable if the text supports it.
 8. complianceAndCertifications.certificates may be an empty array if none are evidenced.
-9. compositionGraph (mandatory): Build a directed material / process flow for Sankey:
+9. circularityEndOfLife.disposalInstructions MUST summarize Entsorgungshinweise / disposal / Section 13 / packaging & residue disposal when present (verbatim-backed). recyclabilityInstructions covers recycling streams; do not duplicate entire SDS in one field—split logically if both exist.
+10. compositionGraph (mandatory): Build a directed material / process flow for Sankey:
    - nodes: each has id (slug, unique), label (human readable), category raw_material | processing | final_product.
    - links: source and target must equal node ids; value = mass share OR percentage flow (non-negative number). Use the same scale for all links (prefer percentages 0–100).
    - Include a left-to-right chain when possible, e.g. recycled PET (raw_material) -> yarn spinning (processing) -> jacket shell (final_product).
-10. Return ONLY JSON, no markdown fences.`;
+11. Return ONLY JSON, no markdown fences.`;

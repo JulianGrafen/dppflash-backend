@@ -63,7 +63,7 @@ export class OpenAiRegulatoryDppExtractor implements RegulatoryStructuredDppExtr
                   energySourcesPercent: [{ sourceLabel: {}, percent: {} }],
                 },
                 complianceAndCertifications: { certificates: [{ scheme: {}, certificateId: {} }] },
-                circularityEndOfLife: ['repairLinks', 'recyclabilityInstructions', 'lifecycleYears'],
+                circularityEndOfLife: ['repairLinks', 'recyclabilityInstructions', 'disposalInstructions', 'lifecycleYears'],
                 compositionGraph: { nodes: [], links: [] },
               },
               null,

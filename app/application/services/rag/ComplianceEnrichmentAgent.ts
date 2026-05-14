@@ -137,11 +137,26 @@ export class ComplianceEnrichmentAgent {
       return [`${field}: source references unknown chunk (${value.source.fileName} p${value.source.pageNumber}).`];
     }
 
-    if (!chunk.text.includes(value.source.contextSnippet)) {
+    if (!ComplianceEnrichmentAgent.chunkContainsSnippet(chunk.text, value.source.contextSnippet)) {
       return [`${field}: contextSnippet is not a verbatim substring of the referenced chunk text.`];
     }
 
     return [];
+  }
+
+  private static chunkContainsSnippet(chunkText: string, snippet: string): boolean {
+    if (chunkText.includes(snippet)) {
+      return true;
+    }
+    const collapsedChunk = chunkText.replace(/\s+/g, ' ').trim();
+    const collapsedSnippet = snippet.replace(/\s+/g, ' ').trim();
+    if (collapsedSnippet.length >= 3 && collapsedChunk.includes(collapsedSnippet)) {
+      return true;
+    }
+    const strip = (s: string) => s.replace(/\s/g, '');
+    const a = strip(chunkText);
+    const b = strip(snippet);
+    return b.length >= 6 && a.includes(b);
   }
 
   private buildUserPrompt(input: ComplianceEnrichmentInput): string {

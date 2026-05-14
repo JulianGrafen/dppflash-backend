@@ -197,7 +197,7 @@ Return only JSON with this exact shape:
       "repairInstructions": "optional string",
       "durabilityGuidance": "optional string"
     },
-    "endOfLifeInstructions": "optional string",
+    "endOfLifeInstructions": "string: MUST aggregate all end-of-life and disposal guidance visible in the document — especially SDS Section 13 (Hinweise zur Entsorgung), packaging disposal, Rückstände/Behälter, Rücknahme- und Recyclinghinweise, and any EWC-related disposal sentences. Use empty string only if no such text exists anywhere.",
     "chemicalComposition": [{
       "substance": "string",
       "casNumber": "optional string",
@@ -250,7 +250,7 @@ Extraction robustness rules:
 - supplierAndProcessInformation should capture supplier/process details only when the document clearly states the level or stage.
 - careRepairDurability should summarize care, repair, maintenance, service life or durability guidance in concise business wording.
 - chemicalComposition should focus on named chemical substances/components; materialComposition remains the broader product/material mix.
-- environmentalImpact should include additional environmental metrics or notes beyond the dedicated carbonFootprint object.
+- endOfLifeInstructions: mandatory scan of every page for Entsorgung / disposal / recycling / packaging / residue / Section 13 / Abschnitt 13 / "Hinweise zur Entsorgung" / "DISPOSAL CONSIDERATIONS". Concatenate distinct disposal-related sentences into one clear German or bilingual block (preserve key legal phrases). If the document only gives recycling rules, put them here too (do not leave empty when any EoL text exists).
 
 Example target output for an adhesive product sheet:
 {
@@ -348,6 +348,7 @@ Map common synonyms:
 - If UPI/GTIN are absent, return "${PENDING_EXTERNAL_MATCH}" instead of fabricating numbers.
 - For materialComposition prioritize only section 3 (composition/information on ingredients).
 - For wasteCode and disposal instructions prioritize section 13 (disposal considerations).
+- German "Technisches Merkblatt" / product data sheets often label the waste key as "Abfallschlüssel", "Abfallschluessel nach AVV", "EAK-Code" or "EWC" near sections 12–13 — copy the code into wasteCode and the disposal sentences into endOfLifeInstructions.
 - adhesives may use terms such as epoxy resin, hardener, filler, reactive diluent, modifier, additive, binder
 
 ${documentText.slice(0, MAX_DOCUMENT_TEXT_CHARS)}`;

@@ -103,6 +103,8 @@ export const DppExtractionSchema = z.object({
   circularityEndOfLife: z.object({
     repairLinks: auditedStringSchema,
     recyclabilityInstructions: auditedStringSchema,
+    /** Entsorgung / Section 13 / AVV / Rückstände / packaging disposal — must cite verbatim source. */
+    disposalInstructions: auditedStringSchema,
     lifecycleYears: auditedNumberSchema,
   }),
   compositionGraph: compositionGraphSchema,

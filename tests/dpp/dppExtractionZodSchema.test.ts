@@ -46,6 +46,7 @@ describe('DppExtractionSchema', () => {
       circularityEndOfLife: {
         repairLinks: audited('https://example.com/repair'),
         recyclabilityInstructions: audited('Separate by material stream.'),
+        disposalInstructions: audited('Entsorgung über zugelassene Entsorgungsfachbetriebe.'),
         lifecycleYears: audited(5),
       },
       compositionGraph: {

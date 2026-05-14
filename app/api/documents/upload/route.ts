@@ -170,6 +170,7 @@ export async function POST(request: NextRequest) {
       // Speichere Extraktions-Metadaten damit die Produktseite echte Konfidenz zeigt
       extractionConfidence: result.extractedData.confidence,
       extractionWarnings: result.extractedData.warnings,
+      regulatoryExtraction: result.extractedData.regulatoryExtraction,
     } as ProductPassport;
 
     const rag = getRagComplianceOrchestrator();
@@ -235,6 +236,7 @@ export async function POST(request: NextRequest) {
       status: result.status,
       message: result.message,
       ragEnrichment: productPassport.ragEnrichment,
+      regulatoryExtraction: result.extractedData.regulatoryExtraction,
     };
 
     console.info('[DPP] upload_response_ready', { productId, status: result.status });

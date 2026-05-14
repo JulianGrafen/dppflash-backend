@@ -1,7 +1,18 @@
 import type { ProductPassport } from '@/app/types/dpp-types';
 
 /** Gemeinsame RAG-Ziele: ESPR zeigt u.a. `wasteCode`, ältere Pässe `ewcCode`; Merge setzt nur noch leere Felder. */
-const COMMON = ['hersteller', 'modellname', 'gtin', 'ewcCode', 'wasteCode'] as const;
+const COMMON = [
+  'hersteller',
+  'modellname',
+  'gtin',
+  'ewcCode',
+  'wasteCode',
+  'productName',
+  'declaredProductType',
+  'countryOfOrigin',
+  'countryOfManufacturing',
+  'endOfLifeInstructions',
+] as const;
 
 const BATTERY = [
   ...COMMON,

@@ -11,6 +11,7 @@ import type { SafeLoggerPort } from '@/app/application/ports/SafeLoggerPort';
 import type { SemanticDppExtractionPort } from '@/app/application/ports/SemanticDppExtractionPort';
 import type { RegulatoryStructuredDppExtractionPort } from '@/app/application/ports/RegulatoryStructuredDppExtractionPort';
 import type { DppExtractionPayload } from '@/app/domain/dpp/dppExtractionZodSchema';
+import { findFirstEuropeanWasteCodeInText } from '@/app/application/services/wasteCodeTextScan';
 
 export interface DppExtractionRequest {
   readonly pdf: Buffer;
@@ -40,7 +41,6 @@ interface DppExtractionServiceDependencies {
 const PENDING_EXTERNAL_MATCH = 'PENDING_EXTERNAL_MATCH';
 const REVIEW_REQUIRED = 'REVIEW_REQUIRED';
 const COMPLIANT = 'COMPLIANT';
-const WASTE_CODE_PATTERN = /\b\d{2}\s?\d{2}\s?\d{2}\*?\b/;
 
 /**
  * Text sources where EWC/EAK codes often appear when the model missed `wasteCode` / `endOfLifeInstructions`.
@@ -56,6 +56,8 @@ function collectWasteCodeSearchTexts(dpp: DppProductPassport): readonly string[]
 
   push(dpp.wasteCode);
   push(dpp.endOfLifeInstructions);
+  push(dpp.productName);
+  push(dpp.declaredProductType);
 
   const care = dpp.careRepairDurability;
   if (care) {
@@ -85,14 +87,20 @@ function collectWasteCodeSearchTexts(dpp: DppProductPassport): readonly string[]
 }
 
 function extractWasteCodeCandidate(dpp: DppProductPassport): string | undefined {
-  for (const candidate of collectWasteCodeSearchTexts(dpp)) {
-    const match = candidate.match(WASTE_CODE_PATTERN);
-    if (match?.[0]) {
-      return match[0];
+  const blobs = collectWasteCodeSearchTexts(dpp);
+  for (const candidate of blobs) {
+    const hit = findFirstEuropeanWasteCodeInText(candidate);
+    if (hit) {
+      return hit.snippet;
     }
   }
-
-  return undefined;
+  const joined = blobs.join('\n');
+  const joinedHit = findFirstEuropeanWasteCodeInText(joined);
+  if (joinedHit) {
+    return joinedHit.snippet;
+  }
+  const legacy = joined.match(/\b\d{2}\s?\d{2}\s?\d{2}\*?\b/);
+  return legacy?.[0];
 }
 
 function enrichWasteCode(dpp: DppProductPassport): {

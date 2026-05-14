@@ -2,6 +2,8 @@ import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import { ShieldCheck, Battery, AlertTriangle } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
+import { RagProvenanceSection } from './RagProvenanceSection';
+import { RegulatoryFlowSection } from './RegulatoryFlowSection';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
 
@@ -446,10 +448,16 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
     endOfLife: endOfLife ? {
       recyclingInstructions: asString(endOfLife.recyclingInstructions) ?? asString(raw.recyclingAnweisungen),
-      disposalInstructions: asString(endOfLife.disposalInstructions),
+      disposalInstructions:
+        asString(endOfLife.disposalInstructions)
+        ?? asString(raw.endOfLifeInstructions)
+        ?? asString(raw.entsorgungshinweise),
       hazardousSubstances: asStringArray(endOfLife.hazardousSubstances),
     } : {
       recyclingInstructions: asString(raw.recyclingAnweisungen),
+      disposalInstructions:
+        asString(raw.endOfLifeInstructions)
+        ?? asString(raw.entsorgungshinweise),
     },
 
     certificationBody:   asString(raw.certificationBody)   ?? asString(raw.zertifizierungsstelle),
@@ -495,7 +503,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 mt-6 space-y-4">
+      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-4">
 
         {/* ── Extraction warnings ── */}
         {hasWarnings && (
@@ -589,8 +597,21 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderSubstancesOfConcern(raw.substancesOfConcern)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
-          <Field label="End-of-Life-Hinweise" value={typeof raw.endOfLifeInstructions === 'string' ? raw.endOfLifeInstructions : undefined} />
+          <Field
+            label="End-of-Life-Hinweise"
+            value={
+              typeof raw.endOfLifeInstructions === 'string'
+                ? raw.endOfLifeInstructions
+                : typeof raw.entsorgungshinweise === 'string'
+                  ? raw.entsorgungshinweise
+                  : undefined
+            }
+          />
         </Section>
+
+        <RegulatoryFlowSection regulatoryExtraction={raw.regulatoryExtraction} />
+
+        <RagProvenanceSection ragEnrichment={raw.ragEnrichment} />
 
         {/* ── Carbon footprint (Art. 7) ── */}
         <Section title="CO₂-Fußabdruck (Art. 7 EU 2023/1542)">

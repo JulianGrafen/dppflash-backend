@@ -4,6 +4,8 @@ import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/Compli
 import type { IngestPdfInput } from '@/app/application/services/rag/DocumentIngestionService';
 import type { HybridRetrievalInput } from '@/app/application/services/rag/HybridRetrievalService';
 import type { ComplianceEnrichmentInput, ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
+import { safeParseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
+import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
 import { computeRetrievalMatchConfidence } from '@/app/domain/rag/productBrainMatch';
 
 export interface RagComplianceRunInput {
@@ -60,6 +62,20 @@ export class RagComplianceOrchestrator {
       input.productMatchTerms ?? [],
       input.sourceFileName,
     );
+
+    if (chunks.length === 0) {
+      const emptyTrail = safeParseAuditTrail({ fields: {} });
+      if (!emptyTrail.success) {
+        throw new Error(emptyTrail.error.message);
+      }
+      const data = emptyTrail.data;
+      const enrichment: ComplianceEnrichmentResult = {
+        auditTrail: data,
+        rawModelJson: '{"fields":{}}',
+        cryptoValidation: validateAuditTrailCryptographically(data),
+      };
+      return { enrichment, retrievalMatchConfidence: 0 };
+    }
 
     const enrichmentInput: ComplianceEnrichmentInput = {
       tenantId: input.tenantId,

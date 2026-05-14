@@ -126,17 +126,26 @@ export class ComplianceEnrichmentAgent {
     return (last ?? filePath).trim();
   }
 
-  private static chunkMatchesSource(chunk: RetrievedChunk, sourceFileName: string, pageNumber: number): boolean {
-    if (chunk.pageNumber !== pageNumber) {
-      return false;
-    }
-    if (chunk.fileName === sourceFileName) {
-      return true;
-    }
-    return (
-      ComplianceEnrichmentAgent.fileBaseName(chunk.fileName)
-      === ComplianceEnrichmentAgent.fileBaseName(sourceFileName)
+  /**
+   * Resolves the chunk that supports an audited value: exact file+page first, then same basename
+   * with matching snippet on any page (models often mis-report page numbers).
+   */
+  private static findProvenanceChunk(
+    chunks: readonly RetrievedChunk[],
+    value: AuditedValue,
+  ): RetrievedChunk | undefined {
+    const base = ComplianceEnrichmentAgent.fileBaseName(value.source.fileName);
+    const snippet = value.source.contextSnippet;
+    const sameBase = chunks.filter(
+      (c) => ComplianceEnrichmentAgent.fileBaseName(c.fileName) === base,
     );
+
+    const exactPage = sameBase.find((c) => c.pageNumber === value.source.pageNumber);
+    if (exactPage && ComplianceEnrichmentAgent.chunkContainsSnippet(exactPage.text, snippet)) {
+      return exactPage;
+    }
+
+    return sameBase.find((c) => ComplianceEnrichmentAgent.chunkContainsSnippet(c.text, snippet));
   }
 
   private static validateFieldProvenance(
@@ -148,16 +157,10 @@ export class ComplianceEnrichmentAgent {
       return [];
     }
 
-    const chunk = chunks.find((c) =>
-      ComplianceEnrichmentAgent.chunkMatchesSource(c, value.source.fileName, value.source.pageNumber),
-    );
+    const chunk = ComplianceEnrichmentAgent.findProvenanceChunk(chunks, value);
 
     if (!chunk) {
       return [`${field}: source references unknown chunk (${value.source.fileName} p${value.source.pageNumber}).`];
-    }
-
-    if (!ComplianceEnrichmentAgent.chunkContainsSnippet(chunk.text, value.source.contextSnippet)) {
-      return [`${field}: contextSnippet is not a verbatim substring of the referenced chunk text.`];
     }
 
     return [];

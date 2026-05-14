@@ -99,6 +99,54 @@ function rowsFromRegulatoryExtraction(regulatory: unknown): { readonly material:
   return rows;
 }
 
+/** Legacy DPP string, e.g. "95% Recyceltes Polyester, 5% Elasthan". */
+function rowsFromMaterialZusammensetzungString(text: string): { readonly material: string; readonly percentage: number }[] {
+  const rows: { material: string; percentage: number }[] = [];
+  const segments = text
+    .split(/(?:,|;|\/|\||\n| und )+/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const seg of segments) {
+    let m = seg.match(/^(\d+(?:[.,]\d+)?)\s*%\s*(.+)$/i);
+    if (m?.[1] && m[2]) {
+      rows.push({
+        material: m[2].trim(),
+        percentage: parseMaterialPercentageLike(m[1]),
+      });
+      continue;
+    }
+    m = seg.match(/^(.+?)\s*[:\-]\s*(\d+(?:[.,]\d+)?)\s*%$/i);
+    if (m?.[1] && m[2]) {
+      rows.push({
+        material: m[1].trim(),
+        percentage: parseMaterialPercentageLike(m[2]),
+      });
+    }
+  }
+  return rows;
+}
+
+function rowsFromChemicalComposition(value: unknown): { readonly material: string; readonly percentage: number }[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const rows: { material: string; percentage: number }[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const r = entry as Record<string, unknown>;
+    const substance = typeof r.substance === 'string' ? r.substance.trim() : '';
+    if (!substance) {
+      continue;
+    }
+    const pct = parseMaterialPercentageLike(r.concentrationPercent);
+    rows.push({ material: substance, percentage: pct });
+  }
+  return rows;
+}
+
 /**
  * Collects material rows from passport root `materialComposition` or nested regulatory extraction.
  */
@@ -109,7 +157,17 @@ export function collectMaterialRowsForSankey(
   if (fromFlat.length > 0) {
     return fromFlat;
   }
-  return rowsFromRegulatoryExtraction(raw.regulatoryExtraction);
+  const fromReg = rowsFromRegulatoryExtraction(raw.regulatoryExtraction);
+  if (fromReg.length > 0) {
+    return fromReg;
+  }
+  if (typeof raw.materialZusammensetzung === 'string' && raw.materialZusammensetzung.trim()) {
+    const fromMz = rowsFromMaterialZusammensetzungString(raw.materialZusammensetzung);
+    if (fromMz.length > 0) {
+      return fromMz;
+    }
+  }
+  return rowsFromChemicalComposition(raw.chemicalComposition);
 }
 
 export function compositionGraphHasMeaningfulFlows(graph: CompositionGraphPayload): boolean {

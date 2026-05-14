@@ -82,6 +82,33 @@ describe('tryMaterialCompositionToSankeyFromRaw', () => {
     expect(graph!.links.length).toBe(2);
   });
 
+  it('parses legacy materialZusammensetzung string when arrays are empty', () => {
+    const graph = tryMaterialCompositionToSankeyFromRaw(
+      {
+        materialComposition: [],
+        materialZusammensetzung: '95% Recyceltes Polyester, 5% Elasthan',
+      },
+      'T-Shirt',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links.length).toBe(2);
+    expect(graph!.links.some((l) => l.value > 0)).toBe(true);
+  });
+
+  it('uses chemicalComposition when no other material source exists', () => {
+    const graph = tryMaterialCompositionToSankeyFromRaw(
+      {
+        chemicalComposition: [
+          { substance: 'Baumwolle', concentrationPercent: 80 },
+          { substance: 'Polyester', concentrationPercent: 20 },
+        ],
+      },
+      'Hose',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links.length).toBe(2);
+  });
+
   it('compositionGraphHasMeaningfulFlows rejects all-zero links', () => {
     const g = {
       nodes: [

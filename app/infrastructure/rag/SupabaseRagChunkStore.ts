@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   HybridSearchHit,
   HybridSearchOptions,
+  ListChunksByFileNamesParams,
   VectorChunkRecord,
   VectorStorePort,
   RagChunkListOptions,
@@ -215,6 +216,52 @@ export class SupabaseRagChunkStore implements VectorStorePort {
     );
 
     return { chunks, total: count ?? chunks.length };
+  }
+
+  async listChunksByFileNames(params: ListChunksByFileNamesParams): Promise<readonly HybridSearchHit[]> {
+    const names = [...new Set(params.fileNames.map((n) => n.trim()).filter(Boolean))];
+    if (names.length === 0) {
+      return [];
+    }
+
+    const maxRows = Math.min(Math.max(1, params.maxRows), 10_000);
+
+    const { data, error } = await this.client
+      .from('rag_chunks')
+      .select('id, tenant_id, product_id, file_name, page_number, chunk_text')
+      .eq('tenant_id', params.tenantId)
+      .in('file_name', names)
+      .order('file_name', { ascending: true })
+      .order('page_number', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(maxRows);
+
+    if (error) {
+      throw new Error(`rag_chunks listChunksByFileNames: ${error.message}`);
+    }
+
+    type Row = {
+      id: string;
+      tenant_id: string;
+      product_id?: string | null;
+      file_name: string;
+      page_number: number;
+      chunk_text: string;
+    };
+
+    const rows = (data ?? []) as Row[];
+
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      productId: r.product_id ?? null,
+      fileName: r.file_name,
+      pageNumber: r.page_number,
+      text: r.chunk_text,
+      score: 0,
+      keywordScore: 0,
+      vectorScore: 0,
+    }));
   }
 
   async searchHybrid(

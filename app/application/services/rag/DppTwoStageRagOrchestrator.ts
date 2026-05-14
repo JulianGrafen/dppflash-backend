@@ -1,6 +1,6 @@
 /**
  * Zwei-Stufen-DPP+RAG (Upload-Pipeline):
- * Primärdaten aus PDF-Extraktion → Lückenanalyse → **pro fehlendem Feld** Hybrid-Retrieval (`retrieveTopChunks`) → sekundäres LLM → Merge.
+ * Primärdaten aus PDF-Extraktion → Lückenanalyse → **Document-Level** Hybrid-Anker + Archiv-Volltext → sekundäres LLM → Merge.
  *
  * @see ProductPassportRagEnrichmentService.enrichFromIndexedChunks
  * @see RagComplianceOrchestrator.runGapTargetedEnrichment

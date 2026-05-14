@@ -1,5 +1,9 @@
 import type { EmbeddingPort } from '@/app/application/ports/rag/EmbeddingPort';
-import type { HybridSearchHit, VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
+import type {
+  HybridSearchHit,
+  ListChunksByFileNamesParams,
+  VectorStorePort,
+} from '@/app/application/ports/rag/VectorStorePort';
 
 export interface HybridRetrievalDependencies {
   readonly embedder: EmbeddingPort;
@@ -44,5 +48,12 @@ export class HybridRetrievalService {
       topK,
       searchOptions,
     );
+  }
+
+  /**
+   * Lädt alle Chunks der angegebenen Dateien (kein Embedding) — Document-Level Kontext.
+   */
+  async listChunksByFileNames(params: ListChunksByFileNamesParams): Promise<readonly RetrievedChunk[]> {
+    return this.dependencies.vectorStore.listChunksByFileNames(params);
   }
 }

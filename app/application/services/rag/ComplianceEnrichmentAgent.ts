@@ -67,8 +67,8 @@ Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
 Felder weglassen, wenn es keine belastbare Information gibt (nicht raten).`;
 }
 
-/** Muss zur Top-K-Kuration im Gap-Orchestrator passen (derzeit 10 Chunks nach Multi-Retrieval). */
-const GAP_LLM_TOP_CHUNKS = 10;
+/** Muss zur Document-Level-Kuration im Gap-Orchestrator passen (derzeit bis zu 30 Chunks). */
+const GAP_LLM_TOP_CHUNKS = 30;
 
 function buildGapTargetedComplianceAuditorSystemPrompt(
   anchorProductName: string,
@@ -93,7 +93,7 @@ function formatTopChunksForGapKnowledgeContext(chunks: readonly RetrievedChunk[]
   return chunks
     .map(
       (c) =>
-        `--- Quelle: ${c.fileName} (Seite ${c.pageNumber}) ---\n${c.text}`,
+        `--- Datei: ${c.fileName} (Seite ${c.pageNumber}) ---\n${c.text}`,
     )
     .join('\n\n');
 }

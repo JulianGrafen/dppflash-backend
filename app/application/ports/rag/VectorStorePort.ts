@@ -46,6 +46,14 @@ export interface RagChunkListResult {
   readonly total: number;
 }
 
+/** Non-vector: alle Chunks eines Mandanten zu den angegebenen exakten `file_name`-Werten. */
+export interface ListChunksByFileNamesParams {
+  readonly tenantId: string;
+  readonly fileNames: readonly string[];
+  /** Obergrenze für die Abfrage (Schutz vor extrem großen PDFs). */
+  readonly maxRows: number;
+}
+
 /** Optional boosts for hybrid search: overlap with product identity tokens and same-PDF preference. */
 export interface HybridSearchOptions {
   readonly productMatchTerms?: readonly string[];
@@ -83,6 +91,12 @@ export interface VectorStorePort {
     limit: number,
     options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]>;
+
+  /**
+   * Lädt alle Chunk-Zeilen für `tenantId`, deren `file_name` in `fileNames` liegt (kein Embedding/Vektor).
+   * Reihenfolge: `file_name`, `page_number`, `id`.
+   */
+  listChunksByFileNames(params: ListChunksByFileNamesParams): Promise<readonly HybridSearchHit[]>;
 
   /**
    * Paginated listing for dashboards (no embeddings). Used by RAG “brain” visualizer.

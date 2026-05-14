@@ -36,9 +36,9 @@ function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
  *
  * 1. Primary data = passport from PDF extraction (Doc A).
  * 2. Gap analysis vs RAG target keys; anchor = `productName` (abort secondary if missing).
- * 3. Programmatische Suchphrase (Logging / Fallback) + **feldweise** Hybrid-Suche pro Lücke.
- * 4. Hybrid-Retrieval (Supabase `rag_chunks` / In-Memory) **nur aus Fremd-Dokumenten** — die hochgeladene Primär-PDF wird niemals als RAG-Quelle verwendet.
- * 5. Secondary LLM (gap-targeted system prompt) → merge into empty passport fields only.
+ * 3. **Document-Level RAG**: einmal Hybrid-Suche mit Produkt-Anker → alle Chunks der erkannten **Archiv-PDFs**
+ *    (keine Primär-Upload-Datei) per Tabellenabfrage → Gap-LLM.
+ * 4. Secondary LLM (gap-targeted system prompt) → merge into empty passport fields only.
  */
 export class ProductPassportRagEnrichmentService {
   async enrichFromIndexedChunks(

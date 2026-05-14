@@ -1,6 +1,7 @@
 import type {
   HybridSearchHit,
   HybridSearchOptions,
+  ListChunksByFileNamesParams,
   VectorChunkRecord,
   VectorStorePort,
   RagChunkListOptions,
@@ -76,6 +77,39 @@ export class InMemoryVectorStore implements VectorStorePort {
     const total = rows.length;
     const page = rows.slice(offset, offset + limit).map((c) => vectorChunkToPreview(c));
     return { chunks: page, total };
+  }
+
+  async listChunksByFileNames(params: ListChunksByFileNamesParams): Promise<readonly HybridSearchHit[]> {
+    const nameSet = new Set(params.fileNames.map((n) => n.trim()).filter(Boolean));
+    if (nameSet.size === 0) {
+      return [];
+    }
+    const maxRows = Math.min(Math.max(1, params.maxRows), 10_000);
+    let rows = [...this.store.values()].filter(
+      (c) => c.tenantId === params.tenantId && nameSet.has(c.fileName),
+    );
+    rows.sort((a, b) => {
+      const fn = a.fileName.localeCompare(b.fileName);
+      if (fn !== 0) {
+        return fn;
+      }
+      if (a.pageNumber !== b.pageNumber) {
+        return a.pageNumber - b.pageNumber;
+      }
+      return a.id.localeCompare(b.id);
+    });
+    rows = rows.slice(0, maxRows);
+    return rows.map((c) => ({
+      id: c.id,
+      tenantId: c.tenantId,
+      productId: c.productId ?? null,
+      fileName: c.fileName,
+      pageNumber: c.pageNumber,
+      text: c.text,
+      score: 0,
+      keywordScore: 0,
+      vectorScore: 0,
+    }));
   }
 
   async searchHybrid(

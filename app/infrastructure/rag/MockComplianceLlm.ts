@@ -31,7 +31,8 @@ function tryParseGapDatabaseChunks(userPrompt: string): readonly ChunkRow[] {
   }
   const body = userPrompt.slice(idx + GAP_TARGETED_CONTEXT_MARKER.length).trim();
   const blocks: ChunkRow[] = [];
-  const re = /--- Quelle:\s*(.+?)\s*\(Seite\s+(\d+)\)\s*---\s*\n([\s\S]*?)(?=\n\n--- Quelle:|$)/g;
+  const re =
+    /--- (?:Quelle|Datei):\s*(.+?)\s*\(Seite\s+(\d+)\)\s*---\s*\n([\s\S]*?)(?=\n\n--- (?:Quelle|Datei):|$)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
     const fileName = m[1]?.trim() ?? '';

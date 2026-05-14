@@ -67,7 +67,8 @@ Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
 Felder weglassen, wenn es keine belastbare Information gibt (nicht raten).`;
 }
 
-const GAP_LLM_TOP_CHUNKS = 5;
+/** Muss zur Top-K-Kuration im Gap-Orchestrator passen (derzeit 10 Chunks nach Multi-Retrieval). */
+const GAP_LLM_TOP_CHUNKS = 10;
 
 function buildGapTargetedComplianceAuditorSystemPrompt(
   anchorProductName: string,

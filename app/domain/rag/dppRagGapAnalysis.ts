@@ -95,15 +95,24 @@ export function detectRagFillableGaps(
 }
 
 /**
- * Schritt 2 (Anker): Nur ESPR-`productName` — ohne Anker kein Targeted RAG.
+ * Schritt 2 (Anker): ESPR-`productName`, sonst Fallback `modellname` — ohne Anker kein Targeted RAG.
  */
 export function resolvePrimaryProductNameAnchor(passport: Record<string, unknown>): string | null {
-  const n = passport.productName;
-  if (typeof n !== 'string') {
-    return null;
+  const productName = passport.productName;
+  if (typeof productName === 'string') {
+    const t = productName.trim();
+    if (t.length > 0) {
+      return t;
+    }
   }
-  const t = n.trim();
-  return t.length > 0 ? t : null;
+  const modellname = passport.modellname;
+  if (typeof modellname === 'string') {
+    const t = modellname.trim();
+    if (t.length > 0) {
+      return t;
+    }
+  }
+  return null;
 }
 
 /** Schritt 2/3: Such-String für Vektor/BM25 (deutsch, PDF-tauglich). */

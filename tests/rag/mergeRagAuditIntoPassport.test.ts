@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mergeRagAuditIntoPassport } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import { parseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
-import type { BatteryDPP, ChemicalDPP } from '@/app/types/dpp-types';
+import type { BatteryDPP, ChemicalDPP, GenericDPP } from '@/app/types/dpp-types';
 
 describe('mergeRagAuditIntoPassport', () => {
   it('fills only empty keys from audited fields', () => {
@@ -128,5 +128,33 @@ describe('mergeRagAuditIntoPassport', () => {
 
     expect(appliedKeys).toContain('gtin');
     expect(patch.gtin).toBe('5901234123457');
+  });
+
+  it('treats empty materialComposition array as empty so audited scalar can apply', () => {
+    const passport = {
+      id: 'p5',
+      type: 'OTHER',
+      createdAt: new Date(),
+      language: 'de',
+      materialComposition: [],
+    } as GenericDPP;
+
+    const trail = parseAuditTrail({
+      fields: {
+        materialComposition: {
+          value: 'Stahl 60 %, Kunststoff 40 %',
+          confidence: 0.95,
+          source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: 'Stahl 60' },
+          requiresManualReview: false,
+        },
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, [
+      'materialComposition',
+    ]);
+
+    expect(appliedKeys).toContain('materialComposition');
+    expect(patch.materialComposition).toBe('Stahl 60 %, Kunststoff 40 %');
   });
 });

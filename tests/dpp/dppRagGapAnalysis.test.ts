@@ -23,10 +23,12 @@ describe('dppRagGapAnalysis', () => {
     expect(q).not.toContain('manufacturer');
   });
 
-  it('resolvePrimaryProductNameAnchor requires non-empty productName', () => {
+  it('resolvePrimaryProductNameAnchor prefers productName, else modellname', () => {
     expect(resolvePrimaryProductNameAnchor({ productName: '  Cimsec S1  ' })).toBe('Cimsec S1');
-    expect(resolvePrimaryProductNameAnchor({ productName: '' })).toBeNull();
-    expect(resolvePrimaryProductNameAnchor({ modellname: 'S1' })).toBeNull();
+    expect(resolvePrimaryProductNameAnchor({ productName: '', modellname: 'S1' })).toBe('S1');
+    expect(resolvePrimaryProductNameAnchor({ modellname: '  S1  ' })).toBe('S1');
+    expect(resolvePrimaryProductNameAnchor({ productName: '', modellname: '' })).toBeNull();
+    expect(resolvePrimaryProductNameAnchor({})).toBeNull();
   });
 
   it('detectRagFillableGaps flags empty materialComposition', () => {

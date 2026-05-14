@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Boxes, Brain, ChevronLeft, Loader2, Upload } from 'lucide-react';
+import { Boxes, Brain, ChevronLeft, Loader2, Trash2, Upload } from 'lucide-react';
 import { RagBrainPanel } from '@/app/dashboard/rag-ingest/RagBrainPanel';
 
 type RagTab = 'ingest' | 'brain';
@@ -23,9 +23,13 @@ interface IngestResponse {
   };
 }
 
-interface StatsResponse {
+interface PurgeResponse {
   readonly tenantId: string;
-  readonly indexStats: IngestResponse['indexStats'];
+  readonly deleteRagChunks: boolean;
+  readonly deletePdfUploadObjects: boolean;
+  readonly ragChunksDeleted: number;
+  readonly pdfStorageObjectsDeleted: number;
+  readonly error?: string;
 }
 
 export default function RagIngestDashboard() {
@@ -36,6 +40,9 @@ export default function RagIngestDashboard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeIncludePdfStorage, setPurgeIncludePdfStorage] = useState(false);
+  const [lastPurge, setLastPurge] = useState<PurgeResponse | null>(null);
 
   const refreshStats = useCallback(async () => {
     setIsLoadingStats(true);
@@ -103,6 +110,44 @@ export default function RagIngestDashboard() {
       setErrorMessage(e instanceof Error ? e.message : 'Upload fehlgeschlagen');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handlePurge = async () => {
+    const pdfHint = purgeIncludePdfStorage
+      ? '\n\nZusätzlich werden PDF-Dateien unter pdf-uploads/tenants/{tenant}/ gelöscht.'
+      : '\n\nPDF-Uploads im Storage bleiben unverändert.';
+    const ok = window.confirm(
+      `RAG-Index für Mandant „${tenantId}“ wirklich leeren? Alle Chunks für diesen tenantId werden entfernt.${pdfHint}`,
+    );
+    if (!ok) {
+      return;
+    }
+
+    setIsPurging(true);
+    setErrorMessage(null);
+    setLastPurge(null);
+    try {
+      const res = await fetch('/api/rag/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          deleteRagChunks: true,
+          deletePdfUploadObjects: purgeIncludePdfStorage,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as PurgeResponse & { error?: string };
+      if (!res.ok) {
+        throw new Error(body.error || `Purge fehlgeschlagen (${res.status})`);
+      }
+      setLastPurge(body as PurgeResponse);
+      setLastResponse(null);
+      await refreshStats();
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Purge fehlgeschlagen');
+    } finally {
+      setIsPurging(false);
     }
   };
 
@@ -203,6 +248,49 @@ export default function RagIngestDashboard() {
             >
               Index-Statistik aktualisieren
             </button>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50/90 p-4 space-y-3">
+            <p className="text-sm font-medium text-amber-950">Index leeren (Purge)</p>
+            <p className="text-xs text-amber-900/90">
+              Entfernt alle RAG-Chunks für den oben eingetragenen Mandanten. Optional auch PDF-Objekte im
+              Bucket <code className="text-amber-950/90">pdf-uploads</code> unter{' '}
+              <code className="text-amber-950/90">tenants/{'{tenantId}'}/</code>.
+            </p>
+            <label className="flex items-center gap-2 text-sm text-amber-950 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={purgeIncludePdfStorage}
+                onChange={(e) => setPurgeIncludePdfStorage(e.target.checked)}
+                disabled={isPurging || isUploading}
+                className="rounded border-amber-400 text-amber-700 focus:ring-amber-500"
+              />
+              PDF-Uploads im Storage mitlöschen
+            </label>
+            <div>
+              <button
+                type="button"
+                onClick={() => void handlePurge()}
+                disabled={isPurging || isUploading}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-50"
+              >
+                {isPurging ? (
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+                ) : (
+                  <Trash2 className="w-4 h-4 shrink-0" aria-hidden />
+                )}
+                Index leeren
+              </button>
+            </div>
+            {lastPurge && (
+              <p className="text-xs text-amber-900/90 border-t border-amber-200/80 pt-3">
+                Zuletzt: {lastPurge.ragChunksDeleted} Chunk-Zeilen entfernt
+                {lastPurge.deletePdfUploadObjects
+                  ? ` · ${lastPurge.pdfStorageObjectsDeleted} Storage-Objekt(e) in pdf-uploads`
+                  : ''}
+                .
+              </p>
+            )}
           </div>
 
           {stats && (

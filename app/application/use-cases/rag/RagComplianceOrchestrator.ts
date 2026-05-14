@@ -138,6 +138,19 @@ export class RagComplianceOrchestrator {
       input.sourceFileName,
     );
 
+    const searchQuery = input.gapSearchQuery;
+    const retrievedChunks = chunks;
+    console.log('=== RAG DEBUG AUDIT ===');
+    console.log('1. Such-String an DB:', searchQuery);
+    console.log('2. Anzahl gefundene Chunks:', retrievedChunks.length);
+    if (retrievedChunks.length > 0) {
+      const t = retrievedChunks[0]!.text;
+      console.log('3. Bester Chunk Text-Snippet:', t.substring(0, Math.min(200, t.length)));
+    } else {
+      console.log('3. FEHLER: Supabase hat NICHTS gefunden!');
+    }
+    console.log('=======================');
+
     if (chunks.length === 0) {
       const emptyTrail = safeParseAuditTrail({ fields: {} });
       if (!emptyTrail.success) {

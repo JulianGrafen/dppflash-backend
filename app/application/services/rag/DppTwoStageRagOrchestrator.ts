@@ -9,6 +9,9 @@
 export { ProductPassportRagEnrichmentService } from './ProductPassportRagEnrichmentService';
 export {
   buildGapTargetedSearchQuery,
+  buildGermanGapSearchTerms,
   detectRagFillableGaps,
+  mapGapFieldKeyToGermanSearchPhrase,
+  RAG_GAP_SEMANTIC_FIELD_MAP,
   resolvePrimaryProductNameAnchor,
 } from '@/app/domain/rag/dppRagGapAnalysis';

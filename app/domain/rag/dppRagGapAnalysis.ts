@@ -3,6 +3,45 @@ import type { ProductPassport } from '@/app/types/dpp-types';
 
 const PENDING = 'PENDING_EXTERNAL_MATCH';
 
+/**
+ * Technische Passport-Keys → deutschsprachige Suchbegriffe (PDF/SDS/ESPR-typisch),
+ * damit Embedding + BM25 näher an deutschen Ziel-Dokumenten landen.
+ */
+export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
+  materialComposition: 'Zusammensetzung, Rohstoffe, Material, Bestandteile',
+  chemicalComposition: 'Chemische Eigenschaften, Rezeptur, Abschnitt 3, CAS-Nummern',
+  gtin: 'GTIN, EAN, Artikelnummer, Barcode',
+  manufacturer: 'Hersteller, Lieferant, Inverkehrbringer, Abschnitt 1',
+  hersteller: 'Hersteller, Firma, Marke, Lieferant',
+  modellname: 'Modell, Typenbezeichnung, Produktbezeichnung',
+  productName: 'Produktname, Handelsname, Bezeichnung',
+  wasteCode: 'Abfallschlüssel, EWC, EAK, AVV, Abfallschlüsselnummer',
+  ewcCode: 'Abfallschlüssel, EWC, EAK, AVV',
+  endOfLifeInstructions: 'Entsorgung, Abschnitt 13, End-of-Life, Recyclinghinweise',
+  countryOfOrigin: 'Ursprungsland, Herkunftsland, country of origin',
+  countryOfManufacturing: 'Herstellungsland, Produktionsland',
+  declaredProductType: 'Produktkategorie, Produkttyp, Anwendung',
+  materialZusammensetzung: 'Materialzusammensetzung, Fasern, Stoffe, Textil',
+  herkunftsland: 'Herkunftsland, Ursprung, Made in',
+  entsorgungshinweise: 'Entsorgung, Abschnitt 13, Entsorgungshinweise',
+  recyclingAnweisungen: 'Recycling, Rücknahme, Entsorgung',
+};
+
+/** Einzel-Key → deutscher Suchteil (Fallback: technischer Key). */
+export function mapGapFieldKeyToGermanSearchPhrase(fieldKey: string): string {
+  return RAG_GAP_SEMANTIC_FIELD_MAP[fieldKey] ?? fieldKey;
+}
+
+/**
+ * Alle Lücken-Felder als zusammenhängende deutschsprachige Suchphrase (Semikolon getrennt).
+ */
+export function buildGermanGapSearchTerms(missingFieldKeys: readonly string[]): string {
+  if (missingFieldKeys.length === 0) {
+    return 'ESPR Kennfelder, Stammdaten, technisches Datenblatt';
+  }
+  return missingFieldKeys.map(mapGapFieldKeyToGermanSearchPhrase).join('; ');
+}
+
 function isEmptyPassportScalar(value: unknown): boolean {
   if (value === undefined || value === null) {
     return true;
@@ -67,11 +106,11 @@ export function resolvePrimaryProductNameAnchor(passport: Record<string, unknown
   return t.length > 0 ? t : null;
 }
 
-/** Schritt 2: dynamischer Such-String für Vektor/BM25-Retrieval. */
+/** Schritt 2/3: Such-String für Vektor/BM25 (deutsch, PDF-tauglich). */
 export function buildGapTargetedSearchQuery(
   missingFieldKeys: readonly string[],
   anchorProductName: string,
 ): string {
-  const fields = missingFieldKeys.length > 0 ? missingFieldKeys.join(', ') : 'ESPR Kennfelder';
-  return `${fields} für das Produkt: ${anchorProductName}`;
+  const terms = buildGermanGapSearchTerms(missingFieldKeys);
+  return `Suche nach: ${terms} für das Produkt: ${anchorProductName}`;
 }

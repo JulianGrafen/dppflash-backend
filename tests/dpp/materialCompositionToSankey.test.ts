@@ -53,10 +53,23 @@ describe('tryMaterialCompositionToSankey', () => {
     expect(graph!.links[0]!.value).toBeCloseTo(50, 5);
     expect(graph!.links[1]!.value).toBeCloseTo(50, 5);
   });
+
+  it('reads sharePercent when percentage is absent', () => {
+    const graph = tryMaterialCompositionToSankey(
+      [
+        { name: 'Wolle', sharePercent: 60 },
+        { material: 'Seide', anteil: 40 },
+      ],
+      'Schal',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links[0]!.value).toBeCloseTo(60, 5);
+    expect(graph!.links[1]!.value).toBeCloseTo(40, 5);
+  });
 });
 
 describe('tryMaterialCompositionToSankeyFromRaw', () => {
-  it('uses regulatory materialCompositionAndSubstances when flat array is empty', () => {
+  it('does not build fan-in from regulatory materials alone (Kernfelder only)', () => {
     const graph = tryMaterialCompositionToSankeyFromRaw(
       {
         materialComposition: [],
@@ -78,8 +91,7 @@ describe('tryMaterialCompositionToSankeyFromRaw', () => {
       },
       'Koffer',
     );
-    expect(graph).not.toBeNull();
-    expect(graph!.links.length).toBe(2);
+    expect(graph).toBeNull();
   });
 
   it('parses legacy materialZusammensetzung string when arrays are empty', () => {
@@ -95,7 +107,7 @@ describe('tryMaterialCompositionToSankeyFromRaw', () => {
     expect(graph!.links.some((l) => l.value > 0)).toBe(true);
   });
 
-  it('uses chemicalComposition when no other material source exists', () => {
+  it('does not use chemicalComposition as Kernfeld material substitute', () => {
     const graph = tryMaterialCompositionToSankeyFromRaw(
       {
         chemicalComposition: [
@@ -105,8 +117,7 @@ describe('tryMaterialCompositionToSankeyFromRaw', () => {
       },
       'Hose',
     );
-    expect(graph).not.toBeNull();
-    expect(graph!.links.length).toBe(2);
+    expect(graph).toBeNull();
   });
 
   it('compositionGraphHasMeaningfulFlows rejects all-zero links', () => {

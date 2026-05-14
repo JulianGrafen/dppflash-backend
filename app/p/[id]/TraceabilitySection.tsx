@@ -2,7 +2,6 @@ import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
 import {
-  collectMaterialRowsForSankey,
   compositionGraphHasMeaningfulFlows,
   tryMaterialCompositionToSankeyFromRaw,
 } from '@/app/domain/dpp/materialCompositionToSankey';
@@ -18,8 +17,8 @@ type TraceabilitySectionProps = {
 };
 
 /**
- * Circularise-style “Traceability” block: Sankey chain-of-custody from regulatory graph
- * or a derived fan-in graph from material percentages (passport or regulatory materials).
+ * Circularise-style “Traceability” block: Sankey from regulatory `compositionGraph` when present,
+ * otherwise a fan-in graph built only from passport Kernfelder (`materialComposition`, `materialZusammensetzung`).
  */
 export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
   const fromReg = isRecord(raw.regulatoryExtraction)
@@ -37,21 +36,13 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
     return null;
   }
 
-  const rows = collectMaterialRowsForSankey(raw);
-  const fromRegulatoryMaterialsOnly =
-    !usedRegGraph && rows.length > 0 && (!Array.isArray(raw.materialComposition) || raw.materialComposition.length === 0);
-
   const chainSubtitle = usedRegGraph
     ? 'Herkunftskette — Lieferkette'
-    : fromRegulatoryMaterialsOnly
-      ? 'Herkunftskette — Materialtabelle (regulatorisch)'
-      : 'Herkunftskette — aus Materialanteilen (%)';
+    : 'Herkunftskette — aus Materialanteilen (%)';
 
   const footnote = usedRegGraph
     ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-    : fromRegulatoryMaterialsOnly
-      ? 'Fluss aus der regulatorischen Materialzusammensetzung (Anteile laut Extraktion).'
-      : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder).';
+    : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung — nicht aus RAG und nicht aus der chemischen Zusammensetzung abgeleitet.';
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/[0.04]">

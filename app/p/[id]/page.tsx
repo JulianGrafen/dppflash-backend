@@ -137,6 +137,78 @@ function renderKeyValueList(
   );
 }
 
+function pickMaterialCompositionPercent(entry: Record<string, unknown>): number | undefined {
+  for (const k of ['percentage', 'sharePercent', 'anteil', 'percent', 'massPercent', 'share', 'concentrationPercent'] as const) {
+    if (!(k in entry)) continue;
+    const v = entry[k];
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      return v;
+    }
+    if (typeof v === 'string' && v.trim()) {
+      const t = v.trim().replace(/\s+/g, '').replace(',', '.');
+      const n = Number(t.endsWith('%') ? t.slice(0, -1) : t);
+      if (Number.isFinite(n)) {
+        return n;
+      }
+    }
+  }
+  return undefined;
+}
+
+function materialNameFromCompositionEntry(entry: Record<string, unknown>): string | undefined {
+  for (const k of ['material', 'name', 'component', 'substance', 'title'] as const) {
+    const v = entry[k];
+    if (typeof v === 'string' && v.trim()) {
+      return v.trim();
+    }
+  }
+  return undefined;
+}
+
+/** ESPR Kernfeld materialComposition + legacy Textfeld materialZusammensetzung (z. B. Textilien). */
+function renderMaterialZusammensetzungKernfelder(
+  materialComposition: unknown,
+  materialZusammensetzung: unknown,
+) {
+  const entries: KeyValueEntry[] = [];
+  if (Array.isArray(materialComposition)) {
+    for (const item of materialComposition) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      const title = materialNameFromCompositionEntry(row);
+      if (!title) continue;
+      const pct = pickMaterialCompositionPercent(row);
+      entries.push({
+        title,
+        details: pct !== undefined ? formatPercentage(pct) : undefined,
+      });
+    }
+  }
+
+  const legacy =
+    typeof materialZusammensetzung === 'string' && materialZusammensetzung.trim().length > 0
+      ? materialZusammensetzung.trim()
+      : undefined;
+
+  const list = renderKeyValueList('Material-Zusammensetzung', entries);
+  if (list) {
+    return (
+      <>
+        {list}
+        {legacy && entries.length > 0 ? (
+          <Field label="Material-Zusammensetzung (Text)" value={legacy} />
+        ) : null}
+      </>
+    );
+  }
+
+  if (legacy) {
+    return <Field label="Material-Zusammensetzung" value={legacy} />;
+  }
+
+  return null;
+}
+
 function renderRecycledContent(value: unknown) {
   if (!Array.isArray(value)) return null;
 
@@ -602,6 +674,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
           />
           {renderManufacturerDetails(raw.manufacturer)}
+          {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
           {renderChemicalComposition(raw.chemicalComposition)}
           {renderRecycledContent(raw.recycledContent)}
           {renderCarbonFootprint(raw.carbonFootprint)}

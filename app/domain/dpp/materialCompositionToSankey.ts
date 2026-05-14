@@ -11,10 +11,6 @@ function clampLabel(s: string, max: number): string {
   return `${t.slice(0, Math.max(0, max - 1))}…`;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
-}
-
 /** Parses percentage from number or strings like "12,5" / "40%". */
 export function parseMaterialPercentageLike(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -42,6 +38,35 @@ function materialLabelFromRow(row: Record<string, unknown>): string {
   return '';
 }
 
+/** Reads a share 0–100 from common DPP / UI / import column names. */
+function readMaterialSharePercentFromRow(r: Record<string, unknown>): number {
+  const keys = [
+    'percentage',
+    'sharePercent',
+    'anteil',
+    'percent',
+    'massPercent',
+    'share',
+    'concentrationPercent',
+  ] as const;
+  for (const k of keys) {
+    if (!(k in r) || r[k] === undefined || r[k] === '') {
+      continue;
+    }
+    const p = parseMaterialPercentageLike(r[k]);
+    if (p > 0) {
+      return p;
+    }
+  }
+  for (const k of keys) {
+    if (!(k in r) || r[k] === undefined || r[k] === '') {
+      continue;
+    }
+    return parseMaterialPercentageLike(r[k]);
+  }
+  return 0;
+}
+
 function normalizeFlatMaterialArray(value: unknown): { readonly material: string; readonly percentage: number }[] {
   if (!Array.isArray(value)) {
     return [];
@@ -56,45 +81,8 @@ function normalizeFlatMaterialArray(value: unknown): { readonly material: string
     if (!material) {
       continue;
     }
-    const pct = parseMaterialPercentageLike(r.percentage);
+    const pct = readMaterialSharePercentFromRow(r);
     rows.push({ material, percentage: pct });
-  }
-  return rows;
-}
-
-function rowsFromRegulatoryExtraction(regulatory: unknown): { readonly material: string; readonly percentage: number }[] {
-  if (!isRecord(regulatory)) {
-    return [];
-  }
-  const mcs = regulatory.materialCompositionAndSubstances;
-  if (!isRecord(mcs)) {
-    return [];
-  }
-  const materials = mcs.materials;
-  if (!Array.isArray(materials)) {
-    return [];
-  }
-
-  const rows: { material: string; percentage: number }[] = [];
-  for (const row of materials) {
-    if (!row || typeof row !== 'object') {
-      continue;
-    }
-    const r = row as Record<string, unknown>;
-    const nameObj = r.name;
-    const shareObj = r.sharePercent;
-    const name =
-      isRecord(nameObj) && typeof nameObj.value === 'string' ? nameObj.value.trim() : '';
-    const pct =
-      isRecord(shareObj) && typeof shareObj.value === 'number' && Number.isFinite(shareObj.value)
-        ? Math.max(0, shareObj.value)
-        : isRecord(shareObj)
-          ? parseMaterialPercentageLike(shareObj.value)
-          : 0;
-    if (!name) {
-      continue;
-    }
-    rows.push({ material: name, percentage: pct });
   }
   return rows;
 }
@@ -127,39 +115,17 @@ function rowsFromMaterialZusammensetzungString(text: string): { readonly materia
   return rows;
 }
 
-function rowsFromChemicalComposition(value: unknown): { readonly material: string; readonly percentage: number }[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const rows: { material: string; percentage: number }[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry !== 'object') {
-      continue;
-    }
-    const r = entry as Record<string, unknown>;
-    const substance = typeof r.substance === 'string' ? r.substance.trim() : '';
-    if (!substance) {
-      continue;
-    }
-    const pct = parseMaterialPercentageLike(r.concentrationPercent);
-    rows.push({ material: substance, percentage: pct });
-  }
-  return rows;
-}
-
 /**
- * Collects material rows from passport root `materialComposition` or nested regulatory extraction.
+ * Passport **core** material sources only (ESPR / legacy UI): structured `materialComposition`
+ * and textile-style `materialZusammensetzung` text. Does not use regulatory extraction, RAG, or
+ * `chemicalComposition` so Sankey copy matches real Kernfelder data.
  */
-export function collectMaterialRowsForSankey(
+export function collectPassportCoreMaterialRowsForSankey(
   raw: Record<string, unknown>,
 ): ReadonlyArray<{ readonly material: string; readonly percentage: number }> {
   const fromFlat = normalizeFlatMaterialArray(raw.materialComposition);
   if (fromFlat.length > 0) {
     return fromFlat;
-  }
-  const fromReg = rowsFromRegulatoryExtraction(raw.regulatoryExtraction);
-  if (fromReg.length > 0) {
-    return fromReg;
   }
   if (typeof raw.materialZusammensetzung === 'string' && raw.materialZusammensetzung.trim()) {
     const fromMz = rowsFromMaterialZusammensetzungString(raw.materialZusammensetzung);
@@ -167,7 +133,7 @@ export function collectMaterialRowsForSankey(
       return fromMz;
     }
   }
-  return rowsFromChemicalComposition(raw.chemicalComposition);
+  return [];
 }
 
 export function compositionGraphHasMeaningfulFlows(graph: CompositionGraphPayload): boolean {
@@ -217,13 +183,13 @@ function buildSankeyFromRows(
 }
 
 /**
- * Prefers passport + regulatory material sources for the fallback Sankey.
+ * Fan-in Sankey from passport Kernfelder only (`materialComposition`, `materialZusammensetzung`).
  */
 export function tryMaterialCompositionToSankeyFromRaw(
   raw: Record<string, unknown>,
   productLabel: string,
 ): CompositionGraphPayload | null {
-  const rows = collectMaterialRowsForSankey(raw);
+  const rows = collectPassportCoreMaterialRowsForSankey(raw);
   return buildSankeyFromRows([...rows], productLabel);
 }
 

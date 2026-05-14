@@ -4,14 +4,31 @@ import { normalizeProductEntityName } from '@/app/domain/rag/normalizeProductEnt
 type SimilarityRpcRow = { id: string; sim?: number };
 
 /**
+ * PostgREST meldet fehlende Tabelle / veralteten Schema-Cache so — dann noch kein Migration-Lauf.
+ */
+function isProductsEntitySchemaErrorMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('schema cache') ||
+    (m.includes('could not find the table') && m.includes('products')) ||
+    (m.includes('relation') && m.includes('products') && m.includes('does not exist'))
+  );
+}
+
+/**
  * Links free-text product labels to canonical `products` rows (entity-centric RAG).
- * All Supabase errors propagate — RLS/FK failures must not be swallowed.
+ * Supabase-Fehler werden weitergereicht, außer „Tabelle fehlt noch“ → null / Rollback auf Ingest ohne product_id (siehe DocumentIngestionService).
  */
 export class ProductEntityService {
   constructor(private readonly client: SupabaseClient) {}
 
+  static isProductsEntitySchemaErrorMessage(message: string): boolean {
+    return isProductsEntitySchemaErrorMessage(message);
+  }
+
   /**
    * Exact match on `normalized_name`, then pg_trgm similarity via RPC. No insert.
+   * Wenn die Tabelle `products` (noch) nicht existiert: `null`, kein Throw.
    */
   async findProductEntityId(tenantId: string, rawProductName: string): Promise<string | null> {
     const normalized = normalizeProductEntityName(rawProductName);
@@ -27,6 +44,9 @@ export class ProductEntityService {
       .maybeSingle();
 
     if (exact.error) {
+      if (isProductsEntitySchemaErrorMessage(exact.error.message)) {
+        return null;
+      }
       throw new Error(`products exact lookup failed: ${exact.error.message}`);
     }
     if (exact.data?.id) {
@@ -40,6 +60,9 @@ export class ProductEntityService {
     });
 
     if (fuzzy.error) {
+      if (isProductsEntitySchemaErrorMessage(fuzzy.error.message)) {
+        return null;
+      }
       throw new Error(`products fuzzy lookup failed: ${fuzzy.error.message}`);
     }
 
@@ -74,6 +97,9 @@ export class ProductEntityService {
       .single();
 
     if (ins.error) {
+      if (isProductsEntitySchemaErrorMessage(ins.error.message)) {
+        throw new Error(`products insert failed: ${ins.error.message}`);
+      }
       if (ins.error.code === '23505') {
         const again = await this.findProductEntityId(tenantId, rawProductName);
         if (again) {

@@ -6,7 +6,7 @@ import type { DocumentLayoutParserPort } from '@/app/application/ports/rag/Docum
 import type { DocumentPrimaryProductNameInferencerPort } from '@/app/application/ports/rag/DocumentPrimaryProductNameInferencerPort';
 import type { EmbeddingPort } from '@/app/application/ports/rag/EmbeddingPort';
 import type { VectorChunkRecord, VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
-import type { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
+import { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
 
 export interface DocumentIngestionDependencies {
   readonly layoutParser: DocumentLayoutParserPort;
@@ -72,10 +72,23 @@ export class DocumentIngestionService {
 
     let productId: string | null | undefined;
     if (this.dependencies.productEntityService) {
-      productId = await this.dependencies.productEntityService.resolveOrCreateProduct(
-        input.tenantId,
-        rawLabel,
-      );
+      try {
+        productId = await this.dependencies.productEntityService.resolveOrCreateProduct(
+          input.tenantId,
+          rawLabel,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (ProductEntityService.isProductsEntitySchemaErrorMessage(msg)) {
+          console.warn(
+            '[DPP] rag_products_table_missing; ingest ohne product_id (Migration ausführen?)',
+            msg,
+          );
+          productId = undefined;
+        } else {
+          throw err;
+        }
+      }
     }
 
     const embeddings = await this.dependencies.embedder.embed(semanticChunks.map((c) => c.text));

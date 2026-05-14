@@ -11,6 +11,13 @@ import { createRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragMvp
 import { InMemoryVectorStore } from '@/app/infrastructure/rag/InMemoryVectorStore';
 import { LocalPdfLayoutParser } from '@/app/infrastructure/rag/LocalPdfLayoutParser';
 import { SupabaseRagChunkStore } from '@/app/infrastructure/rag/SupabaseRagChunkStore';
+import {
+  deleteTenantPdfUploadsFromStorage,
+  type PurgeTenantRagAssetsOptions,
+  type PurgeTenantRagAssetsResult,
+} from '@/app/infrastructure/rag/tenantRagPurge';
+
+export type { PurgeTenantRagAssetsOptions, PurgeTenantRagAssetsResult } from '@/app/infrastructure/rag/tenantRagPurge';
 
 type RagVectorStore = VectorStorePort & {
   getStatsForTenant(tenantId: string): Promise<{
@@ -98,4 +105,30 @@ export async function deleteAllRagChunks(
     return { deletedCount: 0 };
   }
   return store.deleteAllChunks(filters);
+}
+
+/**
+ * Bereinigt RAG-Index und optional PDF-Uploads im Storage für einen Mandanten.
+ * RAG-Chunks laufen über den Singleton-Vector-Store (Supabase oder In-Memory).
+ */
+export async function purgeTenantRagAssets(
+  options: PurgeTenantRagAssetsOptions,
+): Promise<PurgeTenantRagAssetsResult> {
+  const tenantId = options.tenantId.trim();
+
+  let ragChunksDeleted = 0;
+  if (options.deleteRagChunks !== false) {
+    const r = await deleteAllRagChunks({ tenantId });
+    ragChunksDeleted = r.deletedCount;
+  }
+
+  let pdfStorageObjectsDeleted = 0;
+  if (options.deletePdfUploadObjects) {
+    pdfStorageObjectsDeleted = await deleteTenantPdfUploadsFromStorage(
+      tenantId,
+      options.pdfUploadsCreatedBefore,
+    );
+  }
+
+  return { ragChunksDeleted, pdfStorageObjectsDeleted };
 }

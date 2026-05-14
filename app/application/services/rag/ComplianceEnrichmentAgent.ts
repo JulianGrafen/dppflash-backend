@@ -117,12 +117,29 @@ export interface ComplianceEnrichmentResult {
   readonly cryptoValidation: { readonly ok: boolean; readonly errors: readonly string[] };
 }
 
+/** Explizite Stufe-4-Eingabe für den Orchestrator (Stufe 3 → 4). */
+export interface GapTargetedExtractionAgentInput {
+  readonly tenantId: string;
+  readonly productLabel: string;
+  readonly gapSearchQuery: string;
+  readonly anchorProductName: string;
+  readonly missingFields: readonly string[];
+  readonly chunks: readonly RetrievedChunk[];
+}
+
 export class ComplianceEnrichmentAgent {
   constructor(private readonly llm: ComplianceLlmPort) {}
 
   async synthesize(input: ComplianceEnrichmentInput): Promise<ComplianceEnrichmentResult> {
     if (input.gapTargetedExtraction && input.gapTargetedExtraction.missingFieldKeys.length > 0) {
-      return this.gapTargetedExtraction(input);
+      return this.gapTargetedExtraction({
+        tenantId: input.tenantId,
+        productLabel: input.productLabel,
+        gapSearchQuery: input.query,
+        anchorProductName: input.gapTargetedExtraction.anchorProductName,
+        missingFields: input.gapTargetedExtraction.missingFieldKeys,
+        chunks: input.chunks,
+      });
     }
 
     const systemPrompt = buildSystemPrompt(input.targetPassportFieldKeys);
@@ -166,10 +183,29 @@ export class ComplianceEnrichmentAgent {
   }
 
   /**
-   * Stufe 4: sekundäre Extraktion (`gapTargetedExtraction`) — nur Top-5-Chunks, strikter Auditor-Prompt,
+   * Öffentlicher Stufe-4-Einstieg: blockierender LLM-Lauf (await intern auf `completeJson`).
+   */
+  async gapTargetedExtraction(params: GapTargetedExtractionAgentInput): Promise<ComplianceEnrichmentResult> {
+    const input: ComplianceEnrichmentInput = {
+      tenantId: params.tenantId,
+      productLabel: params.productLabel,
+      query: params.gapSearchQuery,
+      chunks: params.chunks,
+      gapTargetedExtraction: {
+        anchorProductName: params.anchorProductName,
+        missingFieldKeys: params.missingFields,
+      },
+    };
+    return this.executeGapTargetedSynthesisPipeline(input);
+  }
+
+  /**
+   * Stufe 4: sekundäre Extraktion — nur Top-5-Chunks, strikter Auditor-Prompt,
    * Zod-Validierung, try/catch inkl. `console.error('[RAG LLM ERROR]', …)` bei jedem Abbruch.
    */
-  private async gapTargetedExtraction(input: ComplianceEnrichmentInput): Promise<ComplianceEnrichmentResult> {
+  private async executeGapTargetedSynthesisPipeline(
+    input: ComplianceEnrichmentInput,
+  ): Promise<ComplianceEnrichmentResult> {
     const gap = input.gapTargetedExtraction!;
     const missingKeys = [...gap.missingFieldKeys];
     const topChunks = input.chunks.slice(0, GAP_LLM_TOP_CHUNKS);

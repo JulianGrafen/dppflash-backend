@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { buildSemanticChunks } from '@/app/domain/rag/semanticChunker';
+import { enrichChunkTextWithProductContext } from '@/app/domain/rag/documentContextEnrichment';
 import { tokenizeForRetrieval } from '@/app/domain/rag/textTokenize';
 import type { DocumentLayoutParserPort } from '@/app/application/ports/rag/DocumentLayoutParserPort';
 import type { DocumentPrimaryProductNameInferencerPort } from '@/app/application/ports/rag/DocumentPrimaryProductNameInferencerPort';
@@ -35,7 +36,8 @@ function inferFallbackProductLabelFromFileName(fileName: string): string {
 }
 
 /**
- * Ingestion pipeline: layout parse → semantic chunk → (optional) product entity resolution → embed → hybrid index upsert.
+ * Ingestion pipeline: layout parse → semantische Chunks → **Kontext-Anreicherung pro Chunk** (Produktname)
+ * → (optional) Product-Entity → **Embedding aus angereichertem Text** → Hybrid-Index upsert.
  */
 export class DocumentIngestionService {
   constructor(private readonly dependencies: DocumentIngestionDependencies) {}
@@ -53,8 +55,8 @@ export class DocumentIngestionService {
       return { chunkCount: 0 };
     }
 
-    const excerpt = layoutBlocks
-      .slice(0, 4)
+    const excerptFirstPage = layoutBlocks
+      .slice(0, 1)
       .map((b) => b.text)
       .join('\n\n')
       .slice(0, 12_000);
@@ -63,7 +65,7 @@ export class DocumentIngestionService {
     if (!rawLabel && this.dependencies.documentPrimaryProductNameInferencer) {
       rawLabel =
         (await this.dependencies.documentPrimaryProductNameInferencer.inferPrimaryProductName(
-          excerpt,
+          excerptFirstPage,
         ))?.trim() ?? '';
     }
     if (!rawLabel) {
@@ -91,7 +93,13 @@ export class DocumentIngestionService {
       }
     }
 
-    const embeddings = await this.dependencies.embedder.embed(semanticChunks.map((c) => c.text));
+    const productNameForContext = rawLabel;
+
+    const enrichedChunkTexts = semanticChunks.map((c) =>
+      enrichChunkTextWithProductContext(productNameForContext, c.text),
+    );
+
+    const embeddings = await this.dependencies.embedder.embed(enrichedChunkTexts);
 
     const records: VectorChunkRecord[] = semanticChunks.map((chunk, index) => ({
       id: uuidv4(),
@@ -99,9 +107,11 @@ export class DocumentIngestionService {
       productId: productId ?? null,
       fileName: input.fileName,
       pageNumber: chunk.pageNumber,
-      text: chunk.text,
+      text: enrichedChunkTexts[index] ?? enrichChunkTextWithProductContext(productNameForContext, chunk.text),
       embedding: embeddings[index] ?? [],
-      tokens: tokenizeForRetrieval(chunk.text),
+      tokens: tokenizeForRetrieval(
+        enrichedChunkTexts[index] ?? enrichChunkTextWithProductContext(productNameForContext, chunk.text),
+      ),
     }));
 
     await this.dependencies.vectorStore.upsertChunks(records);

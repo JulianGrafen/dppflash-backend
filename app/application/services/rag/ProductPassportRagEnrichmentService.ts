@@ -97,7 +97,7 @@ export class ProductPassportRagEnrichmentService {
       gapQueryPreview: gapQuery.slice(0, 200),
     });
 
-    const { enrichment, retrievalMatchConfidence } = await orchestrator.runGapTargetedEnrichment({
+    const gapOutcome = await orchestrator.runGapTargetedEnrichment({
       tenantId: input.tenantId,
       productLabel: input.productLabel,
       gapSearchQuery: gapQuery,
@@ -109,6 +109,17 @@ export class ProductPassportRagEnrichmentService {
       retrievalTopK: Math.min(36, 14 + gaps.length),
       productEntityId: input.productEntityId,
     });
+
+    let enrichment: ComplianceEnrichmentResult;
+    let retrievalMatchConfidence: number;
+    if (gapOutcome === null) {
+      console.warn('[DPP] rag_gap_targeted_no_chunks; LLM übersprungen (Retrieval leer)');
+      enrichment = emptyEnrichmentOutcome();
+      retrievalMatchConfidence = 0;
+    } else {
+      enrichment = gapOutcome.enrichment;
+      retrievalMatchConfidence = gapOutcome.retrievalMatchConfidence;
+    }
 
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
     const { patch, appliedKeys } = mergeRagAuditIntoPassport(

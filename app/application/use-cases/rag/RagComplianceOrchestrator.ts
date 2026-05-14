@@ -115,8 +115,10 @@ export class RagComplianceOrchestrator {
   /**
    * Targeted RAG: tenant-scoped hybrid search (Supabase `rag_chunks` oder In-Memory) mit
    * programmatisch gebauter Suchanfrage; optional ohne Chunks aus der Primär-Datei.
+   *
+   * @returns `null` wenn nach Retrieval **keine** Chunks übrig sind (kein LLM-Lauf). Sonst Outcome inkl. Stufe 4.
    */
-  async runGapTargetedEnrichment(input: RagGapTargetedRunInput): Promise<RagComplianceExtractionOutcome> {
+  async runGapTargetedEnrichment(input: RagGapTargetedRunInput): Promise<RagComplianceExtractionOutcome | null> {
     const defaultTopK = input.retrievalTopK ?? 24;
 
     const retrievalInput: HybridRetrievalInput = {
@@ -158,32 +160,20 @@ export class RagComplianceOrchestrator {
     console.log('=======================');
 
     if (chunks.length === 0) {
-      const emptyTrail = safeParseAuditTrail({ fields: {} });
-      if (!emptyTrail.success) {
-        throw new Error(emptyTrail.error.message);
-      }
-      const data = emptyTrail.data;
-      const enrichment: ComplianceEnrichmentResult = {
-        auditTrail: data,
-        rawModelJson: '{"fields":{}}',
-        cryptoValidation: validateAuditTrailCryptographically(data),
-      };
-      return { enrichment, retrievalMatchConfidence: 0 };
+      return null;
     }
 
-    const enrichmentInput: ComplianceEnrichmentInput = {
+    console.log('[Orchestrator] Starte LLM-Agent für Extraktion...');
+    const agentResult = await this.enrichment.gapTargetedExtraction({
       tenantId: input.tenantId,
       productLabel: input.productLabel,
-      query: input.gapSearchQuery,
+      gapSearchQuery: input.gapSearchQuery,
+      anchorProductName: input.anchorProductName,
+      missingFields: input.targetPassportFieldKeys,
       chunks,
-      targetPassportFieldKeys: input.targetPassportFieldKeys,
-      gapTargetedExtraction: {
-        anchorProductName: input.anchorProductName,
-        missingFieldKeys: input.targetPassportFieldKeys,
-      },
-    };
+    });
+    console.log('[Orchestrator] LLM-Agent hat geantwortet:', agentResult);
 
-    const enrichment = await this.enrichment.synthesize(enrichmentInput);
-    return { enrichment, retrievalMatchConfidence };
+    return { enrichment: agentResult, retrievalMatchConfidence };
   }
 }

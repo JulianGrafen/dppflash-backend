@@ -24,18 +24,30 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
     expect(merged.modellname).toMatchObject(incoming.modellname);
   });
 
-  it('keeps higher-confidence field when incoming is weaker', () => {
+  it('does not overwrite existing with incoming null or empty value', () => {
     const existing = {
       gtin: { value: '111', sourcePdf: 'a.pdf', contextSnippet: 'x', confidence: 0.95 },
     };
     const incoming = {
       gtin: { value: '999', sourcePdf: 'b.pdf', contextSnippet: 'y', confidence: 0.3 },
     };
-    const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
-    expect(merged.gtin).toEqual(existing.gtin);
+    const mergedWeak = mergeExtractedAttributesJsonForPersistence(existing, {
+      gtin: { ...incoming.gtin, value: null },
+    });
+    expect(mergedWeak.gtin).toEqual(existing.gtin);
+
+    const mergedEmpty = mergeExtractedAttributesJsonForPersistence(existing, {
+      gtin: { ...incoming.gtin, value: '' },
+    });
+    expect(mergedEmpty.gtin).toEqual(existing.gtin);
+
+    const mergedWhitespace = mergeExtractedAttributesJsonForPersistence(existing, {
+      gtin: { ...incoming.gtin, value: '   ' },
+    });
+    expect(mergedWhitespace.gtin).toEqual(existing.gtin);
   });
 
-  it('replaces when incoming confidence is equal or higher', () => {
+  it('overwrites when incoming has a non-empty value', () => {
     const existing = {
       gtin: { value: '111', sourcePdf: 'a.pdf', contextSnippet: 'x', confidence: 0.5 },
     };

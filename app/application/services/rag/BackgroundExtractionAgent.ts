@@ -16,29 +16,29 @@ const EAGER_FIELD_KEYS_JSON = JSON.stringify([
   'countryOfManufacturing',
   'endOfLifeInstructions',
   'chemicalComposition',
+  'gtin',
 ]);
 
 const SYSTEM = `Du bist ein Daten-Extraktor für technische Produktunterlagen (ESPR / Digital Product Passport).
 Du erhältst den Volltext eines PDFs (mit Seiten-Markern). Extrahiere **nur** Informationen, die wörtlich oder eindeutig im Text stehen. Erfinde nichts.
 
-Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **ausschließlich** die vorgegebene Liste — weglassen, wenn kein belastbarer Wert existiert.
+Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **ausschließlich** die vorgegebene Liste.
 
-WICHTIG: Nutze für die chemische Zusammensetzung/Materialien IMMER den Key 'chemicalComposition'. Nutze für Entsorgungshinweise IMMER den Key 'endOfLifeInstructions'. Nutze für den Produktnamen IMMER den Key 'modellname'. Übersetze die Keys niemals ins Deutsch!
+Verwende AUSSCHLIESSLICH diese englischen/technischen Keys. Übersetze die Keys nicht ins Deutsche! Wenn ein Feld nicht im Text steht, lass es komplett weg — füge **keinen** Key mit leerem String oder null als Platzhalter ein.
 
-Jeder vorhandene Key mappt zu diesem Objekt:
+WICHTIG: chemische Zusammensetzung / Materialien → Key 'chemicalComposition'. Entsorgung / End-of-Life → 'endOfLifeInstructions'. Produktbezeichnung / Name → 'modellname'.
+
+Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen):
 {
   "value": string | null,
   "sourcePdf": string (Dateiname der Quelle, wie übergeben),
-  "contextSnippet": string (kurzes wörtliches Zitat aus dem Text als Beleg),
-  "pageNumber": number (>=1, Seite wo der Beleg steht; schätzen aus "--- Seite N ---" wenn eindeutig),
-  "confidence": number zwischen 0 und 1
+  "contextSnippet": string (kurzes wörtliches Zitat aus dem Text als Beleg)
 }
 
 Regeln:
 - Numerische Kennwerte als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
-- EWC/Abfallschlüssel nur bei plausibler Kennzeichnung.
-- Bei Unsicherheit: key weglassen oder value=null mit confidence<=0.2.`;
+- EWC/Abfallschlüssel nur bei plausibler Kennzeichnung.`;
 
 export interface BackgroundExtractionInput {
   readonly documentText: string;
@@ -48,7 +48,7 @@ export interface BackgroundExtractionInput {
 
 /**
  * Eager extraction during PDF ingest: ein LLM-Lauf über den Dokumenttext → strukturierte Kandidaten
- * für `products.extracted_attributes` (Merge per Konfidenz in {@link ProductEntityService.mergeExtractedAttributes}).
+ * für `products.extracted_attributes` (sicherer Value-Merge in {@link ProductEntityService.mergeExtractedAttributes}).
  */
 export class BackgroundExtractionAgent {
   constructor(private readonly llm: ComplianceLlmPort) {}

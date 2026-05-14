@@ -62,37 +62,38 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
 }
 
 /**
- * Non-destructive merge for `products.extracted_attributes` persistence:
- * shallow-clones the existing JSONB object so **all** top-level keys stay unless
- * overwritten by `incoming`; per-key updates respect **higher confidence** when
- * both sides coerce to {@link ExtractedAttributeRow}.
+ * Persistenz-Merge für `products.extracted_attributes`: Roh-JSON aus der DB klonen,
+ * dann nur Keys aus `incoming` überschreiben, wenn **ein echter Wert** vorliegt
+ * (kein `null`, kein leerer String) — keine „Null-Leer“-Überschreibungen bestehender Daten.
  */
 export function mergeExtractedAttributesJsonForPersistence(
   existingJsonFromDb: unknown,
   incoming: Readonly<Record<string, ExtractedAttributeRow>>,
 ): Record<string, unknown> {
-  const base =
+  const existingAttributes =
     typeof existingJsonFromDb === 'object' && existingJsonFromDb !== null && !Array.isArray(existingJsonFromDb)
       ? { ...(existingJsonFromDb as Record<string, unknown>) }
       : {};
 
-  const merged: Record<string, unknown> = { ...base };
+  const mergedAttributes: Record<string, unknown> = { ...existingAttributes };
 
-  for (const [k, inc] of Object.entries(incoming)) {
-    const prev = coerceRow(merged[k]);
-    if (prev && inc.confidence < prev.confidence) {
-      continue;
+  for (const [key, fieldData] of Object.entries(incoming)) {
+    if (
+      fieldData &&
+      fieldData.value !== null &&
+      String(fieldData.value).trim() !== ''
+    ) {
+      mergedAttributes[key] = {
+        value: fieldData.value,
+        sourcePdf: fieldData.sourcePdf,
+        contextSnippet: fieldData.contextSnippet,
+        pageNumber: fieldData.pageNumber ?? 1,
+        confidence: fieldData.confidence,
+      };
     }
-    merged[k] = {
-      value: inc.value,
-      sourcePdf: inc.sourcePdf,
-      contextSnippet: inc.contextSnippet,
-      pageNumber: inc.pageNumber ?? 1,
-      confidence: inc.confidence,
-    };
   }
 
-  return merged;
+  return mergedAttributes;
 }
 
 export function mergeExtractedAttributesMaps(

@@ -1,21 +1,17 @@
 import { z } from 'zod';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
 
-/**
- * Ein Feld aus der Eager-LLM-Antwort (nur diese Keys erlaubt; Top-Level strikt).
- * `pageNumber` / `confidence` optional, damit bestehende Prompt-Hinweise nicht brechen.
- */
-const eagerExtractionFieldRowSchema = z.object({
-  value: z.string().nullable(),
-  sourcePdf: z.string(),
-  contextSnippet: z.string(),
-  pageNumber: z.number().int().min(1).optional(),
-  confidence: z.number().min(0).max(1).optional(),
-});
+/** Ein Feld aus der Eager-LLM-Antwort — nur `value` / `sourcePdf` / `contextSnippet` (keine weiteren Keys). */
+const eagerExtractionFieldRowSchema = z
+  .object({
+    value: z.string().nullable(),
+    sourcePdf: z.string(),
+    contextSnippet: z.string(),
+  })
+  .strict();
 
 /**
- * Striktes Schema für die Eager-Extraktion: **keine** weiteren Top-Level-Keys.
- * (Orchestrator / Passport erwarten u.a. `chemicalComposition`, `endOfLifeInstructions`, `modellname`.)
+ * Striktes Eager-Schema: nur diese englischen/technischen Top-Level-Keys, keine weiteren.
  */
 export const eagerExtractionResponseSchema = z
   .object({
@@ -27,8 +23,12 @@ export const eagerExtractionResponseSchema = z
     countryOfManufacturing: eagerExtractionFieldRowSchema.optional(),
     endOfLifeInstructions: eagerExtractionFieldRowSchema.optional(),
     chemicalComposition: eagerExtractionFieldRowSchema.optional(),
+    gtin: eagerExtractionFieldRowSchema.optional(),
   })
   .strict();
+
+/** Alias gemäß Produkt-Spezifikation „eagerExtractionSchema“. */
+export const eagerExtractionSchema = eagerExtractionResponseSchema;
 
 export type EagerExtractionResponse = z.infer<typeof eagerExtractionResponseSchema>;
 
@@ -41,7 +41,11 @@ const EAGER_ROW_KEYS = [
   'countryOfManufacturing',
   'endOfLifeInstructions',
   'chemicalComposition',
+  'gtin',
 ] as const satisfies readonly (keyof EagerExtractionResponse)[];
+
+/** Default-Konfidenz für Eager-Zeilen, wenn das LLM keine Confidence liefert. */
+const EAGER_DEFAULT_CONFIDENCE = 0.88;
 
 export function eagerExtractionResponseToRows(
   data: EagerExtractionResponse,
@@ -53,16 +57,16 @@ export function eagerExtractionResponseToRows(
     if (!chunk) {
       continue;
     }
+    if (chunk.value === null || String(chunk.value).trim() === '') {
+      continue;
+    }
     const sourcePdf = chunk.sourcePdf.trim().length > 0 ? chunk.sourcePdf : defaultSourcePdf;
     out[k] = {
       value: chunk.value,
       sourcePdf,
       contextSnippet: chunk.contextSnippet,
-      pageNumber: chunk.pageNumber ?? 1,
-      confidence:
-        typeof chunk.confidence === 'number' && Number.isFinite(chunk.confidence)
-          ? Math.min(1, Math.max(0, chunk.confidence))
-          : 0,
+      pageNumber: 1,
+      confidence: EAGER_DEFAULT_CONFIDENCE,
     };
   }
   return out;

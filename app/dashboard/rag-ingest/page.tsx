@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Brain, ChevronLeft, Loader2, Upload } from 'lucide-react';
+import { Boxes, Brain, ChevronLeft, Loader2, Upload } from 'lucide-react';
+import { RagBrainPanel } from '@/app/dashboard/rag-ingest/RagBrainPanel';
+
+type RagTab = 'ingest' | 'brain';
 
 interface IngestResultRow {
   readonly fileName: string;
@@ -27,6 +30,7 @@ interface StatsResponse {
 
 export default function RagIngestDashboard() {
   const [tenantId, setTenantId] = useState('default');
+  const [tab, setTab] = useState<RagTab>('ingest');
   const [stats, setStats] = useState<StatsResponse['indexStats'] | null>(null);
   const [lastResponse, setLastResponse] = useState<IngestResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -104,7 +108,7 @@ export default function RagIngestDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-100 p-8">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <a
           href="/dashboard/create"
           className="inline-flex items-center gap-1 text-sm text-indigo-700 hover:text-indigo-900 mb-6"
@@ -113,19 +117,47 @@ export default function RagIngestDashboard() {
           Zurück zum Produkt-Dashboard
         </a>
 
-        <div className="flex items-start gap-4 mb-8">
+        <div className="flex items-start gap-4 mb-6">
           <div className="p-3 rounded-xl bg-white shadow border border-indigo-100">
             <Brain className="w-10 h-10 text-indigo-600" aria-hidden />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">RAG-Wissensbasis</h1>
             <p className="text-gray-600 mt-1">
-              Mehrere PDFs hochladen, um den Compliance-RAG-Index (Chunking + Embeddings) für diesen
-              Mandanten zu befüllen.
+              PDFs indexieren und den Mandanten-Chunk-Speicher einsehen — was das Retrieval-„Gehirn“ gerade
+              kennt.
             </p>
           </div>
         </div>
 
+        <div className="mb-6 flex flex-wrap gap-2 border-b border-indigo-200/60">
+          <button
+            type="button"
+            onClick={() => setTab('ingest')}
+            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              tab === 'ingest'
+                ? 'border-indigo-600 text-indigo-900'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Upload className="h-4 w-4 shrink-0" aria-hidden />
+            Index befüllen
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('brain')}
+            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+              tab === 'brain'
+                ? 'border-indigo-600 text-indigo-900'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Boxes className="h-4 w-4 shrink-0" aria-hidden />
+            Gehirn ansehen
+          </button>
+        </div>
+
+        {tab === 'ingest' && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6">
           <div>
             <label htmlFor="tenantId" className="block text-sm font-medium text-gray-700 mb-1">
@@ -229,6 +261,17 @@ export default function RagIngestDashboard() {
             begrenzt (Hybrid-Ranking im Prozess).
           </p>
         </div>
+        )}
+
+        {tab === 'brain' && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <p className="text-sm text-gray-600 mb-5">
+              Mandant wie unter „Index befüllen“: <strong className="text-gray-900">{tenantId}</strong> — dort
+              die ID ändern, falls Sie einen anderen Index ansehen möchten.
+            </p>
+            <RagBrainPanel tenantId={tenantId} stats={stats} onRefreshStats={refreshStats} />
+          </div>
+        )}
       </div>
     </div>
   );

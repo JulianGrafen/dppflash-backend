@@ -3,8 +3,11 @@ import type {
   HybridSearchHit,
   VectorChunkRecord,
   VectorStorePort,
+  RagChunkListOptions,
+  RagChunkListResult,
 } from '@/app/application/ports/rag/VectorStorePort';
 import { rankChunksHybrid } from '@/app/domain/rag/hybridRankChunks';
+import { vectorChunkToPreview } from '@/app/infrastructure/rag/ragChunkPreviewUtils';
 
 const EMBEDDING_DIM = 1536;
 const FETCH_CAP = 8_000;
@@ -50,6 +53,10 @@ function toVectorChunkRecord(row: RagChunkRow): VectorChunkRecord {
     embedding,
     tokens: Array.isArray(row.tokens) ? row.tokens : [],
   };
+}
+
+function escapeForPostgresIlike(raw: string): string {
+  return raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 /**
@@ -122,6 +129,58 @@ export class SupabaseRagChunkStore implements VectorStorePort {
       chunkCount: count ?? 0,
       distinctFileNames: [...names].sort((a, b) => a.localeCompare(b)),
     };
+  }
+
+  async listChunksForTenant(tenantId: string, options: RagChunkListOptions): Promise<RagChunkListResult> {
+    const { limit, offset, fileName, textContains } = options;
+    const from = Math.max(0, offset);
+    const lim = Math.min(Math.max(1, limit), 500);
+    const to = from + lim - 1;
+
+    let q = this.client
+      .from('rag_chunks')
+      .select('id, file_name, page_number, chunk_text, tokens', { count: 'exact' })
+      .eq('tenant_id', tenantId);
+
+    if (fileName) {
+      q = q.eq('file_name', fileName);
+    }
+    if (textContains?.trim()) {
+      const pattern = `%${escapeForPostgresIlike(textContains.trim())}%`;
+      q = q.ilike('chunk_text', pattern);
+    }
+
+    const { data, error, count } = await q
+      .order('file_name', { ascending: true })
+      .order('page_number', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw new Error(`rag_chunks list: ${error.message}`);
+    }
+
+    type ListRow = {
+      id: string;
+      file_name: string;
+      page_number: number;
+      chunk_text: string;
+      tokens: string[] | null;
+    };
+
+    const rows = (data ?? []) as ListRow[];
+
+    const chunks = rows.map((r) =>
+      vectorChunkToPreview({
+        id: r.id,
+        fileName: r.file_name,
+        pageNumber: r.page_number,
+        text: r.chunk_text,
+        tokens: Array.isArray(r.tokens) ? r.tokens : [],
+      }),
+    );
+
+    return { chunks, total: count ?? chunks.length };
   }
 
   async searchHybrid(

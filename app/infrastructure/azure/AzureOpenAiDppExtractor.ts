@@ -176,7 +176,7 @@ Return only JSON with this exact shape:
     "schemaVersion": "${DPP_SCHEMA_VERSION}",
     "declaredProductType": "optional string such as Klebstoff, adhesive, battery or textile",
     "productName": "clear commercial or technical product name",
-    "wasteCode": "optional EAK/EWC waste code such as 08 04 09*",
+    "wasteCode": "EAK/EWC waste code such as 08 04 09* when visible anywhere in the document; use empty string only if no European waste catalogue code appears in any section",
     "manufacturer": {
       "name": "string",
       "address": "optional string",
@@ -242,7 +242,7 @@ Extraction robustness rules:
 - Preserve original business wording of materials and substances where possible.
 - If a CAS number is visible for a material or substance, copy it exactly.
 - productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
-- wasteCode should capture any explicit EAK/EWC waste code or European waste catalogue code shown in disposal, recycling or safety sections.
+- wasteCode: always scan the full document for EWC/EAK/AVV/Abfallschlüssel (including section 12–15, Entsorgungshinweise, transport/environment tables, footnotes). Populate wasteCode whenever any such code appears; use empty string only if none exists in the source.
 - Never hallucinate identifiers. If UPI or GTIN are not explicit in document, set them to "${PENDING_EXTERNAL_MATCH}".
 - For UPI prioritization, scan the header first for SDB-Nr, Artikelnummer, product code, item number.
 - manufacturer should identify the legal manufacturer or brand owner when visible.

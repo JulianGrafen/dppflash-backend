@@ -32,7 +32,7 @@ ${JSON.stringify([...targetPassportFieldKeys])}
 Hinweise:
 - Numerische Kennwerte (z. B. kWh, kg) als String im Feld "value", z. B. "4,2" oder "4.2".
 - "gtin" nur mit Ziffernfolge aus dem Kontext; sonst null.
-- "ewcCode" nur wenn ein plausibler Abfallschlüssel im Kontext steht; sonst null.`;
+- "ewcCode" und "wasteCode" (gleiche Bedeutung: EWC/EAK) nur wenn ein plausibler Abfallschlüssel im Kontext steht; sonst null. Setze höchstens eines mit belastbarem Beleg, nicht zwei widersprüchliche Werte.`;
   }
 
   return `${FORENSIC_CORE}

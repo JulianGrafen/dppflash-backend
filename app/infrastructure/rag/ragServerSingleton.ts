@@ -1,5 +1,5 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
-import type { VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
+import type { VectorStorePort, RagChunkListOptions, RagChunkListResult } from '@/app/application/ports/rag/VectorStorePort';
 import { supabase } from '@/app/lib/supabase';
 import { createRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragMvpComposition';
 import { InMemoryVectorStore } from '@/app/infrastructure/rag/InMemoryVectorStore';
@@ -56,4 +56,16 @@ export async function getRagIndexStatsForTenant(tenantId: string): Promise<{
     return { chunkCount: 0, distinctFileNames: [] };
   }
   return store.getStatsForTenant(tenantId);
+}
+
+export async function listRagIndexChunksForTenant(
+  tenantId: string,
+  options: RagChunkListOptions,
+): Promise<RagChunkListResult> {
+  getRagComplianceOrchestrator();
+  const store = globalRag().__dppfRagVectorStore;
+  if (!store) {
+    return { chunks: [], total: 0 };
+  }
+  return store.listChunksForTenant(tenantId, options);
 }

@@ -54,7 +54,7 @@ export function validateAuditTrailCryptographically(trail: AuditTrail): {
       if (key === 'gtin' || key === 'ean') {
         errors.push(...validateAuditedGtin(entry).map((m) => m.replace(/^gtin:/, `${key}:`)));
       }
-      if (key === 'ewcCode' || key === 'eakCode' || key === 'abfallSchluessel') {
+      if (key === 'ewcCode' || key === 'eakCode' || key === 'abfallSchluessel' || key === 'wasteCode') {
         errors.push(...validateAuditedEwc(entry).map((m) => m.replace(/^ewcCode:/, `${key}:`)));
       }
     }

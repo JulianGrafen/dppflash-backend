@@ -36,17 +36,50 @@ const REVIEW_REQUIRED = 'REVIEW_REQUIRED';
 const COMPLIANT = 'COMPLIANT';
 const WASTE_CODE_PATTERN = /\b\d{2}\s?\d{2}\s?\d{2}\*?\b/;
 
-function extractWasteCodeCandidate(dpp: DppProductPassport): string | undefined {
-  const candidates = [
-    dpp.wasteCode,
-    dpp.endOfLifeInstructions,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
+/**
+ * Text sources where EWC/EAK codes often appear when the model missed `wasteCode` / `endOfLifeInstructions`.
+ */
+function collectWasteCodeSearchTexts(dpp: DppProductPassport): readonly string[] {
+  const texts: string[] = [];
+  const push = (value: string | undefined) => {
+    const t = value?.trim();
+    if (t) {
+      texts.push(t);
     }
+  };
 
+  push(dpp.wasteCode);
+  push(dpp.endOfLifeInstructions);
+
+  const care = dpp.careRepairDurability;
+  if (care) {
+    push([care.careInstructions, care.repairInstructions, care.durabilityGuidance].filter(Boolean).join('\n'));
+  }
+
+  push(dpp.environmentalImpact?.impactNotes);
+
+  for (const row of dpp.supplierAndProcessInformation ?? []) {
+    push(row.processDescription);
+    push(row.processName);
+  }
+
+  for (const ch of dpp.chemicalComposition ?? []) {
+    push([ch.substance, ch.function, ch.casNumber].filter(Boolean).join(' '));
+  }
+
+  for (const m of dpp.materialComposition ?? []) {
+    push(m.material);
+  }
+
+  for (const s of dpp.substancesOfConcern ?? []) {
+    push([s.name, s.hazardClass, s.casNumber].filter(Boolean).join(' '));
+  }
+
+  return texts;
+}
+
+function extractWasteCodeCandidate(dpp: DppProductPassport): string | undefined {
+  for (const candidate of collectWasteCodeSearchTexts(dpp)) {
     const match = candidate.match(WASTE_CODE_PATTERN);
     if (match?.[0]) {
       return match[0];

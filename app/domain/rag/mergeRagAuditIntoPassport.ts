@@ -95,6 +95,9 @@ export function mergeRagAuditIntoPassport(
 
   tryApply('gtin', trail.gtin);
   tryApply('ewcCode', trail.ewcCode);
+  // ESPR-Produktseite nutzt `wasteCode`; Legacy-Audit oft nur `ewcCode` / `fields.ewcCode`.
+  tryApply('wasteCode', trail.fields?.ewcCode);
+  tryApply('wasteCode', trail.ewcCode);
 
   return { patch, appliedKeys: applied };
 }

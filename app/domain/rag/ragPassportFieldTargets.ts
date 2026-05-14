@@ -45,6 +45,8 @@ const COMMON = [
   'countryOfOrigin',
   'countryOfManufacturing',
   'endOfLifeInstructions',
+  'materialComposition',
+  'chemicalComposition',
 ] as const;
 
 const BATTERY = [

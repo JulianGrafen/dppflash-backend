@@ -119,6 +119,28 @@ export function CompositionFlowchart({
           },
         }}
         motionConfig="gentle"
+        linkTooltip={
+          isTrace
+            ? ({ link }) => (
+                <div
+                  style={{
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    fontSize: 12,
+                    borderRadius: 8,
+                    padding: '8px 12px',
+                    maxWidth: 280,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
+                  <div>
+                    Anteil laut Produktpass:{' '}
+                    {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
+                  </div>
+                </div>
+              )
+            : undefined
+        }
       />
     </div>
   );

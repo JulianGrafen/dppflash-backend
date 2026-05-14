@@ -94,6 +94,22 @@ describe('tryMaterialCompositionToSankeyFromRaw', () => {
     expect(graph).toBeNull();
   });
 
+  it('parses materialComposition stored as JSON string', () => {
+    const graph = tryMaterialCompositionToSankeyFromRaw(
+      {
+        materialComposition: JSON.stringify([
+          { material: 'Baumwolle', percentage: 70 },
+          { name: 'Leinen', anteil: 30 },
+        ]),
+      },
+      'Hemd',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links).toHaveLength(2);
+    expect(graph!.links[0]!.value).toBeCloseTo(70, 5);
+    expect(graph!.links[1]!.value).toBeCloseTo(30, 5);
+  });
+
   it('parses legacy materialZusammensetzung string when arrays are empty', () => {
     const graph = tryMaterialCompositionToSankeyFromRaw(
       {

@@ -17,8 +17,8 @@ type TraceabilitySectionProps = {
 };
 
 /**
- * Circularise-style “Traceability” block: Sankey from regulatory `compositionGraph` when present,
- * otherwise a fan-in graph built only from passport Kernfelder (`materialComposition`, `materialZusammensetzung`).
+ * Rückverfolgbarkeit: zuerst Fan-in aus Kernfeld-Material (`materialComposition` / `materialZusammensetzung`),
+ * sonst regulatorischer Sankey (`compositionGraph`), falls vorhanden.
  */
 export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
   const fromReg = isRecord(raw.regulatoryExtraction)
@@ -27,14 +27,17 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
 
   const materialGraph = tryMaterialCompositionToSankeyFromRaw(raw, productDisplayName);
 
-  const usedRegGraph =
-    fromReg?.success === true && compositionGraphHasMeaningfulFlows(fromReg.data);
+  const regulatoryGraph =
+    fromReg?.success === true && compositionGraphHasMeaningfulFlows(fromReg.data) ? fromReg.data : null;
 
-  const graph = usedRegGraph ? fromReg.data : materialGraph;
+  /** Kernfeld-Materialfluss hat Vorrang, damit „aus Materialanteilen (%)“ die Produktdaten zeigt. */
+  const graph = materialGraph ?? regulatoryGraph;
 
   if (!graph) {
     return null;
   }
+
+  const usedRegGraph = regulatoryGraph !== null && materialGraph === null;
 
   const chainSubtitle = usedRegGraph
     ? 'Herkunftskette — Lieferkette'

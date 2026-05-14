@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import { DocumentIngestionService } from '@/app/application/services/rag/DocumentIngestionService';
 import { HybridRetrievalService } from '@/app/application/services/rag/HybridRetrievalService';
 import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
@@ -17,8 +18,25 @@ export interface RagComplianceRunInput {
   readonly retrievalTopK?: number;
   /** Product-line tokens: more overlap with chunk text / fileName → higher rank and match confidence. */
   readonly productMatchTerms?: readonly string[];
-  /** Basename of the indexed PDF; boosts chunks from that file when it matches stored rows. */
+  /** Basename/path of primary PDF; boosts chunks from that file when it matches stored rows. */
   readonly sourceFileName?: string;
+}
+
+/** Stufe 2–4: gezielte Lückenfüllung (Retrieval mit gapSearchQuery + sekundäres LLM). */
+export interface RagGapTargetedRunInput {
+  readonly tenantId: string;
+  readonly productLabel: string;
+  readonly gapSearchQuery: string;
+  readonly anchorProductName: string;
+  readonly targetPassportFieldKeys: readonly string[];
+  readonly retrievalTopK?: number;
+  readonly productMatchTerms?: readonly string[];
+  readonly sourceFileName?: string;
+  /**
+   * Primär-PDF (Doc A): bevorzugt Chunks aus *anderen* Dateien, damit Doc B zuerst genutzt wird.
+   * Wenn danach keine Chunks übrig bleiben, Fallback auf alle Treffer.
+   */
+  readonly excludePrimaryBasename?: string;
 }
 
 export interface RagComplianceExtractionOutcome {
@@ -44,8 +62,8 @@ export class RagComplianceOrchestrator {
     const defaultTopK =
       input.retrievalTopK ??
       (input.targetPassportFieldKeys?.length
-        ? Math.min(24, 10 + Math.floor(input.targetPassportFieldKeys.length / 2))
-        : 12);
+        ? Math.min(36, 16 + Math.floor(input.targetPassportFieldKeys.length / 2))
+        : 18);
 
     const retrievalInput: HybridRetrievalInput = {
       tenantId: input.tenantId,
@@ -83,6 +101,67 @@ export class RagComplianceOrchestrator {
       query: input.query,
       chunks,
       targetPassportFieldKeys: input.targetPassportFieldKeys,
+    };
+
+    const enrichment = await this.enrichment.synthesize(enrichmentInput);
+    return { enrichment, retrievalMatchConfidence };
+  }
+
+  /**
+   * Targeted RAG: tenant-scoped hybrid search (Supabase `rag_chunks` oder In-Memory) mit
+   * programmatisch gebauter Suchanfrage; optional ohne Chunks aus der Primär-Datei.
+   */
+  async runGapTargetedEnrichment(input: RagGapTargetedRunInput): Promise<RagComplianceExtractionOutcome> {
+    const defaultTopK = input.retrievalTopK ?? 24;
+
+    const retrievalInput: HybridRetrievalInput = {
+      tenantId: input.tenantId,
+      query: input.gapSearchQuery,
+      topK: defaultTopK,
+      productMatchTerms: input.productMatchTerms,
+      sourceFileName: input.sourceFileName,
+    };
+
+    let chunks = await this.retrieval.retrieveTopChunks(retrievalInput);
+
+    if (input.excludePrimaryBasename) {
+      const ex = basename(input.excludePrimaryBasename);
+      const other = chunks.filter((c) => basename(c.fileName) !== ex);
+      if (other.length > 0) {
+        chunks = other;
+      }
+    }
+
+    const retrievalMatchConfidence = computeRetrievalMatchConfidence(
+      chunks,
+      input.productMatchTerms ?? [],
+      input.sourceFileName,
+    );
+
+    if (chunks.length === 0) {
+      const emptyTrail = safeParseAuditTrail({ fields: {} });
+      if (!emptyTrail.success) {
+        throw new Error(emptyTrail.error.message);
+      }
+      const data = emptyTrail.data;
+      const enrichment: ComplianceEnrichmentResult = {
+        auditTrail: data,
+        rawModelJson: '{"fields":{}}',
+        cryptoValidation: validateAuditTrailCryptographically(data),
+      };
+      return { enrichment, retrievalMatchConfidence: 0 };
+    }
+
+    const enrichmentInput: ComplianceEnrichmentInput = {
+      tenantId: input.tenantId,
+      productLabel: input.productLabel,
+      query: input.gapSearchQuery,
+      chunks,
+      targetPassportFieldKeys: input.targetPassportFieldKeys,
+      gapTargetedExtraction: {
+        anchorProductName: input.anchorProductName,
+        missingFieldKeys: input.targetPassportFieldKeys,
+      },
     };
 
     const enrichment = await this.enrichment.synthesize(enrichmentInput);

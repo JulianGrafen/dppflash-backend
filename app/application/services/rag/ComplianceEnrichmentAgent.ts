@@ -5,6 +5,8 @@ import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrail
 
 const FORENSIC_CORE = `Du bist ein forensischer Daten-Auditor. Beantworte die Frage AUSSCHLIESSLICH basierend auf dem bereitgestellten Kontext (Chunks). Wenn die Antwort nicht im Kontext steht, gib null zurück. Erfinde niemals Daten. Zitiere für jeden Wert exakt den 'contextSnippet', die 'pageNumber' und den 'fileName' aus den Metadaten des Chunks.
 
+Die Chunks können aus mehreren PDF-Dateien desselben Mandanten stammen — ein Beleg aus einer zweiten Datei ist gültig, wenn der Textbeleg dort eindeutig steht.
+
 Regeln:
 - Nutze nur Informationen, die wörtlich oder eindeutig aus dem Chunk-Text folgen.
 - Wenn mehrere Chunks widersprüchlich sind: setze requiresManualReview auf true und value auf null.
@@ -60,6 +62,39 @@ Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
 Felder weglassen, wenn es keine belastbare Information gibt (nicht raten).`;
 }
 
+function buildGapTargetedSystemPrompt(
+  missingFieldKeys: readonly string[],
+  anchorProductName: string,
+): string {
+  const keysJson = JSON.stringify([...missingFieldKeys]);
+  return `${FORENSIC_CORE}
+
+Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
+{
+  "fields": {
+    "<feldKey>": {
+      "value": "string oder null",
+      "confidence": number zwischen 0 und 1,
+      "source": { "fileName": "string", "pageNumber": number, "contextSnippet": "string (verbatim aus Chunk-Text)" },
+      "requiresManualReview": boolean
+    }
+  }
+}
+
+Du bist ein Daten-Auditor. Das Produkt heißt "${anchorProductName}" (Anker aus der Primärextraktion).
+Finde NUR die folgenden noch fehlenden Felder (camelCase wie im Digital Product Passport): ${keysJson}
+Nutze AUSSCHLIESSLICH den bereitgestellten Text-Kontext aus den Chunks. Gib zu jedem gefundenen Wert die Quell-Datei (fileName) und einen wörtlichen Beleg (contextSnippet) an.
+Wenn ein Feld nicht belastbar belegbar ist, setze value auf null und requiresManualReview auf true.
+
+Jeder der folgenden Feld-Keys MUSS als Schlüssel unter "fields" vorkommen:
+${keysJson}
+
+Hinweise:
+- Numerische Kennwerte (z. B. kWh, kg) als String im Feld "value", z. B. "4,2" oder "4.2".
+- "gtin" nur mit Ziffernfolge aus dem Kontext; sonst null.
+- "ewcCode" und "wasteCode" (gleiche Bedeutung: EWC/EAK) nur wenn ein plausibler Abfallschlüssel im Kontext steht; sonst null.`;
+}
+
 export interface ComplianceEnrichmentInput {
   readonly tenantId: string;
   readonly productLabel: string;
@@ -67,6 +102,11 @@ export interface ComplianceEnrichmentInput {
   readonly chunks: readonly RetrievedChunk[];
   /** When set, the model returns a provenance bundle under \`fields\` for each passport key. */
   readonly targetPassportFieldKeys?: readonly string[];
+  /** Stufe 4: sekundäres LLM nur für Lücken (Anker + fehlende Keys). */
+  readonly gapTargetedExtraction?: {
+    readonly anchorProductName: string;
+    readonly missingFieldKeys: readonly string[];
+  };
 }
 
 export interface ComplianceEnrichmentResult {
@@ -79,7 +119,13 @@ export class ComplianceEnrichmentAgent {
   constructor(private readonly llm: ComplianceLlmPort) {}
 
   async synthesize(input: ComplianceEnrichmentInput): Promise<ComplianceEnrichmentResult> {
-    const systemPrompt = buildSystemPrompt(input.targetPassportFieldKeys);
+    const systemPrompt =
+      input.gapTargetedExtraction && input.gapTargetedExtraction.missingFieldKeys.length > 0
+        ? buildGapTargetedSystemPrompt(
+            input.gapTargetedExtraction.missingFieldKeys,
+            input.gapTargetedExtraction.anchorProductName,
+          )
+        : buildSystemPrompt(input.targetPassportFieldKeys);
     const userPrompt = this.buildUserPrompt(input);
     const rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
     const parsed = JSON.parse(rawModelJson) as unknown;
@@ -203,6 +249,13 @@ export class ComplianceEnrichmentAgent {
 
     if (input.targetPassportFieldKeys?.length) {
       lines.push(`targetPassportFieldKeys: ${input.targetPassportFieldKeys.join(', ')}`);
+    }
+
+    if (input.gapTargetedExtraction) {
+      lines.push(
+        `gapTargetedExtraction.anchorProductName: ${input.gapTargetedExtraction.anchorProductName}`,
+        `gapTargetedExtraction.missingFieldKeys: ${input.gapTargetedExtraction.missingFieldKeys.join(', ')}`,
+      );
     }
 
     lines.push('', 'chunks:', JSON.stringify(chunkPayload, null, 2));

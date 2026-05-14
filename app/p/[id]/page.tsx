@@ -2,6 +2,7 @@ import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import { ShieldCheck, Battery, AlertTriangle } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
+import { coerceMaterialCompositionArray } from '@/app/domain/dpp/materialCompositionToSankey';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 
@@ -156,7 +157,7 @@ function pickMaterialCompositionPercent(entry: Record<string, unknown>): number 
 }
 
 function materialNameFromCompositionEntry(entry: Record<string, unknown>): string | undefined {
-  for (const k of ['material', 'name', 'component', 'substance', 'title'] as const) {
+  for (const k of ['material', 'name', 'bezeichnung', 'materialName', 'component', 'substance', 'title'] as const) {
     const v = entry[k];
     if (typeof v === 'string' && v.trim()) {
       return v.trim();
@@ -171,18 +172,17 @@ function renderMaterialZusammensetzungKernfelder(
   materialZusammensetzung: unknown,
 ) {
   const entries: KeyValueEntry[] = [];
-  if (Array.isArray(materialComposition)) {
-    for (const item of materialComposition) {
-      if (!item || typeof item !== 'object') continue;
-      const row = item as Record<string, unknown>;
-      const title = materialNameFromCompositionEntry(row);
-      if (!title) continue;
-      const pct = pickMaterialCompositionPercent(row);
-      entries.push({
-        title,
-        details: pct !== undefined ? formatPercentage(pct) : undefined,
-      });
-    }
+  const compositionItems = coerceMaterialCompositionArray(materialComposition);
+  for (const item of compositionItems) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const title = materialNameFromCompositionEntry(row);
+    if (!title) continue;
+    const pct = pickMaterialCompositionPercent(row);
+    entries.push({
+      title,
+      details: pct !== undefined ? formatPercentage(pct) : undefined,
+    });
   }
 
   const legacy =

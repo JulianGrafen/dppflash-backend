@@ -1,20 +1,44 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
 import type { ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
 import { mergeRagAuditIntoPassport } from '@/app/domain/rag/mergeRagAuditIntoPassport';
-import { stripCryptoInvalidAuditedValues } from '@/app/domain/rag/auditTrailValidation';
 import {
-  buildProductIdentityQueryPrefix,
-  buildProductMatchTerms,
-} from '@/app/domain/rag/productBrainMatch';
+  stripCryptoInvalidAuditedValues,
+  validateAuditTrailCryptographically,
+} from '@/app/domain/rag/auditTrailValidation';
+import { safeParseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
+import { buildProductMatchTerms } from '@/app/domain/rag/productBrainMatch';
+import {
+  buildGapTargetedSearchQuery,
+  detectRagFillableGaps,
+  resolvePrimaryProductNameAnchor,
+} from '@/app/domain/rag/dppRagGapAnalysis';
 import {
   getRagTargetFieldKeysForProductType,
-  isPassportGtinMissing,
   orderRagTargetKeysPrioritizingGtin,
 } from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
+function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
+  const emptyTrail = safeParseAuditTrail({ fields: {} });
+  if (!emptyTrail.success) {
+    throw new Error(emptyTrail.error.message);
+  }
+  const data = emptyTrail.data;
+  return {
+    auditTrail: data,
+    rawModelJson: '{"fields":{}}',
+    cryptoValidation: validateAuditTrailCryptographically(data),
+  };
+}
+
 /**
- * Runs one hybrid retrieval + forensic synthesis pass to fill empty passport fields from the RAG index.
+ * Two-stage RAG (mandatory flow for upload):
+ *
+ * 1. Primary data = passport from PDF extraction (Doc A).
+ * 2. Gap analysis vs RAG target keys; anchor = `productName` (abort secondary if missing).
+ * 3. Build search query: missing fields + anchor.
+ * 4. Tenant-scoped hybrid retrieval (Supabase `rag_chunks` or in-process); prefer chunks from other PDFs than Doc A.
+ * 5. Secondary LLM (gap-targeted system prompt) → merge into empty passport fields only.
  */
 export class ProductPassportRagEnrichmentService {
   async enrichFromIndexedChunks(
@@ -24,7 +48,7 @@ export class ProductPassportRagEnrichmentService {
       readonly productType: ProductPassport['type'];
       readonly productLabel: string;
       readonly passport: ProductPassport;
-      /** Indexed PDF basename; aligns retrieval with chunks from that upload. */
+      /** Indexed PDF basename; used to deprioritize Doc A when loading Doc B chunks. */
       readonly sourceFileName?: string;
     },
   ): Promise<{
@@ -32,57 +56,62 @@ export class ProductPassportRagEnrichmentService {
     readonly appliedKeys: readonly string[];
     readonly enrichment: ComplianceEnrichmentResult;
     readonly retrievalMatchConfidence: number;
+    /** True when Stufe 2–4 ran (anchor + gaps present). */
+    readonly ranTargetedGapRag: boolean;
   }> {
-    const keys = orderRagTargetKeysPrioritizingGtin(
-      getRagTargetFieldKeysForProductType(input.productType),
-      input.passport as Record<string, unknown>,
-    );
     const p = input.passport as Record<string, unknown>;
-    const matchTerms = buildProductMatchTerms(p, input.productLabel);
-    const identityPrefix = buildProductIdentityQueryPrefix(p, input.productLabel);
-
-    const hints: string[] = [];
-    const pushHint = (label: string, v: unknown) => {
-      if (typeof v === 'string' && v.trim()) {
-        hints.push(`${label}: ${v.trim().slice(0, 280)}`);
-      }
-    };
-    pushHint('Produktname (ESPR)', p.productName);
-    pushHint('Abfall / EoL (ESPR)', p.endOfLifeInstructions);
-    pushHint('Abfallschlüssel', p.wasteCode);
-    pushHint('UPI', p.upi);
-    pushHint('GTIN (aktuell im Pass)', p.gtin);
-
-    const queryLines = [
-      identityPrefix,
-      `Digital Product Passport / ESPR Stammdaten und Kennwerte für "${input.productLabel}".`,
-      `Relevante Felder (camelCase), Reihenfolge mit Priorität: ${keys.join(', ')}.`,
-    ];
-    if (isPassportGtinMissing(p)) {
-      queryLines.push(
-        'Priorität: Es fehlt noch eine belastbare GTIN/EAN im Pass — extrahiere diese zuerst aus den Chunks, falls dort eine gültige Ziffernfolge eindeutig erkennbar ist (wörtlicher Beleg im contextSnippet). Keine erfundenen GTINs.',
-      );
-    }
-    queryLines.push(
-      'Berücksichtige außerdem: Hersteller, Modellbezeichnung, technische Daten, Entsorgungscodes (EWC/EAK/AVV), Sicherheitsdatenblatt, technisches Merkblatt, Abschnitt 13 Entsorgung.',
-      ...hints,
+    const mergeAllowKeys = orderRagTargetKeysPrioritizingGtin(
+      getRagTargetFieldKeysForProductType(input.productType),
+      p,
     );
-    const query = queryLines.join('\n');
 
-    const { enrichment, retrievalMatchConfidence } = await orchestrator.runComplianceExtraction({
+    const anchor = resolvePrimaryProductNameAnchor(p);
+    const gaps = detectRagFillableGaps(p, input.productType);
+
+    if (!anchor || gaps.length === 0) {
+      const enrichment = emptyEnrichmentOutcome();
+      const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
+      const { patch, appliedKeys } = mergeRagAuditIntoPassport(
+        input.passport,
+        trailForMerge,
+        mergeAllowKeys,
+      );
+      return {
+        passportPatch: patch,
+        appliedKeys,
+        enrichment,
+        retrievalMatchConfidence: 0,
+        ranTargetedGapRag: false,
+      };
+    }
+
+    const gapQuery = buildGapTargetedSearchQuery(gaps, anchor);
+    const matchTerms = buildProductMatchTerms(p, input.productLabel);
+
+    console.info('[DPP] rag_two_stage_gap', {
+      tenantId: input.tenantId,
+      anchor,
+      gapCount: gaps.length,
+      gapQueryPreview: gapQuery.slice(0, 200),
+    });
+
+    const { enrichment, retrievalMatchConfidence } = await orchestrator.runGapTargetedEnrichment({
       tenantId: input.tenantId,
       productLabel: input.productLabel,
-      query,
-      targetPassportFieldKeys: keys,
+      gapSearchQuery: gapQuery,
+      anchorProductName: anchor,
+      targetPassportFieldKeys: [...gaps],
       productMatchTerms: matchTerms,
       sourceFileName: input.sourceFileName,
+      excludePrimaryBasename: input.sourceFileName,
+      retrievalTopK: Math.min(36, 14 + gaps.length),
     });
 
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
     const { patch, appliedKeys } = mergeRagAuditIntoPassport(
       input.passport,
       trailForMerge,
-      keys,
+      mergeAllowKeys,
     );
 
     return {
@@ -90,6 +119,7 @@ export class ProductPassportRagEnrichmentService {
       appliedKeys,
       enrichment,
       retrievalMatchConfidence,
+      ranTargetedGapRag: true,
     };
   }
 }

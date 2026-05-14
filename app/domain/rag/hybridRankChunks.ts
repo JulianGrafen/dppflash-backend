@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import type { HybridSearchHit, HybridSearchOptions, VectorChunkRecord } from '@/app/application/ports/rag/VectorStorePort';
 import { tokenizeForRetrieval } from '@/app/domain/rag/textTokenize';
 
@@ -84,7 +85,7 @@ function productIdentityBoost(
   const ratio = terms.length === 0 ? 0 : hits / terms.length;
   const termBoost = Math.min(0.42, ratio * 0.55);
   const sameFile =
-    sourceFileName && chunk.fileName === sourceFileName ? 0.22 : 0;
+    sourceFileName && basename(chunk.fileName) === basename(sourceFileName) ? 0.22 : 0;
   return Math.min(0.55, termBoost + sameFile);
 }
 

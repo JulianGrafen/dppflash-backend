@@ -28,7 +28,16 @@ export function parseMaterialPercentageLike(value: unknown): number {
 }
 
 function materialLabelFromRow(row: Record<string, unknown>): string {
-  const candidates = ['material', 'name', 'component', 'substance', 'title'] as const;
+  const candidates = [
+    'material',
+    'name',
+    'bezeichnung',
+    'materialName',
+    'component',
+    'substance',
+    'title',
+    'description',
+  ] as const;
   for (const k of candidates) {
     const v = row[k];
     if (typeof v === 'string' && v.trim()) {
@@ -36,6 +45,26 @@ function materialLabelFromRow(row: Record<string, unknown>): string {
     }
   }
   return '';
+}
+
+/** Accepts array or JSON string (e.g. from storage/imports). */
+export function coerceMaterialCompositionArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (!t.startsWith('[')) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(t);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 /** Reads a share 0–100 from common DPP / UI / import column names. */
@@ -110,6 +139,14 @@ function rowsFromMaterialZusammensetzungString(text: string): { readonly materia
         material: m[1].trim(),
         percentage: parseMaterialPercentageLike(m[2]),
       });
+      continue;
+    }
+    m = seg.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)\s*%$/i);
+    if (m?.[1] && m[2]) {
+      rows.push({
+        material: m[1].trim(),
+        percentage: parseMaterialPercentageLike(m[2]),
+      });
     }
   }
   return rows;
@@ -123,7 +160,7 @@ function rowsFromMaterialZusammensetzungString(text: string): { readonly materia
 export function collectPassportCoreMaterialRowsForSankey(
   raw: Record<string, unknown>,
 ): ReadonlyArray<{ readonly material: string; readonly percentage: number }> {
-  const fromFlat = normalizeFlatMaterialArray(raw.materialComposition);
+  const fromFlat = normalizeFlatMaterialArray(coerceMaterialCompositionArray(raw.materialComposition));
   if (fromFlat.length > 0) {
     return fromFlat;
   }
@@ -150,10 +187,11 @@ function buildSankeyFromRows(
   }
 
   const sumPct = rows.reduce((a, r) => a + r.percentage, 0);
-  const weights =
+  /** Declared product percentages when available; else equal split (placeholder). */
+  const linkValues =
     sumPct > 0
-      ? rows.map((r) => (r.percentage / sumPct) * 100)
-      : rows.map(() => 100 / rows.length);
+      ? rows.map((r) => Math.max(0.01, r.percentage))
+      : rows.map(() => Math.max(0.01, 100 / rows.length));
 
   const productId = 'end_product';
   const endLabel =
@@ -175,7 +213,7 @@ function buildSankeyFromRows(
   const links = rows.map((_, i) => ({
     source: `mat_${i}`,
     target: productId,
-    value: Math.max(0.01, weights[i] ?? 0),
+    value: linkValues[i] ?? 0.01,
   }));
 
   const parsed = compositionGraphSchema.safeParse({ nodes, links });
@@ -200,6 +238,6 @@ export function tryMaterialCompositionToSankey(
   value: unknown,
   productLabel: string,
 ): CompositionGraphPayload | null {
-  const rows = normalizeFlatMaterialArray(value);
+  const rows = normalizeFlatMaterialArray(coerceMaterialCompositionArray(value));
   return buildSankeyFromRows(rows, productLabel);
 }

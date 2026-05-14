@@ -1,4 +1,5 @@
 import type { HybridSearchHit } from '@/app/application/ports/rag/VectorStorePort';
+import { basename } from 'node:path';
 import { tokenizeForRetrieval } from '@/app/domain/rag/textTokenize';
 
 const STOPWORDS = new Set([
@@ -28,6 +29,18 @@ function clamp01(n: number): number {
     return 0;
   }
   return Math.max(0, Math.min(1, n));
+}
+
+/** GTIN/EAN-style digit run (8–14) for cross-document retrieval. */
+export function normalizeGtinDigitToken(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const d = value.replace(/\D/g, '');
+  if (d.length >= 8 && d.length <= 14) {
+    return d;
+  }
+  return undefined;
 }
 
 /**
@@ -69,7 +82,19 @@ export function buildProductMatchTerms(
       break;
     }
   }
-  return out;
+
+  const gtinTok = normalizeGtinDigitToken(passport.gtin);
+  if (gtinTok && !seen.has(gtinTok)) {
+    seen.add(gtinTok);
+    out.unshift(gtinTok);
+  }
+  const eanTok = normalizeGtinDigitToken((passport as { ean?: unknown }).ean);
+  if (eanTok && !seen.has(eanTok)) {
+    seen.add(eanTok);
+    out.unshift(eanTok);
+  }
+
+  return out.slice(0, 56);
 }
 
 /**
@@ -89,6 +114,8 @@ export function buildProductIdentityQueryPrefix(
   push(passport.productName);
   push(passport.hersteller);
   push(passport.modellname);
+  push(passport.gtin);
+  push(passport.upi);
   const m = passport.manufacturer as { name?: string } | undefined;
   push(m?.name);
   const uniq: string[] = [];
@@ -137,7 +164,7 @@ export function computeRetrievalMatchConfidence(
       }
     }
     bestRatio = Math.max(bestRatio, hits / matchTerms.length);
-    if (sourceFileName && c.fileName === sourceFileName) {
+    if (sourceFileName && basename(c.fileName) === basename(sourceFileName)) {
       anySameFile = true;
     }
   }

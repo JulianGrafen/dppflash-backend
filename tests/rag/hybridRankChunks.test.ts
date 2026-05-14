@@ -53,10 +53,10 @@ describe('rankChunksHybrid', () => {
     });
     expect(termsOnly[0]?.id).toBe('2');
 
-    const withSameFile = rankChunksHybrid([a, b], 'Wartung', emb, 2, {
+    const withPathBoost = rankChunksHybrid([a, b], 'Wartung', emb, 2, {
       productMatchTerms: ['cimsec', 'flex', 'schnell', 's1'],
-      sourceFileName: 'Cimsec-S1.pdf',
+      sourceFileName: '/data/uploads/Cimsec-S1.pdf',
     });
-    expect(withSameFile[0]?.id).toBe('1');
+    expect(withPathBoost[0]?.id).toBe('1');
   });
 });

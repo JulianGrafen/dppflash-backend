@@ -58,8 +58,9 @@ function toPublicExtractedData(
  * Nimmt eine PDF-Datei entgegen und startet die Verarbeitungs-Pipeline:
  * 1. Speichern in Supabase Storage
  * 2. Azure AI Document Intelligence analysiert das PDF
- * 3. Azure OpenAI extrahiert das ESPR-DPP-Schema
- * 4. PDF wird in den **RAG-Index** desselben Mandanten eingespeist; forensische LLM-Synthese ergänzt **leere** Passfelder aus den Chunks (mit Audit-Trail auf `ragEnrichment`)
+ * 3. Azure OpenAI extrahiert das ESPR-DPP-Schema (**Stufe 1**, primaryData)
+ * 4. PDF → RAG-Index (tenantId); **Stufe 2–5**: Lücken vs. Schema → Suchstring „Felder für Produkt: productName“ →
+ *    Hybrid-Suche (andere PDFs bevorzugt) → sekundäres LLM nur für fehlende Felder → Merge in leere Passfelder (`ragEnrichment`)
  * 5. **Speichern aller Daten im Store**
  * 6. Rückgabe strukturierter Daten mit Product-Link
  * 

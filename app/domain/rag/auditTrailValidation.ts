@@ -32,6 +32,58 @@ function validateAuditedEwc(entry: AuditedValue): readonly string[] {
   return [];
 }
 
+/** True if this audited value passes the same crypto/format rules used for merge eligibility. */
+export function auditedValuePassesCryptoMerge(fieldKey: string, entry: AuditedValue): boolean {
+  if (entry.value === null) {
+    return true;
+  }
+
+  if (fieldKey === 'gtin' || fieldKey === 'ean') {
+    return validateAuditedGtin(entry).length === 0;
+  }
+
+  if (
+    fieldKey === 'ewcCode'
+    || fieldKey === 'eakCode'
+    || fieldKey === 'abfallSchluessel'
+    || fieldKey === 'wasteCode'
+  ) {
+    return validateAuditedEwc(entry).length === 0;
+  }
+
+  return true;
+}
+
+/**
+ * Drops audited entries that fail GTIN/EWC checks so remaining values can still be merged into the passport.
+ * The original trail (e.g. for UI / rawModelJson) stays unchanged; use this only as input to {@link mergeRagAuditIntoPassport}.
+ */
+export function stripCryptoInvalidAuditedValues(trail: AuditTrail): AuditTrail {
+  const next: AuditTrail = {};
+
+  if (trail.gtin && auditedValuePassesCryptoMerge('gtin', trail.gtin)) {
+    next.gtin = trail.gtin;
+  }
+
+  if (trail.ewcCode && auditedValuePassesCryptoMerge('ewcCode', trail.ewcCode)) {
+    next.ewcCode = trail.ewcCode;
+  }
+
+  if (trail.fields) {
+    const fields: Record<string, AuditedValue> = {};
+    for (const [key, entry] of Object.entries(trail.fields)) {
+      if (auditedValuePassesCryptoMerge(key, entry)) {
+        fields[key] = entry;
+      }
+    }
+    if (Object.keys(fields).length > 0) {
+      next.fields = fields;
+    }
+  }
+
+  return next;
+}
+
 /**
  * Deterministic checks beyond Zod (checksums / regex). LLM output must still pass this.
  */

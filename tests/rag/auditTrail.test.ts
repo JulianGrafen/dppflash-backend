@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { parseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
 import { isValidGtinDigits } from '@/app/domain/rag/gtinProof';
-import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
+import {
+  stripCryptoInvalidAuditedValues,
+  validateAuditTrailCryptographically,
+} from '@/app/domain/rag/auditTrailValidation';
 
 describe('auditTrailSchema', () => {
   it('parses fields map with audited entries', () => {
@@ -68,5 +71,30 @@ describe('auditTrailValidation', () => {
 
     const result = validateAuditTrailCryptographically(trail);
     expect(result.ok).toBe(false);
+  });
+
+  it('stripCryptoInvalidAuditedValues keeps valid fields when GTIN is invalid', () => {
+    const trail = parseAuditTrail({
+      fields: {
+        gtin: {
+          value: '123',
+          confidence: 1,
+          source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: '123' },
+          requiresManualReview: false,
+        },
+        hersteller: {
+          value: 'ACME',
+          confidence: 0.9,
+          source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: 'ACME GmbH' },
+          requiresManualReview: false,
+        },
+      },
+    });
+
+    expect(validateAuditTrailCryptographically(trail).ok).toBe(false);
+    const stripped = stripCryptoInvalidAuditedValues(trail);
+    expect(stripped.fields?.hersteller?.value).toBe('ACME');
+    expect(stripped.fields?.gtin).toBeUndefined();
+    expect(validateAuditTrailCryptographically(stripped).ok).toBe(true);
   });
 });

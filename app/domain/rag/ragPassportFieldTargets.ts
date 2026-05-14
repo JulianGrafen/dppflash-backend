@@ -1,5 +1,38 @@
 import type { ProductPassport } from '@/app/types/dpp-types';
 
+const PENDING_GTIN = 'PENDING_EXTERNAL_MATCH';
+
+/** True when the passport has no usable GTIN yet (RAG should treat gtin as high priority). */
+export function isPassportGtinMissing(passport: Record<string, unknown>): boolean {
+  const g = passport.gtin;
+  if (g === undefined || g === null) {
+    return true;
+  }
+  if (typeof g !== 'string') {
+    return false;
+  }
+  const t = g.trim();
+  return t === '' || t === PENDING_GTIN;
+}
+
+/** Puts `gtin` first in the forensic target list when no GTIN is on the passport yet. */
+export function orderRagTargetKeysPrioritizingGtin(
+  keys: readonly string[],
+  passport: Record<string, unknown>,
+): readonly string[] {
+  const k = [...keys];
+  if (!isPassportGtinMissing(passport)) {
+    return k;
+  }
+  const gi = k.indexOf('gtin');
+  if (gi <= 0) {
+    return k;
+  }
+  k.splice(gi, 1);
+  k.unshift('gtin');
+  return k;
+}
+
 /** Gemeinsame RAG-Ziele: ESPR zeigt u.a. `wasteCode`, ältere Pässe `ewcCode`; Merge setzt nur noch leere Felder. */
 const COMMON = [
   'hersteller',

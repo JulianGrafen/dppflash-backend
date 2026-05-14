@@ -1,11 +1,16 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
 import type { ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
 import { mergeRagAuditIntoPassport } from '@/app/domain/rag/mergeRagAuditIntoPassport';
+import { stripCryptoInvalidAuditedValues } from '@/app/domain/rag/auditTrailValidation';
 import {
   buildProductIdentityQueryPrefix,
   buildProductMatchTerms,
 } from '@/app/domain/rag/productBrainMatch';
-import { getRagTargetFieldKeysForProductType } from '@/app/domain/rag/ragPassportFieldTargets';
+import {
+  getRagTargetFieldKeysForProductType,
+  isPassportGtinMissing,
+  orderRagTargetKeysPrioritizingGtin,
+} from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
 /**
@@ -28,7 +33,10 @@ export class ProductPassportRagEnrichmentService {
     readonly enrichment: ComplianceEnrichmentResult;
     readonly retrievalMatchConfidence: number;
   }> {
-    const keys = getRagTargetFieldKeysForProductType(input.productType);
+    const keys = orderRagTargetKeysPrioritizingGtin(
+      getRagTargetFieldKeysForProductType(input.productType),
+      input.passport as Record<string, unknown>,
+    );
     const p = input.passport as Record<string, unknown>;
     const matchTerms = buildProductMatchTerms(p, input.productLabel);
     const identityPrefix = buildProductIdentityQueryPrefix(p, input.productLabel);
@@ -43,15 +51,23 @@ export class ProductPassportRagEnrichmentService {
     pushHint('Abfall / EoL (ESPR)', p.endOfLifeInstructions);
     pushHint('Abfallschlüssel', p.wasteCode);
     pushHint('UPI', p.upi);
-    pushHint('GTIN', p.gtin);
+    pushHint('GTIN (aktuell im Pass)', p.gtin);
 
-    const query = [
+    const queryLines = [
       identityPrefix,
       `Digital Product Passport / ESPR Stammdaten und Kennwerte für "${input.productLabel}".`,
-      `Relevante Felder (camelCase): ${keys.join(', ')}.`,
-      'Berücksichtige GTIN/EAN, Hersteller, Modellbezeichnung, technische Daten, Entsorgungscodes (EWC/EAK/AVV), Sicherheitsdatenblatt, technisches Merkblatt, Abschnitt 13 Entsorgung.',
+      `Relevante Felder (camelCase), Reihenfolge mit Priorität: ${keys.join(', ')}.`,
+    ];
+    if (isPassportGtinMissing(p)) {
+      queryLines.push(
+        'Priorität: Es fehlt noch eine belastbare GTIN/EAN im Pass — extrahiere diese zuerst aus den Chunks, falls dort eine gültige Ziffernfolge eindeutig erkennbar ist (wörtlicher Beleg im contextSnippet). Keine erfundenen GTINs.',
+      );
+    }
+    queryLines.push(
+      'Berücksichtige außerdem: Hersteller, Modellbezeichnung, technische Daten, Entsorgungscodes (EWC/EAK/AVV), Sicherheitsdatenblatt, technisches Merkblatt, Abschnitt 13 Entsorgung.',
       ...hints,
-    ].join('\n');
+    );
+    const query = queryLines.join('\n');
 
     const { enrichment, retrievalMatchConfidence } = await orchestrator.runComplianceExtraction({
       tenantId: input.tenantId,
@@ -62,9 +78,10 @@ export class ProductPassportRagEnrichmentService {
       sourceFileName: input.sourceFileName,
     });
 
+    const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
     const { patch, appliedKeys } = mergeRagAuditIntoPassport(
       input.passport,
-      enrichment.auditTrail,
+      trailForMerge,
       keys,
     );
 

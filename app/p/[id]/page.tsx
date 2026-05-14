@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { ShieldCheck, Battery, AlertTriangle } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
 import { RagProvenanceSection } from './RagProvenanceSection';
-import { RegulatoryFlowSection } from './RegulatoryFlowSection';
+import { TraceabilitySection } from './TraceabilitySection';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
 
@@ -31,12 +31,31 @@ function Section({
   );
 }
 
-function Field({ label, value }: { label: string; value?: string | number }) {
+function Field({
+  label,
+  value,
+  sourceBadge,
+}: {
+  label: string;
+  value?: string | number;
+  /** Short provenance label, e.g. RAG from indexed PDF */
+  sourceBadge?: string;
+}) {
   if (value === undefined || value === null || value === '') return null;
   return (
     <div className="flex justify-between items-start gap-4 px-5 py-3">
       <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm font-medium text-gray-900 text-right">{String(value)}</dd>
+      <dd className="text-sm font-medium text-gray-900 text-right">
+        <span>{String(value)}</span>
+        {sourceBadge ? (
+          <span
+            className="ml-2 inline-flex align-middle rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800"
+            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
+          >
+            {sourceBadge}
+          </span>
+        ) : null}
+      </dd>
     </div>
   );
 }
@@ -45,13 +64,15 @@ function ReviewField({
   label,
   value,
   highlighted,
+  sourceBadge,
 }: {
   label: string;
   value?: string | number;
   highlighted: boolean;
+  sourceBadge?: string;
 }) {
   if (!highlighted) {
-    return <Field label={label} value={value} />;
+    return <Field label={label} value={value} sourceBadge={sourceBadge} />;
   }
 
   if (value === undefined || value === null || value === '') return null;
@@ -59,7 +80,17 @@ function ReviewField({
   return (
     <div className="flex justify-between items-start gap-4 px-5 py-3 bg-yellow-50 border-l-4 border-yellow-300">
       <dt className="text-sm text-yellow-700 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm font-semibold text-yellow-900 text-right">{String(value)}</dd>
+      <dd className="text-sm font-semibold text-yellow-900 text-right">
+        <span>{String(value)}</span>
+        {sourceBadge ? (
+          <span
+            className="ml-2 inline-flex align-middle rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800"
+            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
+          >
+            {sourceBadge}
+          </span>
+        ) : null}
+      </dd>
     </div>
   );
 }
@@ -104,28 +135,6 @@ function renderKeyValueList(
       </dd>
     </div>
   );
-}
-
-function renderMaterialComposition(value: unknown) {
-  if (!Array.isArray(value)) return null;
-
-  const entries = value.flatMap((entry) => {
-    if (!entry || typeof entry !== 'object') return [];
-
-    const material = 'material' in entry && typeof entry.material === 'string'
-      ? entry.material
-      : undefined;
-    const percentage = 'percentage' in entry ? formatPercentage(entry.percentage) : undefined;
-
-    if (!material) return [];
-
-    return [{
-      title: material,
-      details: percentage,
-    }];
-  });
-
-  return renderKeyValueList('Materialzusammensetzung', entries);
 }
 
 function renderRecycledContent(value: unknown) {
@@ -474,6 +483,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const enrichmentReview = asRecord(raw.enrichmentReview);
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
+  const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 
@@ -578,6 +588,12 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
         </Section>
 
+        <TraceabilitySection
+          regulatoryExtraction={raw.regulatoryExtraction}
+          materialComposition={raw.materialComposition}
+          productDisplayName={displayProductName}
+        />
+
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="DPP-Kernfelder (ESPR)">
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
@@ -587,9 +603,9 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             label="GTIN"
             value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
             highlighted={enrichmentFields.includes('gtin')}
+            sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
           />
           {renderManufacturerDetails(raw.manufacturer)}
-          {renderMaterialComposition(raw.materialComposition)}
           {renderChemicalComposition(raw.chemicalComposition)}
           {renderRecycledContent(raw.recycledContent)}
           {renderCarbonFootprint(raw.carbonFootprint)}
@@ -608,8 +624,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             }
           />
         </Section>
-
-        <RegulatoryFlowSection regulatoryExtraction={raw.regulatoryExtraction} />
 
         <RagProvenanceSection ragEnrichment={raw.ragEnrichment} />
 

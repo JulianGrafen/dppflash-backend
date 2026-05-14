@@ -80,11 +80,20 @@ export function RagProvenanceSection({ ragEnrichment }: { readonly ragEnrichment
       <div className="px-5 py-4 space-y-3 text-sm border-b border-gray-50 bg-slate-50/40">
         <p className="text-gray-700">
           <span className="font-medium text-gray-900">Übernommene Felder:</span>{' '}
-          {applied.length > 0 ? applied.join(', ') : 'keine (oder Krypto-Prüfung verhinderte Merge)'}
+          {applied.length > 0
+            ? applied.join(', ')
+            : cryptoOk
+              ? 'keine (RAG lieferte nichts Übernehmbares, alle Werte null / bereits befüllt, oder keine passenden Chunks).'
+              : 'keine — alle vorgeschlagenen Werte scheiterten an der Krypto-/Formatprüfung (siehe unten).'}
         </p>
         {!cryptoOk && cryptoErrors.length > 0 ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <p className="font-semibold mb-1">Krypto-/Formatprüfung</p>
+            {applied.length > 0 ? (
+              <p className="mb-2 text-amber-950/90">
+                Hinweis: Felder, die die Prüfung bestanden haben, sind trotzdem ins Pass übernommen worden.
+              </p>
+            ) : null}
             <ul className="list-disc list-inside space-y-0.5">
               {cryptoErrors.map((e) => (
                 <li key={e}>{e}</li>

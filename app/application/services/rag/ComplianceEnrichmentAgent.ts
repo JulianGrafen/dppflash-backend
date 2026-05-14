@@ -28,7 +28,7 @@ Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
 
 Jeder der folgenden Feld-Keys (camelCase wie im Digital Product Passport) MUSS als Schlüssel unter "fields" vorkommen — verwende value null und requiresManualReview true, wenn im Kontext nichts Belastbares steht:
 ${JSON.stringify([...targetPassportFieldKeys])}
-
+${targetPassportFieldKeys[0] === 'gtin' ? '\nPriorität: Das erste Zielfeld ist "gtin" — wenn im Kontext eine gültige GTIN/EAN erkennbar ist, soll diese mit Chunk-Beleg ausgefüllt werden (keine Halluzination).\n' : ''}
 Hinweise:
 - Numerische Kennwerte (z. B. kWh, kg) als String im Feld "value", z. B. "4,2" oder "4.2".
 - "gtin" nur mit Ziffernfolge aus dem Kontext; sonst null.

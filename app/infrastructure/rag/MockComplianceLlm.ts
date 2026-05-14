@@ -67,29 +67,6 @@ export class MockComplianceLlm implements ComplianceLlmPort {
     const wantWaste = keys.some((k) => k === 'wasteCode' || k === 'ewcCode');
     const wantGtin = keys.some((k) => k === 'gtin' || k === 'ean');
 
-    if (wantWaste) {
-      for (const row of chunks) {
-        const text = typeof row.text === 'string' ? row.text : '';
-        const fn = row.metadata?.fileName;
-        const pn = row.metadata?.pageNumber;
-        if (!text || typeof fn !== 'string' || typeof pn !== 'number') {
-          continue;
-        }
-        const hit = findFirstEuropeanWasteCodeInText(text);
-        if (!hit) {
-          continue;
-        }
-        const audited = auditedFromChunk(hit.normalizedValue, fn, pn, hit.snippet);
-        if (keys.includes('wasteCode')) {
-          fields.wasteCode = audited;
-        }
-        if (keys.includes('ewcCode')) {
-          fields.ewcCode = audited;
-        }
-        break;
-      }
-    }
-
     if (wantGtin) {
       for (const row of chunks) {
         const text = typeof row.text === 'string' ? row.text : '';
@@ -111,6 +88,29 @@ export class MockComplianceLlm implements ComplianceLlmPort {
         if (fields.gtin) {
           break;
         }
+      }
+    }
+
+    if (wantWaste) {
+      for (const row of chunks) {
+        const text = typeof row.text === 'string' ? row.text : '';
+        const fn = row.metadata?.fileName;
+        const pn = row.metadata?.pageNumber;
+        if (!text || typeof fn !== 'string' || typeof pn !== 'number') {
+          continue;
+        }
+        const hit = findFirstEuropeanWasteCodeInText(text);
+        if (!hit) {
+          continue;
+        }
+        const audited = auditedFromChunk(hit.normalizedValue, fn, pn, hit.snippet);
+        if (keys.includes('wasteCode')) {
+          fields.wasteCode = audited;
+        }
+        if (keys.includes('ewcCode')) {
+          fields.ewcCode = audited;
+        }
+        break;
       }
     }
 

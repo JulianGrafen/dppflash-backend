@@ -46,6 +46,11 @@ export interface BaseDPP {
         readonly success: false;
         readonly message: string;
       };
+  /**
+   * Field keys last written by the indexed-document RAG merge (e.g. `gtin` from PDF chunks).
+   * UI provenance only; not part of ESPR interchange.
+   */
+  ragSuppliedFieldKeys?: readonly string[];
   [key: string]: any; // Dynamische Felder
 }
 

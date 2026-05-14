@@ -199,13 +199,15 @@ export async function POST(request: NextRequest) {
         sourceFileName: safeFileName,
       });
 
-      if (ragOutcome.enrichment.cryptoValidation.ok) {
-        Object.assign(productPassport, ragOutcome.passportPatch);
+      Object.assign(productPassport, ragOutcome.passportPatch);
+
+      if (ragOutcome.appliedKeys.length > 0) {
+        productPassport.ragSuppliedFieldKeys = [...ragOutcome.appliedKeys];
       }
 
       productPassport.ragEnrichment = {
         success: true,
-        appliedFieldKeys: ragOutcome.enrichment.cryptoValidation.ok ? [...ragOutcome.appliedKeys] : [],
+        appliedFieldKeys: [...ragOutcome.appliedKeys],
         auditTrail: ragOutcome.enrichment.auditTrail,
         rawModelJson: ragOutcome.enrichment.rawModelJson,
         cryptoValidation: ragOutcome.enrichment.cryptoValidation,

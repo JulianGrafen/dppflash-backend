@@ -125,6 +125,9 @@ export class DocumentIngestionService {
       this.dependencies.backgroundExtractionAgent
     ) {
       try {
+        console.log('=== EAGER INGESTION START ===');
+        console.log('1. Sende Dokument an LLM zur Voraus-Extraktion...');
+
         const fullText = layoutBlocks
           .map((b) => `--- Seite ${b.pageNumber} ---\n${b.text}`)
           .join('\n\n')
@@ -134,12 +137,25 @@ export class DocumentIngestionService {
           fileName: input.fileName,
           productNameHint: productNameForContext,
         });
+
+        console.log('2. LLM hat geantwortet! Extrahiertes JSON:', JSON.stringify(extracted, null, 2));
+
+        console.log('3. Speichere Deep-Merge in products.extracted_attributes...');
         // Persist: SELECT existing JSONB → deep-safe key merge → UPDATE (see ProductEntityService.mergeExtractedAttributes).
         await this.dependencies.productEntityService.mergeExtractedAttributes(productId, extracted);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+      } catch (error) {
+        console.error('!!! FATAL ERROR IN EAGER INGESTION !!!', error);
+        const msg = error instanceof Error ? error.message : String(error);
         console.warn('[DPP] background_extracted_attributes_failed', msg);
       }
+    } else {
+      console.log('[EAGER INGESTION] skipped (no productId, productEntityService, or backgroundExtractionAgent)', {
+        hasProductId: Boolean(productId),
+        hasProductEntityService: Boolean(this.dependencies.productEntityService),
+        hasBackgroundExtractionAgent: Boolean(this.dependencies.backgroundExtractionAgent),
+        tenantId: input.tenantId,
+        fileName: input.fileName,
+      });
     }
 
     return { chunkCount: records.length };

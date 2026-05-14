@@ -8,6 +8,7 @@ import type { DocumentPrimaryProductNameInferencerPort } from '@/app/application
 import type { EmbeddingPort } from '@/app/application/ports/rag/EmbeddingPort';
 import type { VectorChunkRecord, VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
 import { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
+import type { BackgroundExtractionAgent } from '@/app/application/services/rag/BackgroundExtractionAgent';
 
 export interface DocumentIngestionDependencies {
   readonly layoutParser: DocumentLayoutParserPort;
@@ -17,6 +18,8 @@ export interface DocumentIngestionDependencies {
   readonly productEntityService?: ProductEntityService | null;
   /** Optional LLM pass on document excerpt when `primaryProductNameHint` is absent. */
   readonly documentPrimaryProductNameInferencer?: DocumentPrimaryProductNameInferencerPort | null;
+  /** Eager ESPR-style extraction into `products.extracted_attributes` after chunking (requires `productEntityService`). */
+  readonly backgroundExtractionAgent?: BackgroundExtractionAgent | null;
 }
 
 export interface IngestPdfInput {
@@ -115,6 +118,28 @@ export class DocumentIngestionService {
     }));
 
     await this.dependencies.vectorStore.upsertChunks(records);
+
+    if (
+      productId &&
+      this.dependencies.productEntityService &&
+      this.dependencies.backgroundExtractionAgent
+    ) {
+      try {
+        const fullText = layoutBlocks
+          .map((b) => `--- Seite ${b.pageNumber} ---\n${b.text}`)
+          .join('\n\n')
+          .slice(0, 120_000);
+        const extracted = await this.dependencies.backgroundExtractionAgent.extractFromDocumentText({
+          documentText: fullText,
+          fileName: input.fileName,
+          productNameHint: productNameForContext,
+        });
+        await this.dependencies.productEntityService.mergeExtractedAttributes(productId, extracted);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[DPP] background_extracted_attributes_failed', msg);
+      }
+    }
 
     return { chunkCount: records.length };
   }

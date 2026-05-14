@@ -1,6 +1,6 @@
 /**
  * Zwei-Stufen-DPP+RAG (Upload-Pipeline):
- * Primärdaten aus PDF-Extraktion → Lückenanalyse → **Document-Level** Hybrid-Anker + Archiv-Volltext → sekundäres LLM → Merge.
+ * Primärdaten aus PDF-Extraktion → Lückenanalyse → **Eager** `products.extracted_attributes` (kein Gap-LLM) → Merge.
  *
  * @see ProductPassportRagEnrichmentService.enrichFromIndexedChunks
  * @see RagComplianceOrchestrator.runGapTargetedEnrichment

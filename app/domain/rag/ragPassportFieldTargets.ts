@@ -123,3 +123,17 @@ export function getRagTargetFieldKeysForProductType(
       return [...COMMON];
   }
 }
+
+/** Union all product-type keys for eager background extraction (single LLM pass per PDF). */
+export function getAllRagExtractionFieldKeys(): readonly string[] {
+  return [
+    ...new Set<string>([
+      ...COMMON,
+      ...BATTERY,
+      ...TEXTILE,
+      ...ELECTRONICS,
+      ...FURNITURE,
+      ...CHEMICAL,
+    ]),
+  ];
+}

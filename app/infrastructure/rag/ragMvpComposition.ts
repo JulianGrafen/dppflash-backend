@@ -1,6 +1,7 @@
 import type { DocumentLayoutParserPort } from '@/app/application/ports/rag/DocumentLayoutParserPort';
 import type { DocumentPrimaryProductNameInferencerPort } from '@/app/application/ports/rag/DocumentPrimaryProductNameInferencerPort';
 import type { VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
+import { BackgroundExtractionAgent } from '@/app/application/services/rag/BackgroundExtractionAgent';
 import { DocumentIngestionService } from '@/app/application/services/rag/DocumentIngestionService';
 import { HybridRetrievalService } from '@/app/application/services/rag/HybridRetrievalService';
 import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
@@ -70,6 +71,11 @@ export function createRagComplianceOrchestrator(
   const llm = options?.complianceLlm ?? createDefaultComplianceLlm();
 
   const productEntityService = options?.productEntityService ?? null;
+  const backgroundExtractionAgent =
+    productEntityService && llm.name !== 'MockComplianceLlm'
+      ? new BackgroundExtractionAgent(llm)
+      : null;
+
   const documentPrimaryProductNameInferencer =
     options?.documentPrimaryProductNameInferencer !== undefined
       ? options.documentPrimaryProductNameInferencer
@@ -83,6 +89,7 @@ export function createRagComplianceOrchestrator(
     vectorStore,
     productEntityService,
     documentPrimaryProductNameInferencer,
+    backgroundExtractionAgent,
   });
 
   const retrieval = new HybridRetrievalService({
@@ -92,5 +99,5 @@ export function createRagComplianceOrchestrator(
 
   const enrichment = new ComplianceEnrichmentAgent(llm);
 
-  return new RagComplianceOrchestrator(ingestion, retrieval, enrichment);
+  return new RagComplianceOrchestrator(ingestion, retrieval, enrichment, productEntityService);
 }

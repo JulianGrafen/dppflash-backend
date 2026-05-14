@@ -5,10 +5,11 @@ import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/Compli
 import type { IngestPdfInput } from '@/app/application/services/rag/DocumentIngestionService';
 import type { HybridRetrievalInput } from '@/app/application/services/rag/HybridRetrievalService';
 import type { ComplianceEnrichmentInput, ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
+import type { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
 import { safeParseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
 import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
+import { extractedAttributesToAuditTrailFields } from '@/app/domain/rag/extractedAttributesJson';
 import { computeRetrievalMatchConfidence } from '@/app/domain/rag/productBrainMatch';
-import type { RetrievedChunk } from '@/app/application/services/rag/HybridRetrievalService';
 
 export interface RagComplianceRunInput {
   readonly tenantId: string;
@@ -25,36 +26,17 @@ export interface RagComplianceRunInput {
   readonly productEntityId?: string;
 }
 
-/** Hybrid-Suche nur mit Produkt-Anker: so viele Treffer, um Archiv-Dateien zu erkennen. */
-const GAP_ANCHOR_PROBE_TOP_K = 15;
-/** Max. Chunks im LLM-Kontext (Token-Sicherheit) nach Document-Level-Fetch. */
-const GAP_DOCUMENT_CONTEXT_CHUNK_LIMIT = 30;
-/** Obergrenze Zeilen beim `listChunksByFileNames` (alle Seiten der erkannten Dateien). */
-const GAP_FULL_DOCUMENT_FETCH_MAX_ROWS = 10_000;
-
-/** Stufe 2–4: Document-Level Gap-RAG (Anker-Vektorprobe → volle Archiv-Texte → ein LLM-Lauf). */
+/** Eager Gap-Fill: Metadaten für Aufrufer / Logging (Live-Pfad nutzt `products.extracted_attributes`). */
 export interface RagGapTargetedRunInput {
   readonly tenantId: string;
   readonly productLabel: string;
-  /** Fallback-Metadaten / Logging, wenn `missingFields` leer. */
   readonly gapSearchQuery: string;
   readonly anchorProductName: string;
-  /** Fehlende Passport-Keys — ein LLM-Lauf extrahiert alle. */
   readonly missingFields: readonly string[];
-  /** Ungenutzt im Document-Level-Pfad; optional für künftige Erweiterungen. */
   readonly retrievalTopK?: number;
   readonly productMatchTerms?: readonly string[];
-  /**
-   * Primär-PDF (Metadaten): wird **nicht** an die Gap-Hybrid-Suche durchgereicht (kein same-File-Boost),
-   * bleibt aber für Match-Konfidenz nach Retrieval relevant.
-   */
   readonly sourceFileName?: string;
-  /**
-   * Pfad/Basename der **hochgeladenen** Primär-PDF (Doc A). Identifiziert dieselbe Datei wie
-   * `sourceFileName` für den Ausschluss — mindestens eines sollte im Upload-Flow gesetzt sein.
-   */
   readonly excludePrimaryBasename?: string;
-  /** Canonical `products.id` for entity-scoped retrieval (falls back to tenant-wide if empty). */
   readonly productEntityId?: string;
 }
 
@@ -64,13 +46,14 @@ export interface RagComplianceExtractionOutcome {
 }
 
 /**
- * Thin orchestrator wiring ingestion → retrieval → forensic LLM synthesis.
+ * Thin orchestrator: Ingestion → Retrieval → Forensic-LLM; Gap-Fill aus **eager** `products.extracted_attributes`.
  */
 export class RagComplianceOrchestrator {
   constructor(
     private readonly ingestion: DocumentIngestionService,
     private readonly retrieval: HybridRetrievalService,
     private readonly enrichment: ComplianceEnrichmentAgent,
+    private readonly productEntityService?: ProductEntityService | null,
   ) {}
 
   ingestPdf(input: IngestPdfInput): Promise<{ readonly chunkCount: number }> {
@@ -134,122 +117,59 @@ export class RagComplianceOrchestrator {
   }
 
   /**
-   * Document-Level Gap-RAG:
-   * 1) **Eine** Hybrid-Suche mit Query = allein `anchorProductName` (Top {@link GAP_ANCHOR_PROBE_TOP_K}),
-   *    Primär-PDF per Basename entfernen → eindeutige Archiv-`fileName`.
-   * 2) **Kein Vektor**: alle Chunks dieser Dateien für `tenantId` laden (`listChunksByFileNames`).
-   * 3) Kontext auf {@link GAP_DOCUMENT_CONTEXT_CHUNK_LIMIT} Chunks kappen → ein Gap-LLM-Lauf für alle `missingFields`.
-   *
-   * @returns `null` wenn keine Archiv-Dokumente erkannt oder keine Chunks geladen werden.
+   * Lückenfüllung aus `products.extracted_attributes` (tenant + normalisierter Produkt-Anker).
+   * Kein Live-LLM — Werte stammen aus {@link BackgroundExtractionAgent} beim PDF-Ingest.
    */
   async runGapTargetedEnrichment(input: RagGapTargetedRunInput): Promise<RagComplianceExtractionOutcome | null> {
     const anchor = input.anchorProductName.trim();
     const missingFields = input.missingFields;
 
-    if (!anchor) {
+    if (!anchor || missingFields.length === 0 || !this.productEntityService) {
       return null;
     }
 
-    const primaryUploadPath =
-      (input.excludePrimaryBasename?.trim() || input.sourceFileName?.trim()) ?? '';
-
-    const retrievalProductEntityId = primaryUploadPath ? undefined : input.productEntityId;
-
-    const probeHits = await this.retrieval.retrieveTopChunks({
-      tenantId: input.tenantId,
-      query: anchor,
-      topK: GAP_ANCHOR_PROBE_TOP_K,
-      productMatchTerms: undefined,
-      sourceFileName: undefined,
-      productEntityId: retrievalProductEntityId,
-    });
-
-    let probe = [...probeHits];
-    if (primaryUploadPath) {
-      const ex = basename(primaryUploadPath).toLowerCase();
-      probe = probe.filter((c) => basename(c.fileName).toLowerCase() !== ex);
-    }
-
-    const uniqueArchiveFiles = [...new Set(probe.map((c) => c.fileName))];
-
-    if (uniqueArchiveFiles.length === 0) {
-      console.log('=== RAG DEBUG AUDIT (document-level gap) ===');
-      console.log('1. Anker-Suche:', anchor, '| Probe-Treffer:', probeHits.length, '| Archiv-Dateien: 0');
-      console.log('==================================================');
-      return null;
-    }
-
-    let documentChunks = await this.retrieval.listChunksByFileNames({
-      tenantId: input.tenantId,
-      fileNames: uniqueArchiveFiles,
-      maxRows: GAP_FULL_DOCUMENT_FETCH_MAX_ROWS,
-    });
-
-    if (documentChunks.length === 0) {
-      const byFile = new Map<string, RetrievedChunk[]>();
-      for (const c of probe) {
-        const list = byFile.get(c.fileName) ?? [];
-        list.push(c);
-        byFile.set(c.fileName, list);
-      }
-      documentChunks = [...byFile.values()].flat().sort((a, b) => {
-        const fn = a.fileName.localeCompare(b.fileName);
-        if (fn !== 0) {
-          return fn;
-        }
-        return a.pageNumber - b.pageNumber || a.id.localeCompare(b.id);
-      });
-    }
-
-    const chunks = documentChunks.slice(0, GAP_DOCUMENT_CONTEXT_CHUNK_LIMIT);
-
-    const gapSearchQueryForAgent =
-      missingFields.length > 0
-        ? `Produkt: ${anchor} | Archivdokumente: ${uniqueArchiveFiles.join(', ')} | Lückenfelder: ${missingFields.join(', ')}`
-        : input.gapSearchQuery;
-
-    const retrievalMatchConfidence = computeRetrievalMatchConfidence(
-      chunks,
-      input.productMatchTerms ?? [],
-      input.sourceFileName,
-    );
-
-    console.log('=== RAG DEBUG AUDIT (document-level gap) ===');
-    console.log(
-      '1. Anker-Suche:',
+    const stored = await this.productEntityService.fetchExtractedAttributesByNormalizedAnchor(
+      input.tenantId,
       anchor,
-      '| Probe-Treffer:',
-      probeHits.length,
-      '| Archiv-Dateien:',
-      `${uniqueArchiveFiles.length}: ${uniqueArchiveFiles.join(', ')}`,
     );
-    console.log(
-      '2. Document-fetch Chunks:',
-      documentChunks.length,
-      '| ans LLM (cap):',
-      chunks.length,
-    );
-    if (chunks.length > 0) {
-      const t = chunks[0]!.text;
-      console.log('3. Erster Kontext-Snippet:', t.substring(0, Math.min(200, t.length)));
-    }
-    console.log('==================================================');
 
-    if (chunks.length === 0) {
+    if (!stored || Object.keys(stored).length === 0) {
+      console.info('[RAG] eager_gap_skip', {
+        reason: 'no_extracted_attributes',
+        tenantId: input.tenantId,
+        anchorPreview: anchor.slice(0, 80),
+      });
       return null;
     }
 
-    console.log('[Orchestrator] Starte LLM-Agent für Extraktion (Document-Level)…');
-    const agentResult = await this.enrichment.gapTargetedExtraction({
-      tenantId: input.tenantId,
-      productLabel: input.productLabel,
-      gapSearchQuery: gapSearchQueryForAgent,
-      anchorProductName: input.anchorProductName,
-      missingFields: input.missingFields,
-      chunks,
-    });
-    console.log('[Orchestrator] LLM-Agent hat geantwortet:', agentResult);
+    const { fields } = extractedAttributesToAuditTrailFields(stored, missingFields);
+    if (Object.keys(fields).length === 0) {
+      console.info('[RAG] eager_gap_skip', {
+        reason: 'no_matching_missing_fields',
+        tenantId: input.tenantId,
+        missingFields,
+      });
+      return null;
+    }
 
-    return { enrichment: agentResult, retrievalMatchConfidence };
+    const trail = safeParseAuditTrail({ fields });
+    if (!trail.success) {
+      console.warn('[RAG] eager_gap_audit_parse_failed', trail.error.message);
+      return null;
+    }
+
+    const confidences = Object.values(trail.data.fields ?? {}).map((v) => v.confidence);
+    const retrievalMatchConfidence = confidences.length > 0 ? Math.max(...confidences) : 0;
+
+    const enrichment: ComplianceEnrichmentResult = {
+      auditTrail: trail.data,
+      rawModelJson: JSON.stringify({
+        source: 'products.extracted_attributes',
+        appliedKeys: Object.keys(fields),
+      }),
+      cryptoValidation: validateAuditTrailCryptographically(trail.data),
+    };
+
+    return { enrichment, retrievalMatchConfidence };
   }
 }

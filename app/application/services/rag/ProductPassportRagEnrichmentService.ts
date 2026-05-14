@@ -36,9 +36,8 @@ function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
  *
  * 1. Primary data = passport from PDF extraction (Doc A).
  * 2. Gap analysis vs RAG target keys; anchor = `productName` (abort secondary if missing).
- * 3. **Document-Level RAG**: einmal Hybrid-Suche mit Produkt-Anker → alle Chunks der erkannten **Archiv-PDFs**
- *    (keine Primär-Upload-Datei) per Tabellenabfrage → Gap-LLM.
- * 4. Secondary LLM (gap-targeted system prompt) → merge into empty passport fields only.
+ * 3. **Eager Gap-Fill**: `products.extracted_attributes` (tenant + normalisierter Produkt-Anker) — kein Live-LLM.
+ * 4. Merge nur in leere Passport-Felder (Audit-Trail inkl. `contextSnippet` / `sourcePdf` aus dem Ingest).
  */
 export class ProductPassportRagEnrichmentService {
   async enrichFromIndexedChunks(
@@ -113,7 +112,7 @@ export class ProductPassportRagEnrichmentService {
     let enrichment: ComplianceEnrichmentResult;
     let retrievalMatchConfidence: number;
     if (gapOutcome === null) {
-      console.warn('[DPP] rag_gap_targeted_no_chunks; LLM übersprungen (Retrieval leer)');
+      console.warn('[DPP] rag_gap_eager_miss; kein Treffer in products.extracted_attributes (oder Service fehlt)');
       enrichment = emptyEnrichmentOutcome();
       retrievalMatchConfidence = 0;
     } else {

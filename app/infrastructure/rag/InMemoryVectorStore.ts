@@ -5,6 +5,7 @@ import type {
   VectorStorePort,
   RagChunkListOptions,
   RagChunkListResult,
+  DeleteAllRagChunksFilters,
 } from '@/app/application/ports/rag/VectorStorePort';
 import { rankChunksHybrid } from '@/app/domain/rag/hybridRankChunks';
 import { vectorChunkToPreview } from '@/app/infrastructure/rag/ragChunkPreviewUtils';
@@ -21,6 +22,23 @@ export class InMemoryVectorStore implements VectorStorePort {
     for (const chunk of chunks) {
       this.store.set(chunk.id, chunk);
     }
+  }
+
+  async deleteAllChunks(filters?: DeleteAllRagChunksFilters): Promise<{ readonly deletedCount: number }> {
+    const tenantId = filters?.tenantId;
+    if (tenantId === undefined || tenantId === '') {
+      const deletedCount = this.store.size;
+      this.store.clear();
+      return { deletedCount };
+    }
+    let deletedCount = 0;
+    for (const [id, chunk] of this.store) {
+      if (chunk.tenantId === tenantId) {
+        this.store.delete(id);
+        deletedCount += 1;
+      }
+    }
+    return { deletedCount };
   }
 
   async getStatsForTenant(tenantId: string): Promise<{
@@ -67,7 +85,14 @@ export class InMemoryVectorStore implements VectorStorePort {
     limit: number,
     options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]> {
-    const candidates = [...this.store.values()].filter((c) => c.tenantId === tenantId);
+    let candidates = [...this.store.values()].filter((c) => c.tenantId === tenantId);
+    const pe = options?.productEntityId?.trim();
+    if (pe) {
+      const scoped = candidates.filter((c) => c.productId === pe);
+      if (scoped.length > 0) {
+        candidates = scoped;
+      }
+    }
     return rankChunksHybrid(candidates, query, queryEmbedding, limit, options);
   }
 }

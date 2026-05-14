@@ -1,9 +1,14 @@
 import type { ComplianceLlmPort } from '@/app/application/ports/rag/ComplianceLlmPort';
 import type { RetrievedChunk } from '@/app/application/services/rag/HybridRetrievalService';
+import {
+  GAP_TARGETED_CONTEXT_MARKER,
+  buildGapLlmResponseSchema,
+  type GapLlmFieldRow,
+} from '@/app/domain/rag/gapTargetedExtractionSchema';
 import { safeParseAuditTrail, type AuditTrail, type AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
 
-const FORENSIC_CORE = `Du bist ein forensischer Daten-Auditor. Beantworte die Frage AUSSCHLIESSLICH basierend auf dem bereitgestellten Kontext (Chunks). Wenn die Antwort nicht im Kontext steht, gib null zurück. Erfinde niemals Daten. Zitiere für jeden Wert exakt den 'contextSnippet', die 'pageNumber' und den 'fileName' aus den Metadaten des Chunks.
+const FORENSIC_CORE = `Du bist ein forensischer Daten-Auditor. Beantworte die Frage AUSSCHLIESSLICH basierend auf dem bereitgestellten Kontext (Chunks). Wenn die Antwort nicht im Kontext steht, gib null zurück. Erfinde niemals Daten. Zitiere für jeden Wert exakt den 'contextSnippet', die 'pageNumber' und den 'fileName' aus den Metadaten der Chunks.
 
 Die Chunks können aus mehreren PDF-Dateien desselben Mandanten stammen — ein Beleg aus einer zweiten Datei ist gültig, wenn der Textbeleg dort eindeutig steht.
 
@@ -62,37 +67,34 @@ Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
 Felder weglassen, wenn es keine belastbare Information gibt (nicht raten).`;
 }
 
-function buildGapTargetedSystemPrompt(
-  missingFieldKeys: readonly string[],
+const GAP_LLM_TOP_CHUNKS = 5;
+
+function buildGapTargetedComplianceAuditorSystemPrompt(
   anchorProductName: string,
+  missingFieldKeys: readonly string[],
 ): string {
+  const keysList = missingFieldKeys.join(', ');
   const keysJson = JSON.stringify([...missingFieldKeys]);
-  return `${FORENSIC_CORE}
+  return `Du bist ein Compliance-Auditor. Finde für das Produkt "${anchorProductName}" AUSSCHLIESSLICH die fehlenden Felder: ${keysList}. Nutze NUR das folgende Wissen aus der Datenbank (der Textblock unter "### KONTEXT_AUS_DATENBANK"). Wenn etwas nicht im Text steht, setze "value" auf null. Zitiere für jeden Wert den Dateinamen in "sourcePdf" (wie in der Quelle genannt) und einen kurzen wörtlichen "contextSnippet" aus dem Text.
 
-Antworte ausschließlich mit einem JSON-Objekt in dieser Form:
-{
-  "fields": {
-    "<feldKey>": {
-      "value": "string oder null",
-      "confidence": number zwischen 0 und 1,
-      "source": { "fileName": "string", "pageNumber": number, "contextSnippet": "string (verbatim aus Chunk-Text)" },
-      "requiresManualReview": boolean
-    }
-  }
-}
-
-Du bist ein Daten-Auditor. Das Produkt heißt "${anchorProductName}" (Anker aus der Primärextraktion).
-Finde NUR die folgenden noch fehlenden Felder (camelCase wie im Digital Product Passport): ${keysJson}
-Nutze AUSSCHLIESSLICH den bereitgestellten Text-Kontext aus den Chunks. Gib zu jedem gefundenen Wert die Quell-Datei (fileName) und einen wörtlichen Beleg (contextSnippet) an.
-Wenn ein Feld nicht belastbar belegbar ist, setze value auf null und requiresManualReview auf true.
-
-Jeder der folgenden Feld-Keys MUSS als Schlüssel unter "fields" vorkommen:
-${keysJson}
+Ausgabe: genau EIN JSON-Objekt (ohne Markdown). Top-Level-Keys sind exakt diese camelCase-Feldnamen: ${keysJson}
+Jeder Eintrag MUSS dieses Objekt sein:
+{ "value": string | null, "sourcePdf": string, "contextSnippet": string }
+- Bei fehlendem Beleg: value=null, sourcePdf und contextSnippet leere Strings "" oder kurz "—".
+- Keine zusätzlichen Top-Level-Keys. Numerische Kennwerte als String in "value".
 
 Hinweise:
-- Numerische Kennwerte (z. B. kWh, kg) als String im Feld "value", z. B. "4,2" oder "4.2".
-- "gtin" nur mit Ziffernfolge aus dem Kontext; sonst null.
-- "ewcCode" und "wasteCode" (gleiche Bedeutung: EWC/EAK) nur wenn ein plausibler Abfallschlüssel im Kontext steht; sonst null.`;
+- "gtin": nur Ziffernfolge aus dem Kontext; sonst null.
+- "ewcCode" / "wasteCode": nur bei plausibler EWC/EAK-Angabe im Text; sonst null.`;
+}
+
+function formatTopChunksForGapKnowledgeContext(chunks: readonly RetrievedChunk[]): string {
+  return chunks
+    .map(
+      (c) =>
+        `--- Quelle: ${c.fileName} (Seite ${c.pageNumber}) ---\n${c.text}`,
+    )
+    .join('\n\n');
 }
 
 export interface ComplianceEnrichmentInput {
@@ -119,27 +121,41 @@ export class ComplianceEnrichmentAgent {
   constructor(private readonly llm: ComplianceLlmPort) {}
 
   async synthesize(input: ComplianceEnrichmentInput): Promise<ComplianceEnrichmentResult> {
-    const systemPrompt =
-      input.gapTargetedExtraction && input.gapTargetedExtraction.missingFieldKeys.length > 0
-        ? buildGapTargetedSystemPrompt(
-            input.gapTargetedExtraction.missingFieldKeys,
-            input.gapTargetedExtraction.anchorProductName,
-          )
-        : buildSystemPrompt(input.targetPassportFieldKeys);
-    const userPrompt = this.buildUserPrompt(input);
-    const rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
-    const parsed = JSON.parse(rawModelJson) as unknown;
-    const trail = safeParseAuditTrail(parsed);
+    if (input.gapTargetedExtraction && input.gapTargetedExtraction.missingFieldKeys.length > 0) {
+      return this.gapTargetedExtraction(input);
+    }
 
+    const systemPrompt = buildSystemPrompt(input.targetPassportFieldKeys);
+    const userPrompt = this.buildUserPrompt(input);
+
+    let rawModelJson: string;
+    try {
+      rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
+    } catch (error) {
+      console.error('[RAG LLM ERROR]', error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult('{}');
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawModelJson) as unknown;
+    } catch (error) {
+      console.error('[RAG LLM ERROR]', error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    const trail = safeParseAuditTrail(parsed);
     if (!trail.success) {
-      throw new Error(`Audit trail schema validation failed: ${trail.error.message}`);
+      console.error('[RAG LLM ERROR]', trail.error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
     }
 
     const cryptoValidation = validateAuditTrailCryptographically(trail.data);
     const provenanceErrors = ComplianceEnrichmentAgent.validateProvenance(trail.data, input.chunks);
 
     if (provenanceErrors.length > 0) {
-      throw new Error(`Provenance validation failed: ${provenanceErrors.join(' ')}`);
+      console.error('[RAG LLM ERROR]', provenanceErrors.join(' '));
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
     }
 
     return {
@@ -147,6 +163,179 @@ export class ComplianceEnrichmentAgent {
       rawModelJson,
       cryptoValidation,
     };
+  }
+
+  /**
+   * Stufe 4: sekundäre Extraktion (`gapTargetedExtraction`) — nur Top-5-Chunks, strikter Auditor-Prompt,
+   * Zod-Validierung, try/catch inkl. `console.error('[RAG LLM ERROR]', …)` bei jedem Abbruch.
+   */
+  private async gapTargetedExtraction(input: ComplianceEnrichmentInput): Promise<ComplianceEnrichmentResult> {
+    const gap = input.gapTargetedExtraction!;
+    const missingKeys = [...gap.missingFieldKeys];
+    const topChunks = input.chunks.slice(0, GAP_LLM_TOP_CHUNKS);
+
+    const systemPrompt = buildGapTargetedComplianceAuditorSystemPrompt(
+      gap.anchorProductName,
+      missingKeys,
+    );
+    const userPrompt = ComplianceEnrichmentAgent.buildGapTargetedUserPrompt(input, topChunks);
+
+    let rawModelJson = '{}';
+
+    try {
+      rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
+    } catch (error) {
+      console.error('[RAG LLM ERROR]', error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(rawModelJson) as unknown;
+    } catch (error) {
+      console.error('[RAG LLM ERROR]', error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    const rawObj =
+      typeof parsedJson === 'object' && parsedJson !== null
+        ? (parsedJson as Record<string, unknown>)
+        : {};
+
+    const filled: Record<string, unknown> = {};
+    for (const k of missingKeys) {
+      filled[k] = rawObj[k] ?? { value: null, sourcePdf: '', contextSnippet: '' };
+    }
+
+    const schema = buildGapLlmResponseSchema(missingKeys);
+    const zodParsed = schema.safeParse(filled);
+    if (!zodParsed.success) {
+      console.error('[RAG LLM ERROR]', zodParsed.error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    const fieldsRecord = ComplianceEnrichmentAgent.mapGapLlmRowsToAuditedFields(
+      zodParsed.data as Record<string, GapLlmFieldRow>,
+      topChunks,
+      missingKeys,
+    );
+
+    const trail = safeParseAuditTrail({ fields: fieldsRecord });
+    if (!trail.success) {
+      console.error('[RAG LLM ERROR]', trail.error);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    const cryptoValidation = validateAuditTrailCryptographically(trail.data);
+    const provenanceErrors = ComplianceEnrichmentAgent.validateProvenance(trail.data, topChunks);
+
+    if (provenanceErrors.length > 0) {
+      console.error('[RAG LLM ERROR]', provenanceErrors.join(' '));
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+    }
+
+    return {
+      auditTrail: trail.data,
+      rawModelJson,
+      cryptoValidation,
+    };
+  }
+
+  private static emptyGapEnrichmentResult(rawModelJson: string): ComplianceEnrichmentResult {
+    const emptyTrail = safeParseAuditTrail({ fields: {} });
+    if (!emptyTrail.success) {
+      throw new Error(emptyTrail.error.message);
+    }
+    const data = emptyTrail.data;
+    return {
+      auditTrail: data,
+      rawModelJson,
+      cryptoValidation: validateAuditTrailCryptographically(data),
+    };
+  }
+
+  private static buildGapTargetedUserPrompt(
+    input: ComplianceEnrichmentInput,
+    topChunks: readonly RetrievedChunk[],
+  ): string {
+    const gap = input.gapTargetedExtraction!;
+    const lines = [
+      `tenantId: ${input.tenantId}`,
+      `productLabel: ${input.productLabel}`,
+      `query: ${input.query}`,
+      `gapTargetedExtraction.anchorProductName: ${gap.anchorProductName}`,
+      `gapTargetedExtraction.missingFieldKeys: ${gap.missingFieldKeys.join(', ')}`,
+    ];
+
+    const contextBody = formatTopChunksForGapKnowledgeContext(topChunks);
+    return `${lines.join('\n')}${GAP_TARGETED_CONTEXT_MARKER}${contextBody}`;
+  }
+
+  private static mapGapLlmRowsToAuditedFields(
+    data: Record<string, GapLlmFieldRow>,
+    topChunks: readonly RetrievedChunk[],
+    missingKeys: readonly string[],
+  ): Record<string, AuditedValue> {
+    const out: Record<string, AuditedValue> = {};
+    for (const key of missingKeys) {
+      const row = data[key];
+      if (!row) {
+        continue;
+      }
+      const normalizedValue = row.value;
+      const chunk = ComplianceEnrichmentAgent.findChunkForGapCitation(
+        topChunks,
+        row.sourcePdf,
+        row.contextSnippet,
+      );
+      const snippetTrim = row.contextSnippet.trim();
+      const snippetOk =
+        normalizedValue === null
+          ? true
+          : Boolean(chunk && ComplianceEnrichmentAgent.chunkContainsSnippet(chunk.text, row.contextSnippet));
+
+      const fileName =
+        chunk?.fileName ??
+        (row.sourcePdf.trim().length > 0 ? row.sourcePdf.trim() : topChunks[0]?.fileName) ??
+        'unknown';
+      const pageNumber = chunk?.pageNumber ?? topChunks[0]?.pageNumber ?? 1;
+
+      out[key] = {
+        value: normalizedValue,
+        confidence: normalizedValue === null ? 0 : snippetOk ? 0.88 : 0.35,
+        source: {
+          fileName,
+          pageNumber,
+          contextSnippet: snippetTrim.length > 0 ? snippetTrim : '(kein Beleg)',
+        },
+        requiresManualReview:
+          normalizedValue !== null && (!snippetOk || !row.sourcePdf.trim() || snippetTrim.length < 2),
+      };
+    }
+    return out;
+  }
+
+  private static findChunkForGapCitation(
+    chunks: readonly RetrievedChunk[],
+    sourcePdf: string,
+    contextSnippet: string,
+  ): RetrievedChunk | undefined {
+    const base = ComplianceEnrichmentAgent.fileBaseName(sourcePdf.trim());
+    const byName = chunks.filter(
+      (c) =>
+        (base.length > 0 && ComplianceEnrichmentAgent.fileBaseName(c.fileName) === base) ||
+        c.fileName === sourcePdf.trim() ||
+        (sourcePdf.trim().length > 0 && c.fileName.endsWith(sourcePdf.trim())),
+    );
+    const pool = byName.length > 0 ? byName : [...chunks];
+    const bySnippet = pool.find((c) => ComplianceEnrichmentAgent.chunkContainsSnippet(c.text, contextSnippet));
+    if (bySnippet) {
+      return bySnippet;
+    }
+    if (base.length > 0) {
+      return pool.find((c) => ComplianceEnrichmentAgent.fileBaseName(c.fileName) === base);
+    }
+    return pool[0];
   }
 
   private static validateProvenance(trail: AuditTrail, chunks: readonly RetrievedChunk[]): string[] {
@@ -199,7 +388,7 @@ export class ComplianceEnrichmentAgent {
     value: AuditedValue | undefined,
     chunks: readonly RetrievedChunk[],
   ): string[] {
-    if (!value) {
+    if (!value || value.value === null) {
       return [];
     }
 
@@ -249,13 +438,6 @@ export class ComplianceEnrichmentAgent {
 
     if (input.targetPassportFieldKeys?.length) {
       lines.push(`targetPassportFieldKeys: ${input.targetPassportFieldKeys.join(', ')}`);
-    }
-
-    if (input.gapTargetedExtraction) {
-      lines.push(
-        `gapTargetedExtraction.anchorProductName: ${input.gapTargetedExtraction.anchorProductName}`,
-        `gapTargetedExtraction.missingFieldKeys: ${input.gapTargetedExtraction.missingFieldKeys.join(', ')}`,
-      );
     }
 
     lines.push('', 'chunks:', JSON.stringify(chunkPayload, null, 2));

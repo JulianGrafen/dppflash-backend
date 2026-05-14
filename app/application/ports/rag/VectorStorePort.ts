@@ -1,6 +1,8 @@
 export interface VectorChunkRecord {
   readonly id: string;
   readonly tenantId: string;
+  /** Canonical product entity (`products.id`) when using entity-centric RAG. */
+  readonly productId?: string | null;
   readonly fileName: string;
   readonly pageNumber: number;
   readonly text: string;
@@ -12,6 +14,7 @@ export interface VectorChunkRecord {
 export interface HybridSearchHit {
   readonly id: string;
   readonly tenantId: string;
+  readonly productId?: string | null;
   readonly fileName: string;
   readonly pageNumber: number;
   readonly text: string;
@@ -47,12 +50,27 @@ export interface RagChunkListResult {
 export interface HybridSearchOptions {
   readonly productMatchTerms?: readonly string[];
   readonly sourceFileName?: string;
+  /** When set, Supabase store prefers chunks for this `products.id`; falls back to tenant-wide. */
+  readonly productEntityId?: string | null;
+}
+
+export interface DeleteAllRagChunksFilters {
+  /**
+   * Nur Chunks dieses Mandanten entfernen.
+   * Fehlt die Angabe, wird der **gesamte** RAG-Index geleert (alle Mandanten).
+   */
+  readonly tenantId?: string;
 }
 
 export interface VectorStorePort {
   readonly name: string;
 
   upsertChunks(chunks: readonly VectorChunkRecord[]): Promise<void>;
+
+  /**
+   * Entfernt indexierte Chunks aus dem Vektor-/Hybrid-Store (Supabase `rag_chunks` oder In-Memory).
+   */
+  deleteAllChunks(filters?: DeleteAllRagChunksFilters): Promise<{ readonly deletedCount: number }>;
 
   /**
    * Returns ranked chunks for a tenant. Implementations may ignore vector/keyword split

@@ -121,6 +121,7 @@ export function rankChunksHybrid(
       return {
         id: c.id,
         tenantId: c.tenantId,
+        productId: c.productId ?? null,
         fileName: c.fileName,
         pageNumber: c.pageNumber,
         text: c.text,

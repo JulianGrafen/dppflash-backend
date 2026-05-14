@@ -1,5 +1,11 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
-import type { VectorStorePort, RagChunkListOptions, RagChunkListResult } from '@/app/application/ports/rag/VectorStorePort';
+import { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
+import type {
+  VectorStorePort,
+  RagChunkListOptions,
+  RagChunkListResult,
+  DeleteAllRagChunksFilters,
+} from '@/app/application/ports/rag/VectorStorePort';
 import { supabase } from '@/app/lib/supabase';
 import { createRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragMvpComposition';
 import { InMemoryVectorStore } from '@/app/infrastructure/rag/InMemoryVectorStore';
@@ -16,6 +22,7 @@ type RagVectorStore = VectorStorePort & {
 type RagGlobal = typeof globalThis & {
   __dppfRagOrchestrator?: RagComplianceOrchestrator;
   __dppfRagVectorStore?: RagVectorStore;
+  __dppfProductEntityService?: ProductEntityService | null;
 };
 
 function globalRag(): RagGlobal {
@@ -29,6 +36,11 @@ function createRagVectorStore(): RagVectorStore {
   return new InMemoryVectorStore();
 }
 
+export function getProductEntityService(): ProductEntityService | null {
+  getRagComplianceOrchestrator();
+  return globalRag().__dppfProductEntityService ?? null;
+}
+
 /**
  * One shared RAG stack per Node process. Uses **Supabase** (`rag_chunks`) when
  * `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set; otherwise in-memory.
@@ -38,9 +50,12 @@ export function getRagComplianceOrchestrator(): RagComplianceOrchestrator {
   if (!g.__dppfRagOrchestrator) {
     const vectorStore = createRagVectorStore();
     g.__dppfRagVectorStore = vectorStore;
+    const productEntityService = supabase ? new ProductEntityService(supabase) : null;
+    g.__dppfProductEntityService = productEntityService;
     g.__dppfRagOrchestrator = createRagComplianceOrchestrator({
       vectorStore,
       layoutParser: new LocalPdfLayoutParser(),
+      productEntityService,
     });
   }
   return g.__dppfRagOrchestrator;
@@ -68,4 +83,19 @@ export async function listRagIndexChunksForTenant(
     return { chunks: [], total: 0 };
   }
   return store.listChunksForTenant(tenantId, options);
+}
+
+/**
+ * Entfernt alle RAG-Index-Chunks (Embeddings/Tokens im Store).
+ * Ohne `tenantId`: **gesamter** Index; mit `tenantId`: nur dieser Mandant.
+ */
+export async function deleteAllRagChunks(
+  filters?: DeleteAllRagChunksFilters,
+): Promise<{ readonly deletedCount: number }> {
+  getRagComplianceOrchestrator();
+  const store = globalRag().__dppfRagVectorStore;
+  if (!store) {
+    return { deletedCount: 0 };
+  }
+  return store.deleteAllChunks(filters);
 }

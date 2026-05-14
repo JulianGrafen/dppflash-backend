@@ -1,9 +1,5 @@
 import type { EmbeddingPort } from '@/app/application/ports/rag/EmbeddingPort';
-import type {
-  HybridSearchHit,
-  HybridSearchOptions,
-  VectorStorePort,
-} from '@/app/application/ports/rag/VectorStorePort';
+import type { HybridSearchHit, VectorStorePort } from '@/app/application/ports/rag/VectorStorePort';
 
 export interface HybridRetrievalDependencies {
   readonly embedder: EmbeddingPort;
@@ -16,6 +12,8 @@ export interface HybridRetrievalInput {
   readonly topK?: number;
   readonly productMatchTerms?: readonly string[];
   readonly sourceFileName?: string;
+  /** Prefer chunks linked to this `products.id` (entity-centric RAG). */
+  readonly productEntityId?: string;
 }
 
 export type RetrievedChunk = HybridSearchHit;
@@ -30,11 +28,12 @@ export class HybridRetrievalService {
     const topK = input.topK ?? 5;
     const [queryVector] = await this.dependencies.embedder.embed([input.query]);
 
-    const searchOptions: HybridSearchOptions | undefined =
-      (input.productMatchTerms?.length ?? 0) > 0 || input.sourceFileName
+    const searchOptions =
+      (input.productMatchTerms?.length ?? 0) > 0 || input.sourceFileName || input.productEntityId?.trim()
         ? {
             productMatchTerms: input.productMatchTerms,
             sourceFileName: input.sourceFileName,
+            productEntityId: input.productEntityId,
           }
         : undefined;
 

@@ -15,3 +15,4 @@ export {
   RAG_GAP_SEMANTIC_FIELD_MAP,
   resolvePrimaryProductNameAnchor,
 } from '@/app/domain/rag/dppRagGapAnalysis';
+export { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';

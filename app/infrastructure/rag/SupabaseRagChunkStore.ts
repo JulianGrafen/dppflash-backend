@@ -6,6 +6,7 @@ import type {
   VectorStorePort,
   RagChunkListOptions,
   RagChunkListResult,
+  DeleteAllRagChunksFilters,
 } from '@/app/application/ports/rag/VectorStorePort';
 import { rankChunksHybrid } from '@/app/domain/rag/hybridRankChunks';
 import { vectorChunkToPreview } from '@/app/infrastructure/rag/ragChunkPreviewUtils';
@@ -17,6 +18,7 @@ const UPSERT_BATCH = 150;
 type RagChunkRow = {
   readonly id: string;
   readonly tenant_id: string;
+  readonly product_id?: string | null;
   readonly file_name: string;
   readonly page_number: number;
   readonly chunk_text: string;
@@ -48,6 +50,7 @@ function toVectorChunkRecord(row: RagChunkRow): VectorChunkRecord {
   return {
     id: row.id,
     tenantId: row.tenant_id,
+    productId: row.product_id ?? null,
     fileName: row.file_name,
     pageNumber: row.page_number,
     text: row.chunk_text,
@@ -70,6 +73,35 @@ export class SupabaseRagChunkStore implements VectorStorePort {
 
   constructor(private readonly client: SupabaseClient) {}
 
+  async deleteAllChunks(filters?: DeleteAllRagChunksFilters): Promise<{ readonly deletedCount: number }> {
+    const tenantId = filters?.tenantId?.trim();
+    let total = 0;
+    const batch = 5000;
+
+    for (;;) {
+      let q = this.client.from('rag_chunks').delete().select('id').limit(batch);
+      if (tenantId) {
+        q = q.eq('tenant_id', tenantId);
+      } else {
+        q = q.neq('id', '');
+      }
+
+      const { data, error } = await q;
+
+      if (error) {
+        throw new Error(`rag_chunks delete: ${error.message}`);
+      }
+
+      const n = data?.length ?? 0;
+      total += n;
+      if (n === 0) {
+        break;
+      }
+    }
+
+    return { deletedCount: total };
+  }
+
   async upsertChunks(chunks: readonly VectorChunkRecord[]): Promise<void> {
     if (chunks.length === 0) {
       return;
@@ -83,6 +115,7 @@ export class SupabaseRagChunkStore implements VectorStorePort {
       return {
         id: c.id,
         tenant_id: c.tenantId,
+        product_id: c.productId ?? null,
         file_name: c.fileName,
         page_number: c.pageNumber,
         chunk_text: c.text,
@@ -191,17 +224,33 @@ export class SupabaseRagChunkStore implements VectorStorePort {
     limit: number,
     options?: HybridSearchOptions,
   ): Promise<readonly HybridSearchHit[]> {
-    const { data, error } = await this.client
-      .from('rag_chunks')
-      .select('id, tenant_id, file_name, page_number, chunk_text, tokens, embedding')
-      .eq('tenant_id', tenantId)
-      .limit(FETCH_CAP);
+    const productEntityId = options?.productEntityId?.trim();
+    const selectCols =
+      'id, tenant_id, product_id, file_name, page_number, chunk_text, tokens, embedding';
 
-    if (error) {
-      throw new Error(`rag_chunks search load: ${error.message}`);
+    const load = async (scopedToProduct: boolean): Promise<RagChunkRow[]> => {
+      let q = this.client.from('rag_chunks').select(selectCols).eq('tenant_id', tenantId).limit(FETCH_CAP);
+      if (scopedToProduct && productEntityId) {
+        q = q.eq('product_id', productEntityId);
+      }
+      const { data, error } = await q;
+      if (error) {
+        throw new Error(`rag_chunks search load: ${error.message}`);
+      }
+      return (data ?? []) as RagChunkRow[];
+    };
+
+    let rows: RagChunkRow[];
+    if (productEntityId) {
+      rows = await load(true);
+      if (rows.length === 0) {
+        rows = await load(false);
+      }
+    } else {
+      rows = await load(false);
     }
 
-    const candidates = (data ?? []).map((row) => toVectorChunkRecord(row as RagChunkRow));
+    const candidates = rows.map((row) => toVectorChunkRecord(row));
     return rankChunksHybrid(candidates, query, queryEmbedding, limit, options);
   }
 }

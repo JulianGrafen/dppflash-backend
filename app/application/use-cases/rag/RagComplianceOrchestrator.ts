@@ -20,6 +20,8 @@ export interface RagComplianceRunInput {
   readonly productMatchTerms?: readonly string[];
   /** Basename/path of primary PDF; boosts chunks from that file when it matches stored rows. */
   readonly sourceFileName?: string;
+  /** Canonical `products.id`: prefer chunks for this entity, then tenant fallback. */
+  readonly productEntityId?: string;
 }
 
 /** Stufe 2–4: gezielte Lückenfüllung (Retrieval mit gapSearchQuery + sekundäres LLM). */
@@ -37,6 +39,8 @@ export interface RagGapTargetedRunInput {
    * Wenn danach keine Chunks übrig bleiben, Fallback auf alle Treffer.
    */
   readonly excludePrimaryBasename?: string;
+  /** Canonical `products.id` for entity-scoped retrieval (falls back to tenant-wide if empty). */
+  readonly productEntityId?: string;
 }
 
 export interface RagComplianceExtractionOutcome {
@@ -71,6 +75,7 @@ export class RagComplianceOrchestrator {
       topK: defaultTopK,
       productMatchTerms: input.productMatchTerms,
       sourceFileName: input.sourceFileName,
+      productEntityId: input.productEntityId,
     };
 
     const chunks = await this.retrieval.retrieveTopChunks(retrievalInput);
@@ -120,6 +125,7 @@ export class RagComplianceOrchestrator {
       topK: defaultTopK,
       productMatchTerms: input.productMatchTerms,
       sourceFileName: input.sourceFileName,
+      productEntityId: input.productEntityId,
     };
 
     let chunks = await this.retrieval.retrieveTopChunks(retrievalInput);

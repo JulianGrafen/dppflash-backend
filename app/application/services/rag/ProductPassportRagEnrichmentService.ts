@@ -50,6 +50,8 @@ export class ProductPassportRagEnrichmentService {
       readonly passport: ProductPassport;
       /** Indexed PDF basename; used to deprioritize Doc A when loading Doc B chunks. */
       readonly sourceFileName?: string;
+      /** Canonical `products.id` from {@link ProductEntityService.findProductEntityId} (optional). */
+      readonly productEntityId?: string;
     },
   ): Promise<{
     readonly passportPatch: Record<string, unknown>;
@@ -105,6 +107,7 @@ export class ProductPassportRagEnrichmentService {
       sourceFileName: input.sourceFileName,
       excludePrimaryBasename: input.sourceFileName,
       retrievalTopK: Math.min(36, 14 + gaps.length),
+      productEntityId: input.productEntityId,
     });
 
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);

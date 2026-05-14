@@ -1,10 +1,11 @@
 import { basename } from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
 import { ProductPassportRagEnrichmentService } from '@/app/application/services/rag/ProductPassportRagEnrichmentService';
+import { resolvePrimaryProductNameAnchor } from '@/app/domain/rag/dppRagGapAnalysis';
 import { resolveRequestPublicOrigin } from '@/app/lib/resolveRequestPublicOrigin';
 import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { saveProductToStore } from '@/app/lib/server-store';
-import { getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
+import { getProductEntityService, getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
 import { ProductPassport } from '@/app/types/dpp-types';
 
 /**
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest) {
     );
 
     const extractedFields = result.extractedData.extractedFields as Record<string, unknown>;
+    const extractedProductName =
+      typeof extractedFields.productName === 'string' ? extractedFields.productName.trim() : '';
+    const extractedModellname =
+      typeof extractedFields.modellname === 'string' ? extractedFields.modellname.trim() : '';
+    const ragPrimaryNameHint = extractedProductName || extractedModellname || undefined;
     const hasExtractedFields = Object.keys(extractedFields).length > 0;
 
     console.info('[DPP] upload_processed', {
@@ -180,6 +186,7 @@ export async function POST(request: NextRequest) {
         tenantId: safeTenantId,
         fileName: safeFileName,
         pdf: buffer,
+        primaryProductNameHint: ragPrimaryNameHint,
       });
     } catch (ragIngestErr) {
       console.warn('[DPP] rag_ingest_failed', ragIngestErr);
@@ -190,6 +197,20 @@ export async function POST(request: NextRequest) {
     const productLabel =
       `${hersteller} ${modellname}`.trim() || productName || safeFileName;
 
+    const anchorForEntity =
+      resolvePrimaryProductNameAnchor(productPassport as Record<string, unknown>) ||
+      extractedProductName ||
+      extractedModellname ||
+      '';
+
+    let productEntityId: string | undefined;
+    if (anchorForEntity) {
+      const pe = getProductEntityService();
+      if (pe) {
+        productEntityId = (await pe.findProductEntityId(safeTenantId, anchorForEntity)) ?? undefined;
+      }
+    }
+
     try {
       const enrichmentSvc = new ProductPassportRagEnrichmentService();
       const ragOutcome = await enrichmentSvc.enrichFromIndexedChunks(rag, {
@@ -198,6 +219,7 @@ export async function POST(request: NextRequest) {
         productLabel,
         passport: productPassport,
         sourceFileName: safeFileName,
+        productEntityId,
       });
 
       Object.assign(productPassport, ragOutcome.passportPatch);

@@ -12,9 +12,23 @@ export const SourceAttributionSchema = z.object({
     .min(1, 'contextSnippet must contain the verbatim evidence span.'),
 });
 
+const auditedScalarValueSchema = z
+  .union([z.null(), z.string(), z.number().finite()])
+  .transform((v): string | null => {
+    if (v === null) {
+      return null;
+    }
+    if (typeof v === 'number') {
+      return String(v);
+    }
+    const t = v.trim();
+    return t.length === 0 ? null : t;
+  })
+  .pipe(z.union([z.string().min(1), z.null()]));
+
 export const AuditedValueSchema = z.object({
-  value: z.union([z.string().min(1), z.null()]),
-  confidence: z.number().min(0).max(1),
+  value: auditedScalarValueSchema,
+  confidence: z.coerce.number().min(0).max(1),
   source: SourceAttributionSchema,
   requiresManualReview: z.boolean(),
 });

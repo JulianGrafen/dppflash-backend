@@ -101,4 +101,32 @@ describe('mergeRagAuditIntoPassport', () => {
     expect(appliedKeys).toContain('gtin');
     expect(patch.gtin).toBe('5901234123457');
   });
+
+  it('maps fields.ean audited value onto passport gtin when gtin is empty', () => {
+    const passport = {
+      id: 'p4',
+      type: 'BATTERY',
+      createdAt: new Date(),
+      language: 'de',
+      hersteller: 'X',
+      modellname: 'Y',
+      gtin: '',
+    } as BatteryDPP;
+
+    const trail = parseAuditTrail({
+      fields: {
+        ean: {
+          value: '5901234123457',
+          confidence: 1,
+          source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: '5901234123457' },
+          requiresManualReview: false,
+        },
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, ['gtin']);
+
+    expect(appliedKeys).toContain('gtin');
+    expect(patch.gtin).toBe('5901234123457');
+  });
 });

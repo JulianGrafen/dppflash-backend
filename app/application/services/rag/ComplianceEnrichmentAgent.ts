@@ -120,6 +120,25 @@ export class ComplianceEnrichmentAgent {
     return errors;
   }
 
+  private static fileBaseName(filePath: string): string {
+    const parts = filePath.replace(/\\/g, '/').split('/');
+    const last = parts[parts.length - 1];
+    return (last ?? filePath).trim();
+  }
+
+  private static chunkMatchesSource(chunk: RetrievedChunk, sourceFileName: string, pageNumber: number): boolean {
+    if (chunk.pageNumber !== pageNumber) {
+      return false;
+    }
+    if (chunk.fileName === sourceFileName) {
+      return true;
+    }
+    return (
+      ComplianceEnrichmentAgent.fileBaseName(chunk.fileName)
+      === ComplianceEnrichmentAgent.fileBaseName(sourceFileName)
+    );
+  }
+
   private static validateFieldProvenance(
     field: string,
     value: AuditedValue | undefined,
@@ -129,8 +148,8 @@ export class ComplianceEnrichmentAgent {
       return [];
     }
 
-    const chunk = chunks.find(
-      (c) => c.fileName === value.source.fileName && c.pageNumber === value.source.pageNumber,
+    const chunk = chunks.find((c) =>
+      ComplianceEnrichmentAgent.chunkMatchesSource(c, value.source.fileName, value.source.pageNumber),
     );
 
     if (!chunk) {

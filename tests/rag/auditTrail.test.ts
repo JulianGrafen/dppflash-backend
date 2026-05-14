@@ -42,6 +42,25 @@ describe('auditTrailSchema', () => {
 
     expect(trail.gtin?.value).toBe('5901234123457');
   });
+
+  it('coerces numeric audited values to strings (e.g. GTIN from JSON number)', () => {
+    const trail = parseAuditTrail({
+      fields: {
+        gtin: {
+          value: 5901234123457,
+          confidence: '0.85',
+          source: {
+            fileName: 'sds.pdf',
+            pageNumber: 1,
+            contextSnippet: '5901234123457',
+          },
+          requiresManualReview: false,
+        },
+      },
+    });
+    expect(trail.fields?.gtin?.value).toBe('5901234123457');
+    expect(trail.fields?.gtin?.confidence).toBeCloseTo(0.85, 5);
+  });
 });
 
 describe('gtinProof', () => {

@@ -588,11 +588,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
         </Section>
 
-        <TraceabilitySection
-          regulatoryExtraction={raw.regulatoryExtraction}
-          materialComposition={raw.materialComposition}
-          productDisplayName={displayProductName}
-        />
+        <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
 
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="DPP-Kernfelder (ESPR)">

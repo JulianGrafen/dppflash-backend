@@ -1,11 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
-import { tryMaterialCompositionToSankey } from '@/app/domain/dpp/materialCompositionToSankey';
+import {
+  compositionGraphHasMeaningfulFlows,
+  tryMaterialCompositionToSankey,
+  tryMaterialCompositionToSankeyFromRaw,
+} from '@/app/domain/dpp/materialCompositionToSankey';
 
 describe('tryMaterialCompositionToSankey', () => {
   it('returns null for non-array input', () => {
     expect(tryMaterialCompositionToSankey(null, 'X')).toBeNull();
     expect(tryMaterialCompositionToSankey({}, 'X')).toBeNull();
+  });
+
+  it('parses percentage strings with percent sign', () => {
+    const graph = tryMaterialCompositionToSankey(
+      [
+        { material: 'A', percentage: '30%' },
+        { material: 'B', percentage: '70' },
+      ],
+      'Prod',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links[0]!.value).toBeCloseTo(30, 5);
+    expect(graph!.links[1]!.value).toBeCloseTo(70, 5);
   });
 
   it('builds fan-in graph from material + percentage rows', () => {
@@ -35,5 +52,44 @@ describe('tryMaterialCompositionToSankey', () => {
     expect(graph).not.toBeNull();
     expect(graph!.links[0]!.value).toBeCloseTo(50, 5);
     expect(graph!.links[1]!.value).toBeCloseTo(50, 5);
+  });
+});
+
+describe('tryMaterialCompositionToSankeyFromRaw', () => {
+  it('uses regulatory materialCompositionAndSubstances when flat array is empty', () => {
+    const graph = tryMaterialCompositionToSankeyFromRaw(
+      {
+        materialComposition: [],
+        regulatoryExtraction: {
+          materialCompositionAndSubstances: {
+            materials: [
+              {
+                name: { value: 'PCR PP', sourcePdf: 'x.pdf', pageNumber: 1, contextSnippet: 'PCR PP' },
+                sharePercent: { value: 55, sourcePdf: 'x.pdf', pageNumber: 1, contextSnippet: '55' },
+              },
+              {
+                name: { value: 'rPET', sourcePdf: 'x.pdf', pageNumber: 1, contextSnippet: 'rPET' },
+                sharePercent: { value: 45, sourcePdf: 'x.pdf', pageNumber: 1, contextSnippet: '45' },
+              },
+            ],
+            chemicalDeclarations: [],
+          },
+        },
+      },
+      'Koffer',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.links.length).toBe(2);
+  });
+
+  it('compositionGraphHasMeaningfulFlows rejects all-zero links', () => {
+    const g = {
+      nodes: [
+        { id: 'a', label: 'A', category: 'raw_material' as const },
+        { id: 'b', label: 'B', category: 'final_product' as const },
+      ],
+      links: [{ source: 'a', target: 'b', value: 0 }],
+    };
+    expect(compositionGraphHasMeaningfulFlows(compositionGraphSchema.parse(g))).toBe(false);
   });
 });

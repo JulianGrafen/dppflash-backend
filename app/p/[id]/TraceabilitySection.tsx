@@ -1,46 +1,57 @@
 import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
-import { tryMaterialCompositionToSankey } from '@/app/domain/dpp/materialCompositionToSankey';
+import {
+  collectMaterialRowsForSankey,
+  compositionGraphHasMeaningfulFlows,
+  tryMaterialCompositionToSankeyFromRaw,
+} from '@/app/domain/dpp/materialCompositionToSankey';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
 type TraceabilitySectionProps = {
-  readonly regulatoryExtraction: unknown;
-  readonly materialComposition: unknown;
+  /** Product passport fields (needs `regulatoryExtraction`, `materialComposition`). */
+  readonly raw: Record<string, unknown>;
   readonly productDisplayName: string;
 };
 
 /**
  * Circularise-style “Traceability” block: Sankey chain-of-custody from regulatory graph
- * or a derived fan-in graph from ESPR material composition percentages.
+ * or a derived fan-in graph from material percentages (passport or regulatory materials).
  */
-export function TraceabilitySection({
-  regulatoryExtraction,
-  materialComposition,
-  productDisplayName,
-}: TraceabilitySectionProps) {
-  const fromReg = isRecord(regulatoryExtraction)
-    ? compositionGraphSchema.safeParse(regulatoryExtraction.compositionGraph)
+export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
+  const fromReg = isRecord(raw.regulatoryExtraction)
+    ? compositionGraphSchema.safeParse(raw.regulatoryExtraction.compositionGraph)
     : null;
 
-  const graph =
-    fromReg?.success === true
-      ? fromReg.data
-      : tryMaterialCompositionToSankey(materialComposition, productDisplayName);
+  const materialGraph = tryMaterialCompositionToSankeyFromRaw(raw, productDisplayName);
+
+  const usedRegGraph =
+    fromReg?.success === true && compositionGraphHasMeaningfulFlows(fromReg.data);
+
+  const graph = usedRegGraph ? fromReg.data : materialGraph;
 
   if (!graph) {
     return null;
   }
 
-  const chainSubtitle =
-    fromReg?.success === true ? 'Herkunftskette — Lieferkette' : 'Herkunftskette — aus Materialanteilen (%)';
-  const footnote =
-    fromReg?.success === true
-      ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-      : 'Vereinfachtes Flussdiagramm aus den angegebenen Materialprozenten; dient der Orientierung wie bei einer Produktmatrix.';
+  const rows = collectMaterialRowsForSankey(raw);
+  const fromRegulatoryMaterialsOnly =
+    !usedRegGraph && rows.length > 0 && (!Array.isArray(raw.materialComposition) || raw.materialComposition.length === 0);
+
+  const chainSubtitle = usedRegGraph
+    ? 'Herkunftskette — Lieferkette'
+    : fromRegulatoryMaterialsOnly
+      ? 'Herkunftskette — Materialtabelle (regulatorisch)'
+      : 'Herkunftskette — aus Materialanteilen (%)';
+
+  const footnote = usedRegGraph
+    ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
+    : fromRegulatoryMaterialsOnly
+      ? 'Fluss aus der regulatorischen Materialzusammensetzung (Anteile laut Extraktion).'
+      : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder).';
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/[0.04]">

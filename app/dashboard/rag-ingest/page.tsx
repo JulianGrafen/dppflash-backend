@@ -32,6 +32,11 @@ interface PurgeResponse {
   readonly error?: string;
 }
 
+interface StatsResponse {
+  readonly tenantId: string;
+  readonly indexStats: IngestResponse['indexStats'];
+}
+
 export default function RagIngestDashboard() {
   const [tenantId, setTenantId] = useState('default');
   const [tab, setTab] = useState<RagTab>('ingest');

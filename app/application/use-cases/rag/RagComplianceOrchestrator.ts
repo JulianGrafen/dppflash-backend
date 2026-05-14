@@ -128,12 +128,12 @@ export class RagComplianceOrchestrator {
       return null;
     }
 
-    const stored = await this.productEntityService.fetchExtractedAttributesByNormalizedAnchor(
+    const resolved = await this.productEntityService.fetchExtractedAttributesByNormalizedAnchor(
       input.tenantId,
       anchor,
     );
 
-    if (!stored || Object.keys(stored).length === 0) {
+    if (!resolved) {
       console.info('[RAG] eager_gap_skip', {
         reason: 'no_extracted_attributes',
         tenantId: input.tenantId,
@@ -141,6 +141,18 @@ export class RagComplianceOrchestrator {
       });
       return null;
     }
+
+    const stored = resolved.attributes;
+    if (Object.keys(stored).length === 0) {
+      console.info('[RAG] eager_gap_skip', {
+        reason: 'no_extracted_attributes',
+        tenantId: input.tenantId,
+        anchorPreview: anchor.slice(0, 80),
+      });
+      return null;
+    }
+
+    console.info(`[Orchestrator] Eager Data gefunden für Produkt-ID: ${resolved.productId}`);
 
     const { fields } = extractedAttributesToAuditTrailFields(stored, missingFields);
     if (Object.keys(fields).length === 0) {

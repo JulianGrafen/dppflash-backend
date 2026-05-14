@@ -28,6 +28,44 @@ function isExtractedAttributesSchemaErrorMessage(message: string): boolean {
   );
 }
 
+/** Escape `%`, `_`, `\` for safe use inside Postgres `ILIKE` patterns (Postgres default escape). */
+function escapeForIlikeToken(token: string): string {
+  return token.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+/**
+ * Wählt wenige, AND-verknüpfbare Tokens aus dem normalisierten Anker (längerer Doc-A-Text vs. kürzerer `products.name`).
+ * z.B. "cimsec … s1 … schnell" → Treffer auf "Cimsec S1 Flex Schnell".
+ */
+function discriminativeNameTokensForIlike(normalizedAnchor: string): readonly string[] {
+  const parts = normalizedAnchor.split(/\s+/).filter((t) => t.length >= 2);
+  if (parts.length === 0) {
+    return [];
+  }
+  if (parts.length === 1) {
+    return [parts[0]!];
+  }
+  const out: string[] = [];
+  const add = (t: string) => {
+    if (!out.includes(t)) {
+      out.push(t);
+    }
+  };
+  add(parts[0]!);
+  for (const p of parts) {
+    if (/\d/.test(p)) {
+      add(p);
+    }
+  }
+  add(parts[parts.length - 1]!);
+  return out.slice(0, 6);
+}
+
+export type ExtractedAttributesAnchorMatch = {
+  readonly productId: string;
+  readonly attributes: Record<string, ExtractedAttributeRow>;
+};
+
 /**
  * Links free-text product labels to canonical `products` rows (entity-centric RAG).
  * Supabase-Fehler werden weitergereicht, außer „Tabelle fehlt noch“ → null / Rollback auf Ingest ohne product_id (siehe DocumentIngestionService).
@@ -130,41 +168,126 @@ export class ProductEntityService {
   }
 
   /**
-   * Lädt `extracted_attributes` für Produkt-Anker (normalisierter Name, tenant-scoped).
-   * Fehlende Spalte / Tabelle → `null`.
+   * Lädt `extracted_attributes` für Produkt-Anker (tenant-scoped), mit Fallbacks wenn
+   * `normalized_name` nicht exakt zum Anker passt (Doc A vs. Archiv-Entity-Label).
+   *
+   * 1. Exakt: `normalized_name` = {@link normalizeProductEntityName}(Anker)
+   * 2. Fuzzy: RPC `match_product_by_similarity` (pg_trgm)
+   * 3. ILIKE: mehrere `name ILIKE '%token%'` (AND), Tokens aus dem normalisierten Anker
    */
   async fetchExtractedAttributesByNormalizedAnchor(
     tenantId: string,
     rawProductAnchor: string,
-  ): Promise<Record<string, ExtractedAttributeRow> | null> {
+  ): Promise<ExtractedAttributesAnchorMatch | null> {
     const normalized = normalizeProductEntityName(rawProductAnchor);
     if (!normalized) {
       return null;
     }
 
-    const res = await this.client
+    const toMatch = (row: { id: string; extracted_attributes?: unknown } | null | undefined) => {
+      if (!row?.id) {
+        return null;
+      }
+      return {
+        productId: row.id as string,
+        attributes: parseExtractedAttributesJson(row.extracted_attributes),
+      } satisfies ExtractedAttributesAnchorMatch;
+    };
+
+    const handleSelectError = (message: string): 'null' | 'throw' => {
+      if (
+        isProductsEntitySchemaErrorMessage(message) ||
+        isExtractedAttributesSchemaErrorMessage(message)
+      ) {
+        return 'null';
+      }
+      return 'throw';
+    };
+
+    const exact = await this.client
       .from('products')
-      .select('extracted_attributes')
+      .select('id, extracted_attributes')
       .eq('tenant_id', tenantId)
       .eq('normalized_name', normalized)
       .maybeSingle();
 
-    if (res.error) {
-      if (
-        isProductsEntitySchemaErrorMessage(res.error.message) ||
-        isExtractedAttributesSchemaErrorMessage(res.error.message)
-      ) {
+    if (exact.error) {
+      const h = handleSelectError(exact.error.message);
+      if (h === 'null') {
         return null;
       }
-      throw new Error(`products extracted_attributes lookup failed: ${res.error.message}`);
+      throw new Error(`products extracted_attributes exact lookup failed: ${exact.error.message}`);
+    }
+    const exactMatch = toMatch(exact.data as { id: string; extracted_attributes?: unknown } | null);
+    if (exactMatch) {
+      return exactMatch;
     }
 
-    if (res.data == null) {
+    const fuzzy = await this.client.rpc('match_product_by_similarity', {
+      p_tenant_id: tenantId,
+      p_normalized: normalized,
+      p_min_similarity: 0.42,
+    });
+
+    if (fuzzy.error) {
+      if (isProductsEntitySchemaErrorMessage(fuzzy.error.message)) {
+        return null;
+      }
+      throw new Error(`products similarity rpc failed: ${fuzzy.error.message}`);
+    }
+
+    const simRows = (fuzzy.data ?? []) as SimilarityRpcRow[];
+    const simId = simRows[0]?.id;
+    if (simId) {
+      const byId = await this.client
+        .from('products')
+        .select('id, extracted_attributes')
+        .eq('tenant_id', tenantId)
+        .eq('id', simId)
+        .maybeSingle();
+
+      if (byId.error) {
+        const h = handleSelectError(byId.error.message);
+        if (h === 'null') {
+          return null;
+        }
+        throw new Error(`products extracted_attributes by id failed: ${byId.error.message}`);
+      }
+      const simMatch = toMatch(byId.data as { id: string; extracted_attributes?: unknown } | null);
+      if (simMatch) {
+        return simMatch;
+      }
+    }
+
+    const tokens = discriminativeNameTokensForIlike(normalized);
+    if (tokens.length === 0) {
       return null;
     }
 
-    const raw = (res.data as { extracted_attributes?: unknown }).extracted_attributes;
-    return parseExtractedAttributesJson(raw);
+    let ilikeQuery = this.client
+      .from('products')
+      .select('id, extracted_attributes')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    for (const t of tokens) {
+      const pat = `%${escapeForIlikeToken(t)}%`;
+      ilikeQuery = ilikeQuery.ilike('name', pat);
+    }
+
+    const ilikeRes = await ilikeQuery;
+
+    if (ilikeRes.error) {
+      const h = handleSelectError(ilikeRes.error.message);
+      if (h === 'null') {
+        return null;
+      }
+      throw new Error(`products extracted_attributes ilike lookup failed: ${ilikeRes.error.message}`);
+    }
+
+    const ilikeRow = (ilikeRes.data ?? [])[0] as { id: string; extracted_attributes?: unknown } | undefined;
+    return toMatch(ilikeRow);
   }
 
   /**

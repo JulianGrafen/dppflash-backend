@@ -20,7 +20,7 @@ export interface RagComplianceRunInput {
   readonly retrievalTopK?: number;
   /** Product-line tokens: more overlap with chunk text / fileName → higher rank and match confidence. */
   readonly productMatchTerms?: readonly string[];
-  /** Basename/path of primary PDF; boosts chunks from that file when it matches stored rows. */
+  /** Basename/path der Primär-PDF; **nicht** für Ranking-Boost — nur zum Ausschluss aus dem RAG-Kontext. */
   readonly sourceFileName?: string;
   /** Canonical `products.id`: prefer chunks for this entity, then tenant fallback. */
   readonly productEntityId?: string;
@@ -29,21 +29,25 @@ export interface RagComplianceRunInput {
 /** Nach Multi-Field-Retrieval + Filter: so viele Chunks maximal an den Gap-LLM. */
 const GAP_TARGETED_FINAL_CHUNK_LIMIT = 10;
 
-/** Stufe 2–4: gezielte Lückenfüllung (Retrieval mit gapSearchQuery + sekundäres LLM). */
+/** Stufe 2–4: gezielte Lückenfüllung (feldweise Hybrid-Suche + sekundäres LLM). */
 export interface RagGapTargetedRunInput {
   readonly tenantId: string;
   readonly productLabel: string;
-  /** Fallback / LLM-Metadaten: zusammengefasste Suchphrase; Retrieval nutzt primär `targetPassportFieldKeys`. */
+  /** Fallback, wenn `missingFields` leer: eine kombinierte Suchphrase + LLM-Metadaten. */
   readonly gapSearchQuery: string;
   readonly anchorProductName: string;
-  /** Fehlende Passport-Keys — je Key eine eigene Hybrid-Suche (Field-Specific Retrieval). */
-  readonly targetPassportFieldKeys: readonly string[];
+  /** Fehlende Passport-Keys — je Key eine eigene Hybrid-Suche (`retrieveTopChunks`). */
+  readonly missingFields: readonly string[];
   readonly retrievalTopK?: number;
   readonly productMatchTerms?: readonly string[];
+  /**
+   * Primär-PDF (Metadaten): wird **nicht** an die Gap-Hybrid-Suche durchgereicht (kein same-File-Boost),
+   * bleibt aber für Match-Konfidenz nach Retrieval relevant.
+   */
   readonly sourceFileName?: string;
   /**
-   * Primär-PDF (Doc A): bevorzugt Chunks aus *anderen* Dateien, damit Doc B zuerst genutzt wird.
-   * Wenn danach keine Chunks übrig bleiben, Fallback auf alle Treffer.
+   * Pfad/Basename der **hochgeladenen** Primär-PDF (Doc A). Identifiziert dieselbe Datei wie
+   * `sourceFileName` für den Ausschluss — mindestens eines sollte im Upload-Flow gesetzt sein.
    */
   readonly excludePrimaryBasename?: string;
   /** Canonical `products.id` for entity-scoped retrieval (falls back to tenant-wide if empty). */
@@ -81,11 +85,17 @@ export class RagComplianceOrchestrator {
       query: input.query,
       topK: defaultTopK,
       productMatchTerms: input.productMatchTerms,
-      sourceFileName: input.sourceFileName,
-      productEntityId: input.productEntityId,
+      sourceFileName: undefined,
+      productEntityId: input.sourceFileName?.trim() ? undefined : input.productEntityId,
     };
 
-    const chunks = await this.retrieval.retrieveTopChunks(retrievalInput);
+    let chunks = await this.retrieval.retrieveTopChunks(retrievalInput);
+
+    const primaryEx = input.sourceFileName?.trim();
+    if (primaryEx) {
+      const ex = basename(primaryEx).toLowerCase();
+      chunks = chunks.filter((c) => basename(c.fileName).toLowerCase() !== ex);
+    }
 
     const retrievalMatchConfidence = computeRetrievalMatchConfidence(
       chunks,
@@ -121,15 +131,26 @@ export class RagComplianceOrchestrator {
 
   /**
    * Targeted RAG: **Field-Specific Retrieval** — pro fehlendem Passport-Key eine eigene Hybrid-Suche
-   * (`mapGapFieldKeyToGermanSearchPhrase` + Produkt-Anker), dann Pool mergen, per `id` deduplizieren,
-   * optional Primär-PDF (basename) ausfiltern, global nach `score` sortieren, Top-10 an den Gap-LLM.
+   * (`mapGapFieldKeyToGermanSearchPhrase` + Produkt-Anker), Merge, Dedupe nach `id`,
+   * **ausschließlich Chunks aus anderen Dateien** als der Primär-Upload (kein Fallback auf Doc A),
+   * dann Top-K ans Gap-LLM.
    *
-   * @returns `null` wenn nach Retrieval **keine** Chunks übrig sind (kein LLM-Lauf). Sonst Outcome inkl. Stufe 4.
+   * @returns `null` wenn nach Retrieval **keine** passenden Fremd-Dokument-Chunks übrig sind (kein LLM-Lauf).
    */
   async runGapTargetedEnrichment(input: RagGapTargetedRunInput): Promise<RagComplianceExtractionOutcome | null> {
     const anchor = input.anchorProductName;
-    const missingFields = input.targetPassportFieldKeys;
+    const missingFields = input.missingFields;
     const perFieldTopK = Math.max(10, input.retrievalTopK ?? 24);
+
+    /** Primär-Upload (Doc A): RAG nutzt nur **andere** Dateien — niemals dieselbe PDF wie beim DPP-Upload. */
+    const primaryUploadPath =
+      (input.excludePrimaryBasename?.trim() || input.sourceFileName?.trim()) ?? '';
+
+    /**
+     * Archiv-Suche: tenant-weit, sobald wir den Primär-Upload kennen (sonst fehlen oft B/C ohne `product_id`).
+     * Ohne `primaryUploadPath` bleibt optionaler Entity-Scope wie bisher.
+     */
+    const retrievalProductEntityId = primaryUploadPath ? undefined : input.productEntityId;
 
     const baseRetrieval: Pick<
       HybridRetrievalInput,
@@ -137,8 +158,8 @@ export class RagComplianceOrchestrator {
     > = {
       tenantId: input.tenantId,
       productMatchTerms: input.productMatchTerms,
-      sourceFileName: input.sourceFileName,
-      productEntityId: input.productEntityId,
+      sourceFileName: undefined,
+      productEntityId: retrievalProductEntityId,
     };
 
     const pooled: RetrievedChunk[] = [];
@@ -169,22 +190,12 @@ export class RagComplianceOrchestrator {
         byId.set(c.id, c);
       }
     }
-    const byText = new Map<string, RetrievedChunk>();
-    for (const c of byId.values()) {
-      const prev = byText.get(c.text);
-      if (!prev || c.score > prev.score) {
-        byText.set(c.text, c);
-      }
-    }
-    let deduped = [...byText.values()];
-    const afterTextDedupeCount = deduped.length;
+    let deduped = [...byId.values()];
+    const afterIdDedupeCount = deduped.length;
 
-    if (input.excludePrimaryBasename) {
-      const ex = basename(input.excludePrimaryBasename);
-      const other = deduped.filter((c) => basename(c.fileName) !== ex);
-      if (other.length > 0) {
-        deduped = other;
-      }
+    if (primaryUploadPath) {
+      const ex = basename(primaryUploadPath).toLowerCase();
+      deduped = deduped.filter((c) => basename(c.fileName).toLowerCase() !== ex);
     }
     const afterBasenameCount = deduped.length;
 
@@ -209,8 +220,8 @@ export class RagComplianceOrchestrator {
     console.log(
       '2. Roh-Treffer:',
       pooled.length,
-      '| id+text-Dedupe:',
-      afterTextDedupeCount,
+      '| id-Dedupe:',
+      afterIdDedupeCount,
       '| nach basename:',
       afterBasenameCount,
       `| Top-${GAP_TARGETED_FINAL_CHUNK_LIMIT} ans LLM:`,
@@ -234,7 +245,7 @@ export class RagComplianceOrchestrator {
       productLabel: input.productLabel,
       gapSearchQuery: gapSearchQueryForAgent,
       anchorProductName: input.anchorProductName,
-      missingFields: input.targetPassportFieldKeys,
+      missingFields: input.missingFields,
       chunks,
     });
     console.log('[Orchestrator] LLM-Agent hat geantwortet:', agentResult);

@@ -11,15 +11,34 @@ import { MockDocumentLayoutParser } from '@/app/infrastructure/rag/MockDocumentL
 import { MockEmbeddingAdapter } from '@/app/infrastructure/rag/MockEmbeddingAdapter';
 import { MockComplianceLlm } from '@/app/infrastructure/rag/MockComplianceLlm';
 import { MockDocumentPrimaryProductNameInferencer } from '@/app/infrastructure/rag/MockDocumentPrimaryProductNameInferencer';
+import { AzureOpenAiComplianceLlm } from '@/app/infrastructure/rag/AzureOpenAiComplianceLlm';
 import { OpenAiTextEmbeddingAdapter } from '@/app/infrastructure/rag/OpenAiTextEmbeddingAdapter';
 import { OpenAiComplianceLlm } from '@/app/infrastructure/rag/OpenAiComplianceLlm';
 import { OpenAiDocumentPrimaryProductNameInferencer } from '@/app/infrastructure/rag/OpenAiDocumentPrimaryProductNameInferencer';
+import { tryLoadAzureOpenAiComplianceChatConfig } from '@/app/infrastructure/azure/azureConfig';
+import type { ComplianceLlmPort } from '@/app/application/ports/rag/ComplianceLlmPort';
 
 export interface RagMvpCompositionOptions {
   readonly vectorStore?: VectorStorePort;
   readonly layoutParser?: DocumentLayoutParserPort;
   readonly productEntityService?: ProductEntityService | null;
   readonly documentPrimaryProductNameInferencer?: DocumentPrimaryProductNameInferencerPort | null;
+  /** Override default compliance / gap-targeted LLM (e.g. tests). */
+  readonly complianceLlm?: ComplianceLlmPort;
+}
+
+function createDefaultComplianceLlm(): ComplianceLlmPort {
+  if (process.env.OPENAI_API_KEY?.trim()) {
+    return new OpenAiComplianceLlm();
+  }
+  const azureCompliance = tryLoadAzureOpenAiComplianceChatConfig();
+  if (azureCompliance) {
+    return new AzureOpenAiComplianceLlm(azureCompliance);
+  }
+  console.warn(
+    '[RAG] Compliance LLM: weder OPENAI_API_KEY noch vollständige Azure OpenAI Chat-Env gesetzt — MockComplianceLlm (offline, kein Netzwerk).',
+  );
+  return new MockComplianceLlm();
 }
 
 export function createRagComplianceOrchestrator(
@@ -32,9 +51,7 @@ export function createRagComplianceOrchestrator(
     ? new OpenAiTextEmbeddingAdapter()
     : new MockEmbeddingAdapter();
 
-  const llm = process.env.OPENAI_API_KEY
-    ? new OpenAiComplianceLlm()
-    : new MockComplianceLlm();
+  const llm = options?.complianceLlm ?? createDefaultComplianceLlm();
 
   const productEntityService = options?.productEntityService ?? null;
   const documentPrimaryProductNameInferencer =

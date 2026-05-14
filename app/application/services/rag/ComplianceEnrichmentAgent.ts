@@ -151,7 +151,9 @@ export class ComplianceEnrichmentAgent {
       rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
     } catch (error) {
       console.error('[RAG LLM ERROR]', error);
-      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult('{}');
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(
+        JSON.stringify({ error: 'compliance_llm_request_failed', detail: String(error) }),
+      );
     }
 
     let parsed: unknown;
@@ -201,7 +203,7 @@ export class ComplianceEnrichmentAgent {
   }
 
   /**
-   * Stufe 4: sekundäre Extraktion — nur Top-5-Chunks, strikter Auditor-Prompt,
+   * Stufe 4: sekundäre Extraktion — bis zu {@link GAP_LLM_TOP_CHUNKS} Chunks, strikter Auditor-Prompt,
    * Zod-Validierung, try/catch inkl. `console.error('[RAG LLM ERROR]', …)` bei jedem Abbruch.
    */
   private async executeGapTargetedSynthesisPipeline(
@@ -217,13 +219,14 @@ export class ComplianceEnrichmentAgent {
     );
     const userPrompt = ComplianceEnrichmentAgent.buildGapTargetedUserPrompt(input, topChunks);
 
-    let rawModelJson = '{}';
-
+    let rawModelJson: string;
     try {
       rawModelJson = await this.llm.completeJson(systemPrompt, userPrompt);
     } catch (error) {
       console.error('[RAG LLM ERROR]', error);
-      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(rawModelJson);
+      return ComplianceEnrichmentAgent.emptyGapEnrichmentResult(
+        JSON.stringify({ error: 'gap_targeted_llm_request_failed', detail: String(error) }),
+      );
     }
 
     let parsedJson: unknown;

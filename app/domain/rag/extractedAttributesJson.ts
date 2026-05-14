@@ -61,6 +61,40 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
   return out;
 }
 
+/**
+ * Non-destructive merge for `products.extracted_attributes` persistence:
+ * shallow-clones the existing JSONB object so **all** top-level keys stay unless
+ * overwritten by `incoming`; per-key updates respect **higher confidence** when
+ * both sides coerce to {@link ExtractedAttributeRow}.
+ */
+export function mergeExtractedAttributesJsonForPersistence(
+  existingJsonFromDb: unknown,
+  incoming: Readonly<Record<string, ExtractedAttributeRow>>,
+): Record<string, unknown> {
+  const base =
+    typeof existingJsonFromDb === 'object' && existingJsonFromDb !== null && !Array.isArray(existingJsonFromDb)
+      ? { ...(existingJsonFromDb as Record<string, unknown>) }
+      : {};
+
+  const merged: Record<string, unknown> = { ...base };
+
+  for (const [k, inc] of Object.entries(incoming)) {
+    const prev = coerceRow(merged[k]);
+    if (prev && inc.confidence < prev.confidence) {
+      continue;
+    }
+    merged[k] = {
+      value: inc.value,
+      sourcePdf: inc.sourcePdf,
+      contextSnippet: inc.contextSnippet,
+      pageNumber: inc.pageNumber ?? 1,
+      confidence: inc.confidence,
+    };
+  }
+
+  return merged;
+}
+
 export function mergeExtractedAttributesMaps(
   existing: Readonly<Record<string, ExtractedAttributeRow>>,
   incoming: Readonly<Record<string, ExtractedAttributeRow>>,

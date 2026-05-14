@@ -134,6 +134,7 @@ export class DocumentIngestionService {
           fileName: input.fileName,
           productNameHint: productNameForContext,
         });
+        // Persist: SELECT existing JSONB → deep-safe key merge → UPDATE (see ProductEntityService.mergeExtractedAttributes).
         await this.dependencies.productEntityService.mergeExtractedAttributes(productId, extracted);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeProductEntityName } from '@/app/domain/rag/normalizeProductEntityName';
 import {
-  mergeExtractedAttributesMaps,
+  mergeExtractedAttributesJsonForPersistence,
   parseExtractedAttributesJson,
   type ExtractedAttributeRow,
 } from '@/app/domain/rag/extractedAttributesJson';
@@ -291,7 +291,8 @@ export class ProductEntityService {
   }
 
   /**
-   * Merged `incoming` in `products.extracted_attributes` per Feld (höhere `confidence` gewinnt).
+   * Read-merge-write: lädt `extracted_attributes`, mergt mit neuem Dokument-JSON **ohne**
+   * bestehende Top-Level-Keys zu verwerfen (kein re-parse-only Merge mehr).
    */
   async mergeExtractedAttributes(
     productId: string,
@@ -318,10 +319,8 @@ export class ProductEntityService {
       throw new Error(`products read for merge failed: ${cur.error.message}`);
     }
 
-    const existing = parseExtractedAttributesJson(
-      (cur.data as { extracted_attributes?: unknown } | null)?.extracted_attributes,
-    );
-    const merged = mergeExtractedAttributesMaps(existing, incoming);
+    const existingJson = (cur.data as { extracted_attributes?: unknown } | null)?.extracted_attributes;
+    const merged = mergeExtractedAttributesJsonForPersistence(existingJson ?? {}, incoming);
 
     const upd = await this.client
       .from('products')

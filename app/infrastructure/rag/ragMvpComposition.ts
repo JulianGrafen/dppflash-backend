@@ -28,15 +28,31 @@ export interface RagMvpCompositionOptions {
 }
 
 function createDefaultComplianceLlm(): ComplianceLlmPort {
-  if (process.env.OPENAI_API_KEY?.trim()) {
-    return new OpenAiComplianceLlm();
-  }
+  /** Azure zuerst: gleiche Umgebung wie DPP-Extraktion (gpt-4o-Deployment), vermeidet versehentlich OpenAI bei gesetzten Test-Keys. */
   const azureCompliance = tryLoadAzureOpenAiComplianceChatConfig();
   if (azureCompliance) {
+    console.info('[RAG] Compliance LLM aktiv: AzureOpenAiComplianceLlm', {
+      deployment: azureCompliance.deploymentName,
+      model: azureCompliance.modelName,
+      apiVersion: azureCompliance.apiVersion,
+    });
     return new AzureOpenAiComplianceLlm(azureCompliance);
   }
+
+  if (process.env.OPENAI_API_KEY?.trim()) {
+    console.info('[RAG] Compliance LLM aktiv: OpenAiComplianceLlm (OPENAI_API_KEY)');
+    return new OpenAiComplianceLlm();
+  }
+
+  const isVercelProduction = process.env.VERCEL_ENV === 'production';
+  if (isVercelProduction) {
+    throw new Error(
+      '[RAG] Vercel Production: Gap-/Compliance-LLM erfordert Azure OpenAI (AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT oder AZURE_OPENAI_COMPLIANCE_DEPLOYMENT) oder OPENAI_API_KEY. MockComplianceLlm ist hier deaktiviert.',
+    );
+  }
+
   console.warn(
-    '[RAG] Compliance LLM: weder OPENAI_API_KEY noch vollständige Azure OpenAI Chat-Env gesetzt — MockComplianceLlm (offline, kein Netzwerk).',
+    '[RAG] Compliance LLM: weder Azure OpenAI Chat-Env noch OPENAI_API_KEY gesetzt — MockComplianceLlm (offline, kein Netzwerk).',
   );
   return new MockComplianceLlm();
 }

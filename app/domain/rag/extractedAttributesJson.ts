@@ -88,20 +88,103 @@ function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
   };
 }
 
+/** Lowercase trim for resilient key matching between passport gaps and JSONB keys. */
+function normalizeExtractedFieldKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+/**
+ * Passport / gap keys that refer to the same semantic slot in `extracted_attributes`
+ * (LLM casing, English vs. German labels, legacy spellings).
+ */
+const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
+  ['hersteller', 'manufacturer', 'herstellername', 'herstellerName', 'Manufacturer', 'Hersteller'],
+  ['ewcCode', 'wasteCode', 'ewc', 'waste_code', 'ewc_code', 'EWC', 'WasteCode'],
+  ['materialComposition', 'materialZusammensetzung', 'materialzusammensetzung'],
+  ['chemicalComposition', 'chemischeZusammensetzung', 'chemischezusammensetzung'],
+  ['countryOfOrigin', 'herkunftsland', 'countryoforigin'],
+  ['countryOfManufacturing', 'verarbeitungsland', 'herstellungsland', 'countryofmanufacturing'],
+  ['productName', 'productname', 'produktname'],
+  ['modellname', 'modelName', 'modell', 'model'],
+  ['declaredProductType', 'declaredproducttype', 'produkttyp'],
+  ['endOfLifeInstructions', 'entsorgungshinweise', 'endoflifeinstructions'],
+  ['gtin', 'ean'],
+  ['nachhaltigkeit', 'sustainability'],
+  ['gewichtKg', 'gewicht', 'weightKg', 'weight'],
+  ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],
+];
+
+function synonymLowerNamesForPassportField(passportFieldKey: string): ReadonlySet<string> {
+  const needle = normalizeExtractedFieldKey(passportFieldKey);
+  for (const group of FIELD_KEY_SYNONYM_GROUPS) {
+    const lowers = new Set(group.map((g) => normalizeExtractedFieldKey(g)));
+    if (lowers.has(needle)) {
+      return lowers;
+    }
+  }
+  return new Set([needle]);
+}
+
+/** Case-insensitive index; duplicate normalized keys keep the row with higher confidence. */
+function buildStoredAttributeLookup(
+  stored: Readonly<Record<string, ExtractedAttributeRow>>,
+): ReadonlyMap<string, { readonly originalKey: string; readonly row: ExtractedAttributeRow }> {
+  const map = new Map<string, { originalKey: string; row: ExtractedAttributeRow }>();
+  for (const [originalKey, row] of Object.entries(stored)) {
+    const norm = normalizeExtractedFieldKey(originalKey);
+    if (!norm) {
+      continue;
+    }
+    const prev = map.get(norm);
+    if (!prev || row.confidence >= prev.row.confidence) {
+      map.set(norm, { originalKey, row });
+    }
+  }
+  return map;
+}
+
+function resolveStoredRowForMissingField(
+  lookup: ReadonlyMap<string, { readonly originalKey: string; readonly row: ExtractedAttributeRow }>,
+  missingField: string,
+): { readonly originalKey: string; readonly row: ExtractedAttributeRow } | null {
+  const synonyms = synonymLowerNamesForPassportField(missingField);
+  for (const syn of synonyms) {
+    const hit = lookup.get(syn);
+    if (hit?.row) {
+      return hit;
+    }
+  }
+  return null;
+}
+
+export interface ExtractedAttributesToAuditTrailResult {
+  readonly fields: Record<string, AuditedValue>;
+  /** passport gap key → JSON key actually used (debug). */
+  readonly keyResolution: readonly { readonly missingField: string; readonly usedStoredKey: string | null }[];
+}
+
 /**
  * Builds an audit trail `fields` map from pre-extracted JSON for keys in `missingFields` only.
+ * Matching is **case-insensitive** and uses **synonym groups** (e.g. `hersteller` ↔ `manufacturer`).
+ * Output keys are always the **passport** keys from `missingFields` so downstream merge stays stable.
  */
 export function extractedAttributesToAuditTrailFields(
   stored: Readonly<Record<string, ExtractedAttributeRow>>,
   missingFields: readonly string[],
-): { readonly fields: Record<string, AuditedValue> } {
+): ExtractedAttributesToAuditTrailResult {
   const fields: Record<string, AuditedValue> = {};
-  for (const key of missingFields) {
-    const row = stored[key];
-    if (!row || row.value === null) {
+  const keyResolution: { missingField: string; usedStoredKey: string | null }[] = [];
+  const lookup = buildStoredAttributeLookup(stored);
+
+  for (const missingField of missingFields) {
+    const hit = resolveStoredRowForMissingField(lookup, missingField);
+    if (!hit || hit.row.value === null) {
+      keyResolution.push({ missingField, usedStoredKey: hit?.originalKey ?? null });
       continue;
     }
-    fields[key] = rowToAuditedValue(row);
+    fields[missingField] = rowToAuditedValue(hit.row);
+    keyResolution.push({ missingField, usedStoredKey: hit.originalKey });
   }
-  return { fields };
+
+  return { fields, keyResolution };
 }

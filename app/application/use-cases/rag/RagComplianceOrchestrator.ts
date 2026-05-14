@@ -143,19 +143,28 @@ export class RagComplianceOrchestrator {
     }
 
     const stored = resolved.attributes;
+
+    console.log('[Orchestrator] Rohes DB JSON:', JSON.stringify(stored, null, 2));
+    console.log('[Orchestrator] Eager gap missingFields:', JSON.stringify(missingFields));
+    console.log('[Orchestrator] Eager gap JSON top-level keys:', JSON.stringify(Object.keys(stored)));
+
     if (Object.keys(stored).length === 0) {
-      console.info('[RAG] eager_gap_skip', {
-        reason: 'no_extracted_attributes',
-        tenantId: input.tenantId,
-        anchorPreview: anchor.slice(0, 80),
-      });
+      console.log('[Orchestrator] JSON ist leer - Background Agent hat nichts extrahiert!');
       return null;
     }
 
     console.info(`[Orchestrator] Eager Data gefunden für Produkt-ID: ${resolved.productId}`);
 
-    const { fields } = extractedAttributesToAuditTrailFields(stored, missingFields);
+    const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, missingFields);
+    console.log('[Orchestrator] Eager key resolution (passportKey <- storedKey):', JSON.stringify(keyResolution, null, 2));
+
     if (Object.keys(fields).length === 0) {
+      console.warn('[Orchestrator] Eager gap: keine Felder nach Synonym/Case-Match — Abbruch (no_matching_missing_fields).', {
+        tenantId: input.tenantId,
+        missingFields,
+        storedKeys: Object.keys(stored),
+        keyResolution,
+      });
       console.info('[RAG] eager_gap_skip', {
         reason: 'no_matching_missing_fields',
         tenantId: input.tenantId,
@@ -163,6 +172,8 @@ export class RagComplianceOrchestrator {
       });
       return null;
     }
+
+    console.log('[Orchestrator] Eager gemappte audit fields keys:', JSON.stringify(Object.keys(fields)));
 
     const trail = safeParseAuditTrail({ fields });
     if (!trail.success) {
@@ -177,7 +188,9 @@ export class RagComplianceOrchestrator {
       auditTrail: trail.data,
       rawModelJson: JSON.stringify({
         source: 'products.extracted_attributes',
+        productId: resolved.productId,
         appliedKeys: Object.keys(fields),
+        keyResolution,
       }),
       cryptoValidation: validateAuditTrailCryptographically(trail.data),
     };

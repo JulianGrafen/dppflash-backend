@@ -13,6 +13,20 @@ export interface ExtractedAttributeRow {
 
 export type ExtractedAttributesMap = Readonly<Record<string, ExtractedAttributeRow>>;
 
+/**
+ * Produkt-Anker für `products.normalized_name` nach Eager-Extraktion (Doc B/C),
+ * damit Doc A per Fuzzy-Key dieselbe Entity trifft.
+ */
+export function pickProductEntityAnchorFromExtracted(
+  extracted: Readonly<Record<string, ExtractedAttributeRow>>,
+  fallbackLabel: string,
+): string {
+  const productName = extracted.productName?.value?.trim();
+  const modellname = extracted.modellname?.value?.trim();
+  const fb = fallbackLabel.trim();
+  return productName || modellname || fb;
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }

@@ -46,7 +46,12 @@ export interface RagComplianceExtractionOutcome {
 }
 
 /**
- * Thin orchestrator: Ingestion → Retrieval → Forensic-LLM; Gap-Fill aus **eager** `products.extracted_attributes`.
+ * Orchestrator:
+ *
+ * - **Ingestion (Doc B/C):** {@link DocumentIngestionService} füllt das „Gehirn“
+ *   (`products.extracted_attributes` + `normalized_name` ≈ `product_knowledge`).
+ * - **Retrieval (Doc A):** {@link fillGapsWithEagerKnowledge} — direkter DB-Lookup per Fuzzy-Anker,
+ *   kein Chunk-RAG-Loop für Lücken.
  */
 export class RagComplianceOrchestrator {
   constructor(
@@ -114,6 +119,16 @@ export class RagComplianceOrchestrator {
 
     const enrichment = await this.enrichment.synthesize(enrichmentInput);
     return { enrichment, retrievalMatchConfidence };
+  }
+
+  /**
+   * Doc A: Structured Key Match statt Vektorsuche.
+   * `SELECT extracted_attributes FROM products WHERE normalized_name` (exakt → pg_trgm → ILIKE).
+   */
+  async fillGapsWithEagerKnowledge(
+    input: RagGapTargetedRunInput,
+  ): Promise<RagComplianceExtractionOutcome | null> {
+    return this.runGapTargetedEnrichment(input);
   }
 
   /**

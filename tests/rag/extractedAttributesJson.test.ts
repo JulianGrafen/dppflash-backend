@@ -2,7 +2,26 @@ import { describe, expect, it } from 'vitest';
 import {
   extractedAttributesToAuditTrailFields,
   mergeExtractedAttributesJsonForPersistence,
+  pickProductEntityAnchorFromExtracted,
 } from '@/app/domain/rag/extractedAttributesJson';
+
+describe('pickProductEntityAnchorFromExtracted', () => {
+  it('prefers productName then modellname over filename fallback', () => {
+    const anchor = pickProductEntityAnchorFromExtracted(
+      {
+        modellname: {
+          value: 'Cimsec S1 Flex Schnell',
+          sourcePdf: 'sdb.pdf',
+          contextSnippet: 'x',
+          confidence: 0.9,
+        },
+        gtin: { value: '123', sourcePdf: 'a.pdf', contextSnippet: 'y', confidence: 0.9 },
+      },
+      'SDB-Cimsec-filename',
+    );
+    expect(anchor).toBe('Cimsec S1 Flex Schnell');
+  });
+});
 
 describe('mergeExtractedAttributesJsonForPersistence', () => {
   it('keeps existing top-level keys not present in incoming', () => {

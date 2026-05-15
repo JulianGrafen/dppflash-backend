@@ -67,8 +67,9 @@ export type ExtractedAttributesAnchorMatch = {
 };
 
 /**
- * Links free-text product labels to canonical `products` rows (entity-centric RAG).
- * Supabase-Fehler werden weitergereicht, außer „Tabelle fehlt noch“ → null / Rollback auf Ingest ohne product_id (siehe DocumentIngestionService).
+ * Kanonische Produkt-Entity + **product knowledge** in `extracted_attributes`
+ * (normalisierter Fuzzy-Key `normalized_name`, kein separates `product_knowledge`-Table).
+ * Supabase-Fehler werden weitergereicht, außer „Tabelle fehlt noch“ → null / Rollback auf Ingest ohne product_id.
  */
 export class ProductEntityService {
   constructor(private readonly client: SupabaseClient) {}

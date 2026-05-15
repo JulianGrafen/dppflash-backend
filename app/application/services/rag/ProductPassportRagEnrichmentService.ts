@@ -15,6 +15,7 @@ import {
 import {
   getRagTargetFieldKeysForProductType,
   orderRagTargetKeysPrioritizingGtin,
+  RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS,
 } from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
@@ -37,7 +38,7 @@ function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
  * 1. Primary data = passport from PDF extraction (Doc A).
  * 2. Gap analysis vs RAG target keys; anchor = `productName` (abort secondary if missing).
  * 3. **Eager Gap-Fill**: `products.extracted_attributes` (tenant + normalisierter Produkt-Anker) — kein Live-LLM.
- * 4. Merge nur in leere Passport-Felder (Audit-Trail inkl. `contextSnippet` / `sourcePdf` aus dem Ingest).
+ * 4. Merge nur **genehmigte** leere Passport-Felder (siehe {@link RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS}) mit Audit inkl. Quelle.
  */
 export class ProductPassportRagEnrichmentService {
   async enrichFromIndexedChunks(
@@ -68,6 +69,7 @@ export class ProductPassportRagEnrichmentService {
 
     const anchor = resolvePrimaryProductNameAnchor(p);
     const gaps = detectRagFillableGaps(p, input.productType);
+    const ragEvidenceGaps = gaps.filter((key) => RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key));
 
     if (!anchor || gaps.length === 0) {
       const enrichment = emptyEnrichmentOutcome();
@@ -86,13 +88,37 @@ export class ProductPassportRagEnrichmentService {
       };
     }
 
-    const gapQuery = buildGapTargetedSearchQuery(gaps, anchor);
+    if (ragEvidenceGaps.length === 0) {
+      console.info('[DPP] rag_sources_evidence_skip', {
+        reason: 'no_whitelisted_gaps',
+        gapKeys: gaps,
+        ragEvidenceWhitelist: [...RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS],
+      });
+      const enrichment = emptyEnrichmentOutcome();
+      const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
+      const { patch, appliedKeys } = mergeRagAuditIntoPassport(
+        input.passport,
+        trailForMerge,
+        mergeAllowKeys,
+      );
+      return {
+        passportPatch: patch,
+        appliedKeys,
+        enrichment,
+        retrievalMatchConfidence: 0,
+        ranTargetedGapRag: false,
+      };
+    }
+
+    const gapQuery = buildGapTargetedSearchQuery(ragEvidenceGaps, anchor);
     const matchTerms = buildProductMatchTerms(p, input.productLabel);
 
     console.info('[DPP] rag_two_stage_gap', {
       tenantId: input.tenantId,
       anchor,
-      gapCount: gaps.length,
+      gapCountAll: gaps.length,
+      ragEvidenceGapCount: ragEvidenceGaps.length,
+      ragEvidenceGaps,
       gapQueryPreview: gapQuery.slice(0, 200),
     });
 
@@ -101,11 +127,11 @@ export class ProductPassportRagEnrichmentService {
       productLabel: input.productLabel,
       gapSearchQuery: gapQuery,
       anchorProductName: anchor,
-      missingFields: [...gaps],
+      missingFields: [...ragEvidenceGaps],
       productMatchTerms: matchTerms,
       sourceFileName: input.sourceFileName,
       excludePrimaryBasename: input.sourceFileName,
-      retrievalTopK: Math.min(36, 14 + gaps.length),
+      retrievalTopK: Math.min(36, 14 + ragEvidenceGaps.length),
       productEntityId: input.productEntityId,
     });
 
@@ -120,13 +146,17 @@ export class ProductPassportRagEnrichmentService {
       retrievalMatchConfidence = gapOutcome.retrievalMatchConfidence;
     }
 
+    const mergeAllowKeysRagEvidence = mergeAllowKeys.filter((key) =>
+      RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key),
+    );
+
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
     const mergeOpts: MergeRagAuditOptions | undefined =
       gapOutcome !== null ? { fieldShape: 'provenance' } : undefined;
     const { patch, appliedKeys } = mergeRagAuditIntoPassport(
       input.passport,
       trailForMerge,
-      mergeAllowKeys,
+      mergeAllowKeysRagEvidence,
       mergeOpts,
     );
 

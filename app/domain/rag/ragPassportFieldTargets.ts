@@ -1,5 +1,22 @@
 import type { ProductPassport } from '@/app/types/dpp-types';
 
+/**
+ * Felder die beim DPP-Erstellen aus RAG/Eager (`products.extracted_attributes`)
+ * ins Produktpass übernommen werden („Quellen & Belege“).
+ * Andere Keys (z. B. gtin, productName) bleiben aus dieser Schicht unberührt.
+ */
+export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
+  'hersteller',
+  'modellname',
+  'ewcCode',
+  'wasteCode',
+  'endOfLifeInstructions',
+  'chemicalComposition',
+  /** CHEMICAL-Pass / deutsch — gleiche Slots wie chemicalComposition / endOfLifeInstructions (Synonym-Merge). */
+  'zusammensetzung',
+  'entsorgungshinweise',
+]);
+
 const PENDING_GTIN = 'PENDING_EXTERNAL_MATCH';
 
 /** True when the passport has no usable GTIN yet (RAG should treat gtin as high priority). */

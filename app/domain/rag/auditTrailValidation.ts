@@ -13,6 +13,10 @@ function validateAuditedGtin(entry: AuditedValue): readonly string[] {
     return [];
   }
 
+  if (typeof entry.value !== 'string') {
+    return [];
+  }
+
   if (!isValidGtinDigits(entry.value)) {
     return [`gtin: Invalid GTIN checksum or length for value "${entry.value}".`];
   }
@@ -22,6 +26,10 @@ function validateAuditedGtin(entry: AuditedValue): readonly string[] {
 
 function validateAuditedEwc(entry: AuditedValue): readonly string[] {
   if (entry.value === null) {
+    return [];
+  }
+
+  if (typeof entry.value !== 'string') {
     return [];
   }
 

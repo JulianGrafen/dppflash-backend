@@ -211,8 +211,10 @@ export class RagComplianceOrchestrator {
     };
 
     console.log(
-      '[Orchestrator] Eager audit trail chemicalComposition:',
-      trail.data.fields?.chemicalComposition?.value ?? '(nicht gesetzt)',
+      '[Orchestrator] Eager audit trail Materialzusammensetzung (materialZusammensetzung):',
+      trail.data.fields?.materialZusammensetzung?.value ??
+        trail.data.fields?.chemicalComposition?.value ??
+        '(nicht gesetzt)',
     );
 
     return { enrichment, retrievalMatchConfidence };

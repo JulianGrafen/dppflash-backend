@@ -18,7 +18,7 @@ Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **
 
 Extrahiere die Daten STRENG nach diesem Schema. Nutze niemals deutsche Keys!
 
-- Zusammensetzung / Materialien / Rezeptur → chemicalComposition (NICHT materialZusammensetzung, NICHT materialComposition)
+- Zusammensetzung / Materialien / Rezeptur aus Abschnitt 3 eines Sicherheitsdatenblatts → chemicalComposition (NICHT materialZusammensetzung, NICHT materialComposition). **Spezialfall chemicalComposition:** siehe unten.
 - Entsorgung / End-of-Life / Abschnitt 13 → endOfLifeInstructions
 - Hersteller / Lieferant / Inverkehrbringer → hersteller (NICHT manufacturer, NICHT Hersteller)
 - Handelsname / Produktbezeichnung auf dem Deckblatt → productName (NICHT produktname)
@@ -26,9 +26,23 @@ Extrahiere die Daten STRENG nach diesem Schema. Nutze niemals deutsche Keys!
 - Abfallschlüssel / EWC / EAK / AVV → ewcCode
 - GTIN / EAN / Barcode → gtin
 
-Wenn ein Feld nicht im Text steht, lass den Key komplett weg — kein null, kein leerer String als Platzhalter.
+WICHTIG: Wenn du die chemische Zusammensetzung aus Abschnitt 3 eines Sicherheitsdatenblatts extrahierst, musst du JEDEN Stoff als einzelnes Objekt in das Array "chemicalComposition.value" packen. Du darfst keine Stoffe weglassen. Die Prozentangaben (Konzentration) müssen zwingend übernommen werden!
 
-Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen):
+**chemicalComposition** (falls vorhanden) mappt zu genau diesem Objekt — value ist ein **Array von Objekten** (nicht kommagetrennter Text):
+{
+  "value": [
+    {
+      "stoffname": string,
+      "casNummer": string | null,
+      "prozentAnteil": string,
+      "einstufung": string | null
+    }
+  ] | null,
+  "sourcePdf": string (Dateiname der Quelle, wie übergeben),
+  "contextSnippet": string (kurzes wörtliches Zitat aus dem Text als Beleg)
+}
+
+Alle **anderen** Felder mappen zu genau diesem Objekt (keine weiteren Property-Namen):
 {
   "value": string | null,
   "sourcePdf": string (Dateiname der Quelle, wie übergeben),
@@ -36,9 +50,13 @@ Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen
 }
 
 Regeln:
-- Numerische Kennwerte als String in "value".
+- Numerische Kennwerte (außer chemicalComposition) als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
-- EWC/Abfallschlüssel nur bei plausibler Kennzeichnung.`;
+- EWC/Abfallschlüssel nur bei plausibler Kennzeichnung.
+- chemicalComposition.value ist ein nicht-leeres Array von Stoff-Zeilen — nie ein einzelner Freitext über alle Stoffe.
+
+Wenn ein Feld nicht im Text steht oder nicht extrahierbar ist, lasse den Top-Level-Key weg — keine Platzhalter mit leeren Strings.
+chemicalComposition nur ausgeben, wenn du ein nicht-leeres Array von Stoff-Objekten hast (keine zusammengefasste Kommaliste als Freitext).`;
 
 export interface BackgroundExtractionInput {
   readonly documentText: string;

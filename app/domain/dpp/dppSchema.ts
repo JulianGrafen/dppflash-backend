@@ -45,10 +45,15 @@ export interface CareRepairDurability {
 }
 
 export interface ChemicalCompositionEntry {
-  readonly substance: string;
+  readonly substance?: string;
+  /** SDS Abschnitt 3 / deutschsprachige Extraktion */
+  readonly stoffname?: string;
   readonly casNumber?: string;
+  readonly casNummer?: string | null;
   readonly concentrationPercent?: number;
+  readonly prozentAnteil?: string;
   readonly function?: string;
+  readonly einstufung?: string | null;
 }
 
 export interface EnvironmentalImpactSummary {
@@ -204,10 +209,17 @@ function validateOptionalChemicalComposition(
   return entries.flatMap((entry, index) => {
     const issues: DppValidationIssue[] = [];
 
-    if (!isNonEmptyString(entry.substance)) {
+    const substanceLabel =
+      isNonEmptyString(entry.substance)
+        ? entry.substance.trim()
+        : isNonEmptyString(entry.stoffname)
+          ? entry.stoffname.trim()
+          : '';
+
+    if (!isNonEmptyString(substanceLabel)) {
       issues.push({
         field: `chemicalComposition[${index}].substance`,
-        message: 'Chemical substance name is required.',
+        message: 'Chemical substance name is required (substance or stoffname).',
       });
     }
 

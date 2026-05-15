@@ -1,6 +1,11 @@
 import type { ProductPassport } from '@/app/types/dpp-types';
 
 /**
+ * Passport-Schlüssel für die Kernfeld-Anzeige „Materialzusammensetzung“ (chemische/Rezeptur-Daten aus RAG landen hier).
+ */
+export const RAG_MATERIAL_COMPOSITION_PASSPORT_KEY = 'materialZusammensetzung' as const;
+
+/**
  * Felder die beim DPP-Erstellen aus RAG/Eager (`products.extracted_attributes`)
  * ins Produktpass übernommen werden („Quellen & Belege“).
  * Andere Keys (z. B. gtin, productName) bleiben aus dieser Schicht unberührt.
@@ -11,8 +16,9 @@ export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
   'ewcCode',
   'wasteCode',
   'endOfLifeInstructions',
-  'chemicalComposition',
-  /** CHEMICAL-Pass / deutsch — gleiche Slots wie chemicalComposition / endOfLifeInstructions (Synonym-Merge). */
+  /** UI „Materialzusammensetzung“ / Textil-Kernfeld; RAG speichert oft `chemicalComposition` in der DB. */
+  'materialZusammensetzung',
+  /** CHEMICAL-Pass / deutsch — gleiche Quelle wie chemicalComposition im Index (Synonym-Merge). */
   'zusammensetzung',
   'entsorgungshinweise',
 ]);

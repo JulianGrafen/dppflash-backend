@@ -6,6 +6,10 @@ import {
   eagerExtractionResponseToRows,
   normalizeEagerExtractionRawObject,
 } from '@/app/domain/rag/eagerExtractionResponseSchema';
+import {
+  isSdsCompositionMassSumPlausible,
+  sumApproximateMassPercents,
+} from '@/app/domain/rag/sdsCompositionSchema';
 
 const MAX_DOCUMENT_CHARS = 120_000;
 
@@ -16,29 +20,60 @@ Du erhältst den Volltext eines PDFs (mit Seiten-Markern). Extrahiere **nur** In
 
 Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **ausschließlich** die vorgegebene Liste.
 
-Extrahiere die Daten STRENG nach diesem Schema. Nutze niemals deutsche Keys!
+Extrahiere die Daten STRENG nach diesem Schema. Nutze niemals deutsche Keys für Top-Level-Namen!
 
-- Zusammensetzung / Materialien / Rezeptur → chemicalComposition (NICHT materialZusammensetzung, NICHT materialComposition)
-- Entsorgung / End-of-Life / Abschnitt 13 → endOfLifeInstructions
-- Hersteller / Lieferant / Inverkehrbringer → hersteller (NICHT manufacturer, NICHT Hersteller)
-- Handelsname / Produktbezeichnung auf dem Deckblatt → productName (NICHT produktname)
-- Modell / Typenbezeichnung → modellname
-- Abfallschlüssel / EWC / EAK / AVV → ewcCode
-- GTIN / EAN / Barcode → gtin
+---
 
-Wenn ein Feld nicht im Text steht, lass den Key komplett weg — kein null, kein leerer String als Platzhalter.
+## chemicalComposition — Massenanteile / Gew.-%, Abschnitt 3 Sicherheitsdatenblatt
 
-Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen):
+Mappe hier **die vollständige produktbezogene Zusammensetzung** (nicht nur Einzelgefahren): **jeden Eintrag aus der Gehalts-/Bestandteilstabelle** als eigenes Objekt im Array \`chemicalComposition.value\`.
+
+Pflicht für diese Objekte:
+- \`stoffname\`: Stoff-/Gemischbezeichnung wie im SDB.
+- \`prozentAnteil\`: **genau die %-Angabe(n) aus der Tabelle** (Einzelwert oder Bereich), z. B. \`"≥ 99"\`, \`"40 – 60 %"\`, \`"< 1 %"\`.
+- \`casNummer\`: CAS wie angegeben oder null.
+- \`einstufung\`: Einstufung/H-Sätze zur Komponente oder null.
+
+**Summe:** Alle ausgewiesenen Massen-/Gew.-Anteile dieser Zeilen müssen sich **logisch zu 100 %** der ausgewiesenen Zusammensetzung ergänzen (Rest-/„Sonstige Bestandteile“-Zeile aus dem SDB mit übernehmen, wenn vorhanden). Keine Stoffzeilen aus Abschnitt 3 weglassen. Keine Kommaliste als einen einzigen Freitext — immer strukturierte Zeilen.
+
+---
+
+## substancesOfConcern — besorgniserregende / ausgewiesene Stoffe **separat**
+
+Alles was im SDB **explizit als besorgniserregend**, SVHC, Grenzwert-/Zulassungsbedingungen, **spezifische Konzentrationsgrenzen** oder vergleichbare **gesonderte Hinweise** geführt wird (oft eigene Unterabschnitte, Grenzwerte, SVHC-Tabelle): als **eigenes Objekt** im Array \`substancesOfConcern.value\` ausgeben — **nicht** mit den Massen-% der Gesamtzusammensetzung vermischen.
+
+Felder:
+- \`name\`: Bezeichnung wie im Dokument.
+- \`casNummer\`: CAS oder null.
+- \`anteilOderGrenzwert\`: zulässiger Anteil / Grenzwert / Konzentration wie angegeben oder null.
+- \`hinweis\`: regulatorischer Hinweis (z. B. SVHC, spezifische Einstufung) oder null.
+
+Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: Key \`substancesOfConcern\` **weglassen**.
+
+---
+
+## Alle anderen Felder
+
+- Entsorgung / Abschnitt 13 → endOfLifeInstructions
+- Hersteller → hersteller (nicht manufacturer)
+- Produktbezeichnung Deckblatt → productName
+- Modell → modellname
+- EWC / AVV → ewcCode
+- GTIN / EAN → gtin
+
+**Andere Felder** außer chemicalComposition/substancesOfConcern: wie gewohnt
+
 {
   "value": string | null,
-  "sourcePdf": string (Dateiname der Quelle, wie übergeben),
-  "contextSnippet": string (kurzes wörtliches Zitat aus dem Text als Beleg)
+  "sourcePdf": string,
+  "contextSnippet": string
 }
 
 Regeln:
-- Numerische Kennwerte als String in "value".
+- Kennzahlen außerhalb chemicalComposition/substancesOfConcern als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
-- EWC/Abfallschlüssel nur bei plausibler Kennzeichnung.`;
+
+Wenn ein Feld nicht extrahierbar ist: Top-Level-Key weglassen — keine leeren Platzhalter.`;
 
 export interface BackgroundExtractionInput {
   readonly documentText: string;
@@ -84,6 +119,14 @@ ${body}`;
     if (!validated.success) {
       console.warn('[EAGER] Zod validation failed (strict keys only):', validated.error.flatten());
       return {};
+    }
+
+    const cc = validated.data.chemicalComposition?.value;
+    if (cc && cc.length > 0 && !isSdsCompositionMassSumPlausible(cc)) {
+      console.warn('[EAGER] SDS Abschnitt 3: Massenanteile nicht ~100 % (Schätzung aus %-Angaben)', {
+        approximateSumPercent: sumApproximateMassPercents(cc),
+        fileName: input.fileName,
+      });
     }
 
     return eagerExtractionResponseToRows(validated.data, input.fileName);

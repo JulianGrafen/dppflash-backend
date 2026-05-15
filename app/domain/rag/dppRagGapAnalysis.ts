@@ -21,7 +21,9 @@ export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   countryOfOrigin: 'Ursprungsland, Herkunftsland, country of origin',
   countryOfManufacturing: 'Herstellungsland, Produktionsland',
   declaredProductType: 'Produktkategorie, Produkttyp, Anwendung',
-  materialZusammensetzung: 'Materialzusammensetzung, Fasern, Stoffe, Textil',
+  zusammensetzung: 'Zusammensetzung, Inhaltsstoffe, Rezeptur, Abschnitt 3, Anteile',
+  substancesOfConcern: 'besorgniserregende Stoffe, SVHC, Grenzwert, Zulassungsbedingungen',
+  gefahrenstoffe: 'Gefahrenstoffe, besorgniserregende Stoffe, SVHC, Abschnitt 3, Länderliste',
   herkunftsland: 'Herkunftsland, Ursprung, Made in',
   entsorgungshinweise: 'Entsorgung, Abschnitt 13, Entsorgungshinweise',
   recyclingAnweisungen: 'Recycling, Rücknahme, Entsorgung',
@@ -53,6 +55,28 @@ function isEmptyPassportScalar(value: unknown): boolean {
   return false;
 }
 
+function isCompositionMassFractionGapFilled(value: unknown): boolean {
+  if (Array.isArray(value) && value.length > 0) {
+    return true;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    return true;
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const inner = (value as Record<string, unknown>).value;
+    if (Array.isArray(inner) && inner.length > 0) {
+      return true;
+    }
+    if (typeof inner === 'string' && inner.trim() !== '') {
+      return true;
+    }
+    if (typeof inner === 'number' && Number.isFinite(inner)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isEmptyForRagGap(key: string, value: unknown): boolean {
   if (key === 'materialComposition') {
     if (Array.isArray(value) && value.length > 0) {
@@ -69,19 +93,23 @@ function isEmptyForRagGap(key: string, value: unknown): boolean {
     }
     return true;
   }
-  if (key === 'chemicalComposition') {
+  if (
+    key === 'chemicalComposition'
+    || key === 'materialZusammensetzung'
+    || key === 'zusammensetzung'
+  ) {
+    return !isCompositionMassFractionGapFilled(value);
+  }
+  if (key === 'gefahrenstoffe') {
     if (Array.isArray(value) && value.length > 0) {
-      return false;
-    }
-    if (typeof value === 'string' && value.trim() !== '') {
       return false;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const inner = (value as Record<string, unknown>).value;
-      if (typeof inner === 'string' && inner.trim() !== '') {
+      if (Array.isArray(inner) && inner.length > 0) {
         return false;
       }
-      if (typeof inner === 'number' && Number.isFinite(inner)) {
+      if (typeof inner === 'string' && inner.trim() !== '') {
         return false;
       }
     }

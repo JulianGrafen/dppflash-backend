@@ -166,6 +166,13 @@ function materialNameFromCompositionEntry(entry: Record<string, unknown>): strin
   return undefined;
 }
 
+function unwrapProvenanceInner(value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'value' in value) {
+    return (value as Record<string, unknown>).value;
+  }
+  return value;
+}
+
 /** ESPR Kernfeld materialComposition + legacy Textfeld materialZusammensetzung (z. B. Textilien). */
 function renderMaterialZusammensetzungKernfelder(
   materialComposition: unknown,
@@ -185,10 +192,43 @@ function renderMaterialZusammensetzungKernfelder(
     });
   }
 
+  const mzInner = unwrapProvenanceInner(materialZusammensetzung);
+  if (Array.isArray(mzInner)) {
+    for (const item of mzInner) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      const title =
+        typeof row.stoffname === 'string'
+          ? row.stoffname.trim()
+          : typeof row.substance === 'string'
+            ? row.substance.trim()
+            : '';
+      if (!title) continue;
+      const pct =
+        typeof row.prozentAnteil === 'string' && row.prozentAnteil.trim()
+          ? row.prozentAnteil.trim()
+          : undefined;
+      const ein =
+        typeof row.einstufung === 'string' && row.einstufung.trim()
+          ? row.einstufung.trim()
+          : undefined;
+      const cas =
+        row.casNummer !== null && typeof row.casNummer === 'string' && row.casNummer.trim()
+          ? row.casNummer.trim()
+          : typeof row.casNumber === 'string'
+            ? row.casNumber.trim()
+            : undefined;
+      const details = [pct, cas ? `CAS ${cas}` : undefined, ein].filter(Boolean).join(' · ');
+      entries.push({ title, details: details || undefined });
+    }
+  }
+
   const legacy =
     typeof materialZusammensetzung === 'string' && materialZusammensetzung.trim().length > 0
       ? materialZusammensetzung.trim()
-      : undefined;
+      : typeof mzInner === 'string' && mzInner.trim().length > 0
+        ? mzInner.trim()
+        : undefined;
 
   const list = renderKeyValueList('Material-Zusammensetzung', entries);
   if (list) {
@@ -250,21 +290,38 @@ function renderCarbonFootprint(value: unknown) {
 }
 
 function renderSubstancesOfConcern(value: unknown) {
-  if (!Array.isArray(value)) return null;
+  const inner = unwrapProvenanceInner(value);
+  if (!Array.isArray(inner)) return null;
 
-  const entries = value.flatMap((entry) => {
+  const entries = inner.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
 
-    const name = 'name' in entry && typeof entry.name === 'string' ? entry.name : undefined;
-    const casNumber = 'casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined;
-    const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
-    const hazardClass = 'hazardClass' in entry && typeof entry.hazardClass === 'string' && entry.hazardClass
-      ? entry.hazardClass
-      : undefined;
+    const name =
+      ('name' in entry && typeof entry.name === 'string' ? entry.name : undefined)
+      ?? ('stoffname' in entry && typeof entry.stoffname === 'string' ? entry.stoffname : undefined);
+    const casNumber =
+      ('casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined)
+      ?? ('casNummer' in entry && entry.casNummer !== null && typeof entry.casNummer === 'string'
+        ? entry.casNummer
+        : undefined);
+    const concentration =
+      'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
+    const pctStr =
+      'anteilOderGrenzwert' in entry && typeof entry.anteilOderGrenzwert === 'string'
+      && entry.anteilOderGrenzwert.trim()
+        ? entry.anteilOderGrenzwert.trim()
+        : undefined;
+    const hazardClass =
+      ('hazardClass' in entry && typeof entry.hazardClass === 'string' && entry.hazardClass
+        ? entry.hazardClass
+        : undefined)
+      ?? ('hinweis' in entry && typeof entry.hinweis === 'string' && entry.hinweis.trim()
+        ? entry.hinweis.trim()
+        : undefined);
 
     if (!name) return [];
 
-    const details = [casNumber, concentration, hazardClass].filter(Boolean).join(' · ');
+    const details = [casNumber, pctStr ?? concentration, hazardClass].filter(Boolean).join(' · ');
 
     return [{
       title: name,
@@ -273,6 +330,36 @@ function renderSubstancesOfConcern(value: unknown) {
   });
 
   return renderKeyValueList('Besorgniserregende Stoffe', entries);
+}
+
+function renderGefahrenstoffeKernfelder(value: unknown) {
+  const inner = unwrapProvenanceInner(value);
+  if (inner === undefined || inner === null) return null;
+  if (!Array.isArray(inner) || inner.length === 0) return null;
+
+  if (typeof inner[0] === 'string') {
+    return renderKeyValueList(
+      'Gefahren- / besorgniserregende Stoffe',
+      inner.map((s) => ({ title: typeof s === 'string' ? s : String(s) })),
+    );
+  }
+
+  const entries = inner.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const o = entry as Record<string, unknown>;
+    const name = typeof o.name === 'string' ? o.name.trim() : '';
+    if (!name) return [];
+    const parts = [
+      o.casNummer != null && String(o.casNummer).trim() ? `CAS ${String(o.casNummer).trim()}` : '',
+      o.anteilOderGrenzwert != null && String(o.anteilOderGrenzwert).trim()
+        ? String(o.anteilOderGrenzwert).trim()
+        : '',
+      o.hinweis != null && String(o.hinweis).trim() ? String(o.hinweis).trim() : '',
+    ].filter(Boolean);
+    return [{ title: name, details: parts.join(' · ') || undefined }];
+  });
+
+  return renderKeyValueList('Gefahren- / besorgniserregende Stoffe', entries);
 }
 
 function renderManufacturerDetails(value: unknown) {
@@ -346,25 +433,40 @@ function renderCareRepairDurability(value: unknown) {
 }
 
 function renderChemicalComposition(value: unknown) {
-  if (!Array.isArray(value)) return null;
+  const inner = unwrapProvenanceInner(value);
+  if (!Array.isArray(inner)) return null;
 
-  const entries = value.flatMap((entry) => {
+  const entries = inner.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
 
-    const substance = 'substance' in entry && typeof entry.substance === 'string'
-      ? entry.substance
-      : undefined;
-    const casNumber = 'casNumber' in entry && typeof entry.casNumber === 'string'
-      ? entry.casNumber
-      : undefined;
+    const substance =
+      ('substance' in entry && typeof entry.substance === 'string' ? entry.substance.trim() : '')
+      || ('stoffname' in entry && typeof entry.stoffname === 'string' ? entry.stoffname.trim() : '')
+      || undefined;
+
+    const casNumber =
+      ('casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined)
+      ?? ('casNummer' in entry && entry.casNummer !== null && typeof entry.casNummer === 'string'
+        ? entry.casNummer
+        : undefined);
+
+    const pctFromStructured =
+      'prozentAnteil' in entry && typeof entry.prozentAnteil === 'string' && entry.prozentAnteil.trim()
+        ? entry.prozentAnteil.trim()
+        : undefined;
     const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
-    const substanceFunction = 'function' in entry && typeof entry.function === 'string' && entry.function
-      ? entry.function
-      : undefined;
+
+    const substanceFunction =
+      ('function' in entry && typeof entry.function === 'string' && entry.function.trim()
+        ? entry.function.trim()
+        : undefined)
+      ?? ('einstufung' in entry && entry.einstufung !== null && typeof entry.einstufung === 'string'
+        ? entry.einstufung.trim()
+        : undefined);
 
     if (!substance) return [];
 
-    const details = [casNumber, concentration, substanceFunction].filter(Boolean).join(' · ');
+    const details = [casNumber, pctFromStructured ?? concentration, substanceFunction].filter(Boolean).join(' · ');
 
     return [{
       title: substance,
@@ -680,6 +782,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderCarbonFootprint(raw.carbonFootprint)}
           {renderEnvironmentalImpact(raw.environmentalImpact)}
           {renderSubstancesOfConcern(raw.substancesOfConcern)}
+          {renderGefahrenstoffeKernfelder(raw.gefahrenstoffe)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
           <Field

@@ -45,16 +45,53 @@ function isEmptyPassportValue(value: unknown): boolean {
       if (typeof inner === 'string' && inner.trim() === 'PENDING_EXTERNAL_MATCH') {
         return true;
       }
+      if (Array.isArray(inner) && inner.length === 0) {
+        return true;
+      }
       return false;
     }
   }
   return false;
 }
 
+/** Konvertiert strukturierte besorgniserregende Stoffe → `gefahrenstoffe?: string[]` auf dem Produktpass. */
+function formatGefahrenstoffStringsFromStructured(rows: readonly unknown[]): string[] {
+  return rows.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return String(item);
+    }
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === 'string' ? o.name.trim() : '';
+    const cas =
+      o.casNummer !== null && o.casNummer !== undefined && String(o.casNummer).trim()
+        ? `CAS ${String(o.casNummer).trim()}`
+        : '';
+    const anteil =
+      o.anteilOderGrenzwert !== null
+      && o.anteilOderGrenzwert !== undefined
+      && String(o.anteilOderGrenzwert).trim()
+        ? String(o.anteilOderGrenzwert).trim()
+        : '';
+    const hinweis =
+      o.hinweis !== null && o.hinweis !== undefined && String(o.hinweis).trim()
+        ? String(o.hinweis).trim()
+        : '';
+    const line = [name || '(ohne Namen)', cas, anteil, hinweis].filter(Boolean).join(' · ');
+    return line.length > 0 ? line : JSON.stringify(o);
+  });
+}
+
 function normalizeScalar(key: string, audited: AuditedValue): unknown {
   const raw = audited.value;
   if (raw === null) {
     return null;
+  }
+
+  if (Array.isArray(raw)) {
+    if (key === 'gefahrenstoffe') {
+      return formatGefahrenstoffStringsFromStructured(raw);
+    }
+    return raw;
   }
 
   if (NUMERIC_FIELDS.has(key)) {

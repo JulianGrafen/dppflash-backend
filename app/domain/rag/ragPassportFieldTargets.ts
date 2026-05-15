@@ -12,7 +12,10 @@ export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
   'wasteCode',
   'endOfLifeInstructions',
   'chemicalComposition',
-  /** CHEMICAL-Pass / deutsch — gleiche Slots wie chemicalComposition / endOfLifeInstructions (Synonym-Merge). */
+  'materialZusammensetzung',
+  'substancesOfConcern',
+  'gefahrenstoffe',
+  /** CHEMICAL/PAINT — gleicher Speicher-Slot wie chemicalComposition (Synonym-Merge). */
   'zusammensetzung',
   'entsorgungshinweise',
 ]);
@@ -113,10 +116,31 @@ const FURNITURE = [...COMMON, 'material', 'abmessungen', 'gewicht', 'zerlegbarke
 const CHEMICAL = [
   ...COMMON,
   'zusammensetzung',
+  'gefahrenstoffe',
   'verwendung',
   'lagerbedingungen',
   'entsorgungshinweise',
   'sicherheitsdatenblatt',
+] as const;
+
+const PAINT = [
+  ...COMMON,
+  'zusammensetzung',
+  'gefahrenstoffe',
+  'verwendung',
+  'lagerbedingungen',
+  'entsorgungshinweise',
+  'voc',
+] as const;
+
+const LUBRICANT = [
+  ...COMMON,
+  'zusammensetzung',
+  'gefahrenstoffe',
+  'viskositaet',
+  'temperaturbereich',
+  'umweltfreundlichkeit',
+  'verwendungsbereich',
 ] as const;
 
 /**
@@ -136,6 +160,10 @@ export function getRagTargetFieldKeysForProductType(
       return [...FURNITURE];
     case 'CHEMICAL':
       return [...CHEMICAL];
+    case 'PAINT':
+      return [...PAINT];
+    case 'LUBRICANT':
+      return [...LUBRICANT];
     default:
       return [...COMMON];
   }
@@ -151,6 +179,8 @@ export function getAllRagExtractionFieldKeys(): readonly string[] {
       ...ELECTRONICS,
       ...FURNITURE,
       ...CHEMICAL,
+      ...PAINT,
+      ...LUBRICANT,
     ]),
   ];
 }

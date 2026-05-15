@@ -146,7 +146,7 @@ export class ProductPassportRagEnrichmentService {
       retrievalMatchConfidence = gapOutcome.retrievalMatchConfidence;
     }
 
-    const mergeAllowKeysRagEvidence = mergeAllowKeys.filter((key) =>
+    const mergeAllowKeysRagEvidence = ragEvidenceGaps.filter((key) =>
       RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key),
     );
 
@@ -161,14 +161,14 @@ export class ProductPassportRagEnrichmentService {
     );
 
     const dppPreview = { ...p, ...patch } as Record<string, unknown>;
-    const chem = dppPreview.chemicalComposition;
+    const mz = dppPreview.materialZusammensetzung ?? dppPreview.zusammensetzung;
     console.log(
-      'Synthese abgeschlossen. Finales DPP-Objekt hat chemicalComposition: ',
-      chem !== null &&
-        typeof chem === 'object' &&
-        'value' in (chem as Record<string, unknown>)
-        ? (chem as { value: unknown }).value
-        : chem,
+      'Synthese abgeschlossen. Material-/Zusammensetzung (Kernfeld): ',
+      mz !== null &&
+        typeof mz === 'object' &&
+        'value' in (mz as Record<string, unknown>)
+        ? (mz as { value: unknown }).value
+        : mz,
     );
 
     return {

@@ -1,10 +1,18 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
+import type { SdsCompositionEntry } from '@/app/domain/rag/sdsCompositionSchema';
+import type { SubstanceConcernEntry } from '@/app/domain/rag/substanceConcernSchema';
+
+export type ExtractedStructuredValue =
+  | string
+  | null
+  | readonly SdsCompositionEntry[]
+  | readonly SubstanceConcernEntry[];
 
 /**
  * JSONB shape in `products.extracted_attributes` (per field, from background extraction).
  */
 export interface ExtractedAttributeRow {
-  readonly value: string | null;
+  readonly value: ExtractedStructuredValue;
   readonly sourcePdf: string;
   readonly contextSnippet: string;
   readonly pageNumber?: number;
@@ -12,6 +20,16 @@ export interface ExtractedAttributeRow {
 }
 
 export type ExtractedAttributesMap = Readonly<Record<string, ExtractedAttributeRow>>;
+
+export function hasNonEmptyExtractedRowValue(value: ExtractedStructuredValue): boolean {
+  if (value === null) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    return value.trim() !== '';
+  }
+  return Array.isArray(value) && value.length > 0;
+}
 
 /**
  * Produkt-Anker für `products.normalized_name` nach Eager-Extraktion (Doc B/C),
@@ -21,8 +39,10 @@ export function pickProductEntityAnchorFromExtracted(
   extracted: Readonly<Record<string, ExtractedAttributeRow>>,
   fallbackLabel: string,
 ): string {
-  const productName = extracted.productName?.value?.trim();
-  const modellname = extracted.modellname?.value?.trim();
+  const pv = extracted.productName?.value;
+  const mv = extracted.modellname?.value;
+  const productName = typeof pv === 'string' ? pv.trim() : '';
+  const modellname = typeof mv === 'string' ? mv.trim() : '';
   const fb = fallbackLabel.trim();
   return productName || modellname || fb;
 }
@@ -31,16 +51,187 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function coerceRow(raw: unknown): ExtractedAttributeRow | null {
+/** Lowercase trim for resilient key matching between passport gaps and JSONB keys. */
+function normalizeExtractedFieldKey(key: string): string {
+  return key.trim().toLowerCase();
+}
+
+/**
+ * Passport / gap keys that refer to the same semantic slot in `extracted_attributes`
+ * (LLM casing, English vs. German labels, legacy spellings).
+ */
+const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
+  ['hersteller', 'manufacturer', 'herstellername', 'herstellerName', 'Manufacturer', 'Hersteller'],
+  ['ewcCode', 'wasteCode', 'ewc', 'waste_code', 'ewc_code', 'EWC', 'WasteCode'],
+  [
+    'chemicalComposition',
+    'materialComposition',
+    'materialZusammensetzung',
+    'materialzusammensetzung',
+    'chemischeZusammensetzung',
+    'chemischezusammensetzung',
+    'zusammensetzung',
+  ],
+  ['substancesOfConcern', 'gefahrenstoffe', 'besorgniserregendestoffe', 'besorgniserregendeStoffe', 'svhc'],
+  ['countryOfOrigin', 'herkunftsland', 'countryoforigin'],
+  ['countryOfManufacturing', 'verarbeitungsland', 'herstellungsland', 'countryofmanufacturing'],
+  ['productName', 'productname', 'produktname', 'modellname', 'modelName', 'modell', 'model'],
+  ['declaredProductType', 'declaredproducttype', 'produkttyp'],
+  ['endOfLifeInstructions', 'entsorgungshinweise', 'endoflifeinstructions'],
+  ['gtin', 'ean'],
+  ['nachhaltigkeit', 'sustainability'],
+  ['gewichtKg', 'gewicht', 'weightKg', 'weight'],
+  ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],
+];
+
+function synonymLowerNamesForPassportField(passportFieldKey: string): ReadonlySet<string> {
+  const needle = normalizeExtractedFieldKey(passportFieldKey);
+  for (const group of FIELD_KEY_SYNONYM_GROUPS) {
+    const lowers = new Set(group.map((g) => normalizeExtractedFieldKey(g)));
+    if (lowers.has(needle)) {
+      return lowers;
+    }
+  }
+  return new Set([needle]);
+}
+
+function isCompositionStorageKey(fieldKey: string): boolean {
+  return synonymLowerNamesForPassportField('chemicalComposition').has(normalizeExtractedFieldKey(fieldKey));
+}
+
+function isSubstancesConcernStorageKey(fieldKey: string): boolean {
+  return synonymLowerNamesForPassportField('substancesOfConcern').has(normalizeExtractedFieldKey(fieldKey));
+}
+
+function parseStoredCompositionArray(rawValue: unknown): readonly SdsCompositionEntry[] | null {
+  if (!Array.isArray(rawValue)) {
+    return null;
+  }
+  const entries: SdsCompositionEntry[] = [];
+  for (const item of rawValue) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const stoffFromDe = typeof item.stoffname === 'string' ? item.stoffname.trim() : '';
+    const stoffFromEn = typeof item.substance === 'string' ? item.substance.trim() : '';
+    const stoffname = stoffFromDe || stoffFromEn;
+    if (!stoffname) {
+      continue;
+    }
+    let casNummer: string | null = null;
+    if (item.casNummer === null) {
+      casNummer = null;
+    } else if (typeof item.casNummer === 'string') {
+      casNummer = item.casNummer;
+    } else if (typeof item.casNumber === 'string') {
+      casNummer = item.casNumber;
+    }
+    const prozentAnteil =
+      typeof item.prozentAnteil === 'string'
+        ? item.prozentAnteil
+        : typeof item.concentrationPercent === 'number' && Number.isFinite(item.concentrationPercent)
+          ? `${item.concentrationPercent}%`
+          : '';
+    let einstufung: string | null = null;
+    if (item.einstufung === null || item.einstufung === undefined) {
+      einstufung =
+        typeof item.function === 'string' && item.function.trim() ? item.function.trim() : null;
+    } else if (typeof item.einstufung === 'string') {
+      einstufung = item.einstufung;
+    }
+    entries.push({
+      stoffname,
+      casNummer,
+      prozentAnteil,
+      einstufung,
+    });
+  }
+  return entries.length > 0 ? entries : null;
+}
+
+function parseStoredSubstancesArray(rawValue: unknown): readonly SubstanceConcernEntry[] | null {
+  if (!Array.isArray(rawValue)) {
+    return null;
+  }
+  const entries: SubstanceConcernEntry[] = [];
+  for (const item of rawValue) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const name =
+      typeof item.name === 'string'
+        ? item.name.trim()
+        : typeof item.stoffname === 'string'
+          ? item.stoffname.trim()
+          : '';
+    if (!name) {
+      continue;
+    }
+    let casNummer: string | null = null;
+    if (item.casNummer === null) {
+      casNummer = null;
+    } else if (typeof item.casNummer === 'string') {
+      casNummer = item.casNummer;
+    } else if (typeof item.casNumber === 'string') {
+      casNummer = item.casNumber;
+    }
+    const anteil =
+      typeof item.anteilOderGrenzwert === 'string'
+        ? item.anteilOderGrenzwert
+        : typeof item.concentrationPercent !== 'undefined'
+          ? String(item.concentrationPercent)
+          : null;
+    const hinweis =
+      typeof item.hinweis === 'string'
+        ? item.hinweis
+        : typeof item.einstufung === 'string'
+          ? item.einstufung
+          : typeof item.hazardClass === 'string'
+            ? item.hazardClass
+            : null;
+    entries.push({
+      name,
+      casNummer,
+      anteilOderGrenzwert: anteil,
+      hinweis,
+    });
+  }
+  return entries.length > 0 ? entries : null;
+}
+
+function coerceRow(raw: unknown, fieldKey: string): ExtractedAttributeRow | null {
   if (!isRecord(raw)) {
     return null;
   }
-  const value =
-    raw.value === null || raw.value === undefined
-      ? null
-      : typeof raw.value === 'string'
-        ? raw.value
-        : String(raw.value);
+
+  let value: ExtractedStructuredValue;
+  const rawVal = raw.value;
+  if (rawVal === null || rawVal === undefined) {
+    value = null;
+  } else if (isCompositionStorageKey(fieldKey)) {
+    const structured = parseStoredCompositionArray(rawVal);
+    if (structured) {
+      value = structured;
+    } else if (typeof rawVal === 'string') {
+      value = rawVal;
+    } else {
+      value = String(rawVal);
+    }
+  } else if (isSubstancesConcernStorageKey(fieldKey)) {
+    const structured = parseStoredSubstancesArray(rawVal);
+    if (structured) {
+      value = structured;
+    } else if (typeof rawVal === 'string') {
+      value = rawVal;
+    } else {
+      value = String(rawVal);
+    }
+  } else if (typeof rawVal === 'string') {
+    value = rawVal;
+  } else {
+    value = String(rawVal);
+  }
+
   const sourcePdf = typeof raw.sourcePdf === 'string' ? raw.sourcePdf : '';
   const contextSnippet = typeof raw.contextSnippet === 'string' ? raw.contextSnippet : '';
   const conf = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? raw.confidence : 0;
@@ -67,7 +258,7 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
     if (!k || k.length > 96) {
       continue;
     }
-    const row = coerceRow(v);
+    const row = coerceRow(v, k);
     if (row) {
       out[k] = row;
     }
@@ -92,11 +283,7 @@ export function mergeExtractedAttributesJsonForPersistence(
   const mergedAttributes: Record<string, unknown> = { ...existingAttributes };
 
   for (const [key, fieldData] of Object.entries(incoming)) {
-    if (
-      fieldData &&
-      fieldData.value !== null &&
-      String(fieldData.value).trim() !== ''
-    ) {
+    if (fieldData && hasNonEmptyExtractedRowValue(fieldData.value)) {
       mergedAttributes[key] = {
         value: fieldData.value,
         sourcePdf: fieldData.sourcePdf,
@@ -125,59 +312,27 @@ export function mergeExtractedAttributesMaps(
 }
 
 function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
+  const requiresSnippet =
+    row.value !== null
+    && (typeof row.value === 'string' ? row.contextSnippet.trim().length < 2 : row.contextSnippet.trim().length < 2);
+
+  let valueOut: AuditedValue['value'];
+  if (row.value !== null && Array.isArray(row.value)) {
+    valueOut = row.value.map((e) => ({ ...e })) as AuditedValue['value'];
+  } else {
+    valueOut = row.value as AuditedValue['value'];
+  }
+
   return {
-    value: row.value,
+    value: valueOut,
     confidence: row.confidence,
     source: {
       fileName: row.sourcePdf.trim().length > 0 ? row.sourcePdf : 'unknown',
       pageNumber: row.pageNumber ?? 1,
       contextSnippet: row.contextSnippet.trim().length > 0 ? row.contextSnippet : '—',
     },
-    requiresManualReview: row.value !== null && row.contextSnippet.trim().length < 2,
+    requiresManualReview: requiresSnippet,
   };
-}
-
-/** Lowercase trim for resilient key matching between passport gaps and JSONB keys. */
-function normalizeExtractedFieldKey(key: string): string {
-  return key.trim().toLowerCase();
-}
-
-/**
- * Passport / gap keys that refer to the same semantic slot in `extracted_attributes`
- * (LLM casing, English vs. German labels, legacy spellings).
- */
-const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
-  ['hersteller', 'manufacturer', 'herstellername', 'herstellerName', 'Manufacturer', 'Hersteller'],
-  ['ewcCode', 'wasteCode', 'ewc', 'waste_code', 'ewc_code', 'EWC', 'WasteCode'],
-  [
-    'chemicalComposition',
-    'materialComposition',
-    'materialZusammensetzung',
-    'materialzusammensetzung',
-    'chemischeZusammensetzung',
-    'chemischezusammensetzung',
-    'zusammensetzung',
-  ],
-  ['countryOfOrigin', 'herkunftsland', 'countryoforigin'],
-  ['countryOfManufacturing', 'verarbeitungsland', 'herstellungsland', 'countryofmanufacturing'],
-  ['productName', 'productname', 'produktname', 'modellname', 'modelName', 'modell', 'model'],
-  ['declaredProductType', 'declaredproducttype', 'produkttyp'],
-  ['endOfLifeInstructions', 'entsorgungshinweise', 'endoflifeinstructions'],
-  ['gtin', 'ean'],
-  ['nachhaltigkeit', 'sustainability'],
-  ['gewichtKg', 'gewicht', 'weightKg', 'weight'],
-  ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],
-];
-
-function synonymLowerNamesForPassportField(passportFieldKey: string): ReadonlySet<string> {
-  const needle = normalizeExtractedFieldKey(passportFieldKey);
-  for (const group of FIELD_KEY_SYNONYM_GROUPS) {
-    const lowers = new Set(group.map((g) => normalizeExtractedFieldKey(g)));
-    if (lowers.has(needle)) {
-      return lowers;
-    }
-  }
-  return new Set([needle]);
 }
 
 /** Case-insensitive index; duplicate normalized keys keep the row with higher confidence. */
@@ -233,7 +388,7 @@ export function extractedAttributesToAuditTrailFields(
 
   for (const missingField of missingFields) {
     const hit = resolveStoredRowForMissingField(lookup, missingField);
-    if (!hit || hit.row.value === null) {
+    if (!hit || !hasNonEmptyExtractedRowValue(hit.row.value)) {
       keyResolution.push({ missingField, usedStoredKey: hit?.originalKey ?? null });
       continue;
     }

@@ -39,9 +39,6 @@ function isEmptyPassportValue(value: unknown): boolean {
       if (inner === undefined || inner === null) {
         return true;
       }
-      if (Array.isArray(inner) && inner.length === 0) {
-        return true;
-      }
       if (typeof inner === 'string' && inner.trim() === '') {
         return true;
       }
@@ -58,10 +55,6 @@ function normalizeScalar(key: string, audited: AuditedValue): unknown {
   const raw = audited.value;
   if (raw === null) {
     return null;
-  }
-
-  if (Array.isArray(raw)) {
-    return raw;
   }
 
   if (NUMERIC_FIELDS.has(key)) {

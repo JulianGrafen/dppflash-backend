@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { sdsCompositionArraySchema } from '@/app/domain/rag/sdsCompositionSchema';
 
 /**
  * Single provenance bundle: every extracted value must cite exact source context.
@@ -27,11 +26,8 @@ const auditedScalarValueSchema = z
   })
   .pipe(z.union([z.string().min(1), z.null()]));
 
-/** Skalare Passport-Werte oder SDS-Abschnitt-3-Stoffliste (Eager/RAG). */
-export const auditedPassportFieldValueSchema = z.union([sdsCompositionArraySchema, auditedScalarValueSchema]);
-
 export const AuditedValueSchema = z.object({
-  value: auditedPassportFieldValueSchema,
+  value: auditedScalarValueSchema,
   confidence: z.coerce.number().min(0).max(1),
   source: SourceAttributionSchema,
   requiresManualReview: z.boolean(),
@@ -51,8 +47,8 @@ export const AuditTrailSchema = z
     gtin: AuditedValueSchema.optional(),
     ewcCode: AuditedValueSchema.optional(),
     /**
-     * DPP/ESPR field keys → audited scalar (string form; numbers normalized at merge time)
-     * oder strukturierte SDS-Zusammensetzung (`materialZusammensetzung` / Synonyme).
+     * DPP/ESPR field keys → audited scalar (string form; numbers are normalized at merge time).
+     * Keys should match camelCase passport field names (e.g. kapazitaetKWh, materialZusammensetzung).
      */
     fields: passportFieldsRecord.optional(),
   })

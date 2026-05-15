@@ -78,9 +78,6 @@ function isEmptyForRagGap(key: string, value: unknown): boolean {
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       const inner = (value as Record<string, unknown>).value;
-      if (Array.isArray(inner) && inner.length > 0) {
-        return false;
-      }
       if (typeof inner === 'string' && inner.trim() !== '') {
         return false;
       }

@@ -72,11 +72,7 @@ function collectWasteCodeSearchTexts(dpp: DppProductPassport): readonly string[]
   }
 
   for (const ch of dpp.chemicalComposition ?? []) {
-    push(
-      [ch.substance, ch.stoffname, ch.function, ch.einstufung, ch.casNumber, ch.casNummer ?? undefined, ch.prozentAnteil]
-        .filter(Boolean)
-        .join(' '),
-    );
+    push([ch.substance, ch.function, ch.casNumber].filter(Boolean).join(' '));
   }
 
   for (const m of dpp.materialComposition ?? []) {

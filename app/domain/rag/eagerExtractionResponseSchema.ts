@@ -1,20 +1,10 @@
 import { z } from 'zod';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
-import { sdsCompositionEntrySchema } from '@/app/domain/rag/sdsCompositionSchema';
 
 /** Ein Feld aus der Eager-LLM-Antwort — nur `value` / `sourcePdf` / `contextSnippet` (keine weiteren Keys). */
 const eagerExtractionFieldRowSchema = z
   .object({
     value: z.string().nullable(),
-    sourcePdf: z.string(),
-    contextSnippet: z.string(),
-  })
-  .strict();
-
-/** SDS Abschnitt 3 — strukturierte Stoffliste (nicht als kommagetrennter String). */
-export const eagerChemicalCompositionFieldRowSchema = z
-  .object({
-    value: z.array(sdsCompositionEntrySchema).nullable(),
     sourcePdf: z.string(),
     contextSnippet: z.string(),
   })
@@ -90,24 +80,6 @@ function isLooseFieldRow(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Ältere LLM-/Merge-Antworten: flacher String → ein SDS-Zeilenobjekt (Zod akzeptiert nur Arrays). */
-export function coerceLegacyChemicalCompositionValue(v: unknown): unknown {
-  if (v === null || v === undefined) {
-    return null;
-  }
-  if (Array.isArray(v)) {
-    return v;
-  }
-  if (typeof v === 'string') {
-    const t = v.trim();
-    if (t.length === 0) {
-      return null;
-    }
-    return [{ stoffname: t, casNummer: null, prozentAnteil: '', einstufung: null }];
-  }
-  return null;
-}
-
 /**
  * Vor Zod: unbekannte / deutsche LLM-Keys auf kanonische Keys mappen; Duplikate auf denselben Key:
  * behält die Zeile mit **längerem** nicht-leerem `value` (sonst erste gültige).
@@ -115,27 +87,13 @@ export function coerceLegacyChemicalCompositionValue(v: unknown): unknown {
 export function normalizeEagerExtractionRawObject(source: Record<string, unknown>): Record<string, unknown> {
   const buckets: Partial<Record<EagerCanonicalFieldKey, Record<string, unknown>>> = {};
 
-  const scoreScalarRow = (row: Record<string, unknown>): number => {
+  const score = (row: Record<string, unknown>): number => {
     const val = row.value;
     if (val === null || val === undefined) {
       return 0;
     }
     const s = typeof val === 'string' ? val.trim() : String(val).trim();
     return s.length;
-  };
-
-  const scoreCompositionRow = (row: Record<string, unknown>): number => {
-    const val = row.value;
-    if (val === null || val === undefined) {
-      return 0;
-    }
-    if (Array.isArray(val)) {
-      return val.length * 100_000 + JSON.stringify(val).length;
-    }
-    if (typeof val === 'string') {
-      return val.trim().length;
-    }
-    return scoreScalarRow(row);
   };
 
   for (const [rawKey, v] of Object.entries(source)) {
@@ -147,23 +105,16 @@ export function normalizeEagerExtractionRawObject(source: Record<string, unknown
       continue;
     }
     const prev = buckets[canonical];
-    const scoreFor = canonical === 'chemicalComposition' ? scoreCompositionRow : scoreScalarRow;
     if (!prev) {
       buckets[canonical] = { ...v };
       continue;
     }
-    if (scoreFor(v) > scoreFor(prev)) {
+    if (score(v) > score(prev)) {
       buckets[canonical] = { ...v };
     }
   }
 
-  const out = buckets as Record<string, unknown>;
-  const cc = out.chemicalComposition;
-  if (cc && isLooseFieldRow(cc)) {
-    cc.value = coerceLegacyChemicalCompositionValue(cc.value);
-  }
-
-  return out;
+  return buckets as Record<string, unknown>;
 }
 
 /**
@@ -179,7 +130,7 @@ export const eagerExtractionResponseSchema = z
     countryOfOrigin: eagerExtractionFieldRowSchema.optional(),
     countryOfManufacturing: eagerExtractionFieldRowSchema.optional(),
     endOfLifeInstructions: eagerExtractionFieldRowSchema.optional(),
-    chemicalComposition: eagerChemicalCompositionFieldRowSchema.optional(),
+    chemicalComposition: eagerExtractionFieldRowSchema.optional(),
     gtin: eagerExtractionFieldRowSchema.optional(),
   })
   .strict();
@@ -194,16 +145,6 @@ const EAGER_ROW_KEYS = EAGER_CANONICAL_FIELD_KEYS;
 /** Default-Konfidenz für Eager-Zeilen, wenn das LLM keine Confidence liefert. */
 const EAGER_DEFAULT_CONFIDENCE = 0.88;
 
-function eagerChunkHasExtractableValue(key: EagerCanonicalFieldKey, chunk: { value: unknown }): boolean {
-  if (chunk.value === null) {
-    return false;
-  }
-  if (key === 'chemicalComposition') {
-    return Array.isArray(chunk.value) && chunk.value.length > 0;
-  }
-  return String(chunk.value).trim() !== '';
-}
-
 export function eagerExtractionResponseToRows(
   data: EagerExtractionResponse,
   defaultSourcePdf: string,
@@ -214,12 +155,12 @@ export function eagerExtractionResponseToRows(
     if (!chunk) {
       continue;
     }
-    if (!eagerChunkHasExtractableValue(k, chunk)) {
+    if (chunk.value === null || String(chunk.value).trim() === '') {
       continue;
     }
     const sourcePdf = chunk.sourcePdf.trim().length > 0 ? chunk.sourcePdf : defaultSourcePdf;
     out[k] = {
-      value: chunk.value as ExtractedAttributeRow['value'],
+      value: chunk.value,
       sourcePdf,
       contextSnippet: chunk.contextSnippet,
       pageNumber: 1,

@@ -15,18 +15,9 @@ import {
 import {
   getRagTargetFieldKeysForProductType,
   orderRagTargetKeysPrioritizingGtin,
-  RAG_MATERIAL_COMPOSITION_PASSPORT_KEY,
   RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS,
 } from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ProductPassport } from '@/app/types/dpp-types';
-
-/** Lücken `chemicalComposition` → Passport-Kernfeld „Materialzusammensetzung“ (`materialZusammensetzung`). */
-function mapGapsToRagEvidenceTargets(gaps: readonly string[]): readonly string[] {
-  const mapped = gaps.map((key) =>
-    key === 'chemicalComposition' ? RAG_MATERIAL_COMPOSITION_PASSPORT_KEY : key,
-  );
-  return [...new Set(mapped)].filter((key) => RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key));
-}
 
 function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
   const emptyTrail = safeParseAuditTrail({ fields: {} });
@@ -47,7 +38,7 @@ function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
  * 1. Primary data = passport from PDF extraction (Doc A).
  * 2. Gap analysis vs RAG target keys; anchor = `productName` (abort secondary if missing).
  * 3. **Eager Gap-Fill**: `products.extracted_attributes` (tenant + normalisierter Produkt-Anker) — kein Live-LLM.
- * 4. Merge nur **genehmigte** leere Passport-Felder (u. a. Zusammensetzung unter {@link RAG_MATERIAL_COMPOSITION_PASSPORT_KEY}) mit Audit inkl. Quelle.
+ * 4. Merge nur **genehmigte** leere Passport-Felder (siehe {@link RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS}) mit Audit inkl. Quelle.
  */
 export class ProductPassportRagEnrichmentService {
   async enrichFromIndexedChunks(
@@ -78,7 +69,7 @@ export class ProductPassportRagEnrichmentService {
 
     const anchor = resolvePrimaryProductNameAnchor(p);
     const gaps = detectRagFillableGaps(p, input.productType);
-    const ragEvidenceGaps = mapGapsToRagEvidenceTargets(gaps);
+    const ragEvidenceGaps = gaps.filter((key) => RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key));
 
     if (!anchor || gaps.length === 0) {
       const enrichment = emptyEnrichmentOutcome();
@@ -155,7 +146,9 @@ export class ProductPassportRagEnrichmentService {
       retrievalMatchConfidence = gapOutcome.retrievalMatchConfidence;
     }
 
-    const mergeAllowKeysRagEvidence = [...ragEvidenceGaps];
+    const mergeAllowKeysRagEvidence = mergeAllowKeys.filter((key) =>
+      RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS.has(key),
+    );
 
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
     const mergeOpts: MergeRagAuditOptions | undefined =
@@ -168,14 +161,14 @@ export class ProductPassportRagEnrichmentService {
     );
 
     const dppPreview = { ...p, ...patch } as Record<string, unknown>;
-    const mz = dppPreview.materialZusammensetzung;
+    const chem = dppPreview.chemicalComposition;
     console.log(
-      'Synthese abgeschlossen. Finales DPP-Objekt hat materialZusammensetzung (Materialzusammensetzung): ',
-      mz !== null &&
-        typeof mz === 'object' &&
-        'value' in (mz as Record<string, unknown>)
-        ? (mz as { value: unknown }).value
-        : mz,
+      'Synthese abgeschlossen. Finales DPP-Objekt hat chemicalComposition: ',
+      chem !== null &&
+        typeof chem === 'object' &&
+        'value' in (chem as Record<string, unknown>)
+        ? (chem as { value: unknown }).value
+        : chem,
     );
 
     return {

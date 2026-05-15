@@ -351,35 +351,20 @@ function renderChemicalComposition(value: unknown) {
   const entries = value.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
 
-    const substance =
-      ('substance' in entry && typeof entry.substance === 'string' ? entry.substance.trim() : '')
-      || ('stoffname' in entry && typeof entry.stoffname === 'string' ? entry.stoffname.trim() : '')
-      || undefined;
-
-    const casNumber =
-      ('casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined)
-      ?? ('casNummer' in entry && entry.casNummer !== null && typeof entry.casNummer === 'string'
-        ? entry.casNummer
-        : undefined);
-
-    const pctFromStructured =
-      'prozentAnteil' in entry && typeof entry.prozentAnteil === 'string' && entry.prozentAnteil.trim()
-        ? entry.prozentAnteil.trim()
-        : undefined;
-    const concentration =
-      'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
-
-    const substanceFunction =
-      ('function' in entry && typeof entry.function === 'string' && entry.function.trim()
-        ? entry.function.trim()
-        : undefined)
-      ?? ('einstufung' in entry && entry.einstufung !== null && typeof entry.einstufung === 'string'
-        ? entry.einstufung.trim()
-        : undefined);
+    const substance = 'substance' in entry && typeof entry.substance === 'string'
+      ? entry.substance
+      : undefined;
+    const casNumber = 'casNumber' in entry && typeof entry.casNumber === 'string'
+      ? entry.casNumber
+      : undefined;
+    const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
+    const substanceFunction = 'function' in entry && typeof entry.function === 'string' && entry.function
+      ? entry.function
+      : undefined;
 
     if (!substance) return [];
 
-    const details = [casNumber, pctFromStructured ?? concentration, substanceFunction].filter(Boolean).join(' · ');
+    const details = [casNumber, concentration, substanceFunction].filter(Boolean).join(' · ');
 
     return [{
       title: substance,

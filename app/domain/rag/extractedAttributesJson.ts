@@ -1,12 +1,10 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
-import type { SdsCompositionEntry } from '@/app/domain/rag/sdsCompositionSchema';
 
 /**
  * JSONB shape in `products.extracted_attributes` (per field, from background extraction).
- * `chemicalComposition` (und Synonyme) können strukturierte SDS-Zeilen halten.
  */
 export interface ExtractedAttributeRow {
-  readonly value: string | null | readonly SdsCompositionEntry[];
+  readonly value: string | null;
   readonly sourcePdf: string;
   readonly contextSnippet: string;
   readonly pageNumber?: number;
@@ -14,17 +12,6 @@ export interface ExtractedAttributeRow {
 }
 
 export type ExtractedAttributesMap = Readonly<Record<string, ExtractedAttributeRow>>;
-
-export function hasNonEmptyExtractedRowValue(value: ExtractedAttributeRow['value']): boolean {
-  if (value === null) {
-    return false;
-  }
-  if (typeof value === 'string') {
-    return value.trim() !== '';
-  }
-  return Array.isArray(value) && value.length > 0;
-}
-
 
 /**
  * Produkt-Anker für `products.normalized_name` nach Eager-Extraktion (Doc B/C),
@@ -34,10 +21,8 @@ export function pickProductEntityAnchorFromExtracted(
   extracted: Readonly<Record<string, ExtractedAttributeRow>>,
   fallbackLabel: string,
 ): string {
-  const pv = extracted.productName?.value;
-  const mv = extracted.modellname?.value;
-  const productName = typeof pv === 'string' ? pv.trim() : '';
-  const modellname = typeof mv === 'string' ? mv.trim() : '';
+  const productName = extracted.productName?.value?.trim();
+  const modellname = extracted.modellname?.value?.trim();
   const fb = fallbackLabel.trim();
   return productName || modellname || fb;
 }
@@ -46,84 +31,16 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function isCompositionStorageKey(fieldKey: string): boolean {
-  const needle = normalizeExtractedFieldKey(fieldKey);
-  return synonymLowerNamesForPassportField('chemicalComposition').has(needle);
-}
-
-function parseStoredCompositionArray(rawValue: unknown): readonly SdsCompositionEntry[] | null {
-  if (!Array.isArray(rawValue)) {
-    return null;
-  }
-  const entries: SdsCompositionEntry[] = [];
-  for (const item of rawValue) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const stoffFromDe = typeof item.stoffname === 'string' ? item.stoffname.trim() : '';
-    const stoffFromEn =
-      typeof item.substance === 'string' ? item.substance.trim() : '';
-    const stoffname = stoffFromDe || stoffFromEn;
-    if (!stoffname) {
-      continue;
-    }
-    let casNummer: string | null = null;
-    if (item.casNummer === null) {
-      casNummer = null;
-    } else if (typeof item.casNummer === 'string') {
-      casNummer = item.casNummer;
-    } else if (typeof item.casNumber === 'string') {
-      casNummer = item.casNumber;
-    }
-    const prozentAnteil =
-      typeof item.prozentAnteil === 'string'
-        ? item.prozentAnteil
-        : typeof item.concentrationPercent === 'number' && Number.isFinite(item.concentrationPercent)
-          ? `${item.concentrationPercent}%`
-          : '';
-    let einstufung: string | null = null;
-    if (item.einstufung === null || item.einstufung === undefined) {
-      einstufung =
-        typeof item.function === 'string' && item.function.trim()
-          ? item.function.trim()
-          : null;
-    } else if (typeof item.einstufung === 'string') {
-      einstufung = item.einstufung;
-    }
-    entries.push({
-      stoffname,
-      casNummer,
-      prozentAnteil,
-      einstufung,
-    });
-  }
-  return entries.length > 0 ? entries : null;
-}
-
-function coerceRow(raw: unknown, fieldKey: string): ExtractedAttributeRow | null {
+function coerceRow(raw: unknown): ExtractedAttributeRow | null {
   if (!isRecord(raw)) {
     return null;
   }
-
-  let value: ExtractedAttributeRow['value'];
-  const rawVal = raw.value;
-  if (rawVal === null || rawVal === undefined) {
-    value = null;
-  } else if (isCompositionStorageKey(fieldKey)) {
-    const structured = parseStoredCompositionArray(rawVal);
-    if (structured) {
-      value = structured;
-    } else if (typeof rawVal === 'string') {
-      value = rawVal;
-    } else {
-      value = String(rawVal);
-    }
-  } else if (typeof rawVal === 'string') {
-    value = rawVal;
-  } else {
-    value = String(rawVal);
-  }
-
+  const value =
+    raw.value === null || raw.value === undefined
+      ? null
+      : typeof raw.value === 'string'
+        ? raw.value
+        : String(raw.value);
   const sourcePdf = typeof raw.sourcePdf === 'string' ? raw.sourcePdf : '';
   const contextSnippet = typeof raw.contextSnippet === 'string' ? raw.contextSnippet : '';
   const conf = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? raw.confidence : 0;
@@ -150,7 +67,7 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
     if (!k || k.length > 96) {
       continue;
     }
-    const row = coerceRow(v, k);
+    const row = coerceRow(v);
     if (row) {
       out[k] = row;
     }
@@ -175,7 +92,11 @@ export function mergeExtractedAttributesJsonForPersistence(
   const mergedAttributes: Record<string, unknown> = { ...existingAttributes };
 
   for (const [key, fieldData] of Object.entries(incoming)) {
-    if (fieldData && hasNonEmptyExtractedRowValue(fieldData.value)) {
+    if (
+      fieldData &&
+      fieldData.value !== null &&
+      String(fieldData.value).trim() !== ''
+    ) {
       mergedAttributes[key] = {
         value: fieldData.value,
         sourcePdf: fieldData.sourcePdf,
@@ -204,22 +125,15 @@ export function mergeExtractedAttributesMaps(
 }
 
 function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
-  const requiresSnippet =
-    row.value !== null
-    && (typeof row.value === 'string' ? row.contextSnippet.trim().length < 2 : row.contextSnippet.trim().length < 2);
-  const valueOut: AuditedValue['value'] =
-    row.value !== null && Array.isArray(row.value)
-      ? row.value.map((e) => ({ ...e }))
-      : (row.value as AuditedValue['value']);
   return {
-    value: valueOut,
+    value: row.value,
     confidence: row.confidence,
     source: {
       fileName: row.sourcePdf.trim().length > 0 ? row.sourcePdf : 'unknown',
       pageNumber: row.pageNumber ?? 1,
       contextSnippet: row.contextSnippet.trim().length > 0 ? row.contextSnippet : '—',
     },
-    requiresManualReview: requiresSnippet,
+    requiresManualReview: row.value !== null && row.contextSnippet.trim().length < 2,
   };
 }
 
@@ -319,7 +233,7 @@ export function extractedAttributesToAuditTrailFields(
 
   for (const missingField of missingFields) {
     const hit = resolveStoredRowForMissingField(lookup, missingField);
-    if (!hit || !hasNonEmptyExtractedRowValue(hit.row.value)) {
+    if (!hit || hit.row.value === null) {
       keyResolution.push({ missingField, usedStoredKey: hit?.originalKey ?? null });
       continue;
     }

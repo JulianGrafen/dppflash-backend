@@ -291,8 +291,7 @@ export class ProductEntityService {
   }
 
   /**
-   * Read-merge-write: lädt `extracted_attributes`, mergt mit neuem Dokument-JSON **ohne**
-   * bestehende Top-Level-Keys zu verwerfen (kein re-parse-only Merge mehr).
+   * Safe-Merge / Cumulative Memory: SELECT → `{ ...existing, ...new }` (value-safe) → UPDATE.
    */
   async mergeExtractedAttributes(
     productId: string,
@@ -306,7 +305,7 @@ export class ProductEntityService {
       .from('products')
       .select('extracted_attributes')
       .eq('id', productId)
-      .maybeSingle();
+      .single();
 
     if (cur.error) {
       if (
@@ -319,12 +318,29 @@ export class ProductEntityService {
       throw new Error(`products read for merge failed: ${cur.error.message}`);
     }
 
-    const existingJson = (cur.data as { extracted_attributes?: unknown } | null)?.extracted_attributes;
-    const merged = mergeExtractedAttributesJsonForPersistence(existingJson ?? {}, incoming);
+    const existing =
+      typeof cur.data?.extracted_attributes === 'object' &&
+      cur.data.extracted_attributes !== null &&
+      !Array.isArray(cur.data.extracted_attributes)
+        ? (cur.data.extracted_attributes as Record<string, unknown>)
+        : {};
+
+    const newlyExtractedData = incoming;
+
+    console.log(
+      `MERGE-CHECK: Behalte ${Object.keys(existing).join(', ')} und füge ${Object.keys(newlyExtractedData).join(', ')} hinzu.`,
+    );
+
+    const finalAttributes = mergeExtractedAttributesJsonForPersistence(existing, newlyExtractedData);
+
+    console.log(
+      `MERGE-CHECK: final keys nach Merge: ${Object.keys(finalAttributes).join(', ')}`,
+    );
+    console.log('[EAGER MERGE] finalAttributes:', JSON.stringify(finalAttributes, null, 2));
 
     const upd = await this.client
       .from('products')
-      .update({ extracted_attributes: merged })
+      .update({ extracted_attributes: finalAttributes })
       .eq('id', productId);
 
     if (upd.error) {

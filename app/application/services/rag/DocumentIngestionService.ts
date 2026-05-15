@@ -140,8 +140,10 @@ export class DocumentIngestionService {
 
         console.log('2. LLM hat geantwortet! Extrahiertes JSON:', JSON.stringify(extracted, null, 2));
 
-        console.log('3. Speichere Deep-Merge in products.extracted_attributes...');
-        // Persist: SELECT existing JSONB → deep-safe key merge → UPDATE (see ProductEntityService.mergeExtractedAttributes).
+        console.log('3. Speichere Safe-Merge in products.extracted_attributes...', {
+          productId,
+          productNameHint: productNameForContext,
+        });
         await this.dependencies.productEntityService.mergeExtractedAttributes(productId, extracted);
       } catch (error) {
         console.error('!!! FATAL ERROR IN EAGER INGESTION !!!', error);

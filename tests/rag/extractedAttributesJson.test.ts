@@ -47,6 +47,44 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
     expect(mergedWhitespace.gtin).toEqual(existing.gtin);
   });
 
+  it('simulates Doc B then Doc A: archive fields stay when Doc A adds gtin', () => {
+    const afterDocB = {
+      chemicalComposition: {
+        value: 'Quarz, Zement',
+        sourcePdf: 'SDB-Cimsec.pdf',
+        contextSnippet: 'Zusammensetzung',
+        confidence: 0.9,
+      },
+      hersteller: {
+        value: 'Henkel AG',
+        sourcePdf: 'SDB-Cimsec.pdf',
+        contextSnippet: 'Hersteller',
+        confidence: 0.9,
+      },
+    };
+    const docAIncoming = {
+      gtin: {
+        value: '9000101122954',
+        sourcePdf: 'Produktinformationen.pdf',
+        contextSnippet: 'GTIN',
+        confidence: 0.88,
+      },
+      productName: {
+        value: 'Cimsec Fliesen Kleber',
+        sourcePdf: 'Produktinformationen.pdf',
+        contextSnippet: 'Name',
+        confidence: 0.88,
+      },
+    };
+    const merged = mergeExtractedAttributesJsonForPersistence(afterDocB, docAIncoming);
+    expect(merged.chemicalComposition).toEqual(afterDocB.chemicalComposition);
+    expect(merged.hersteller).toEqual(afterDocB.hersteller);
+    expect((merged.gtin as { value: string }).value).toBe('9000101122954');
+    expect(Object.keys(merged).sort()).toEqual(
+      ['chemicalComposition', 'gtin', 'hersteller', 'productName'].sort(),
+    );
+  });
+
   it('overwrites when incoming has a non-empty value', () => {
     const existing = {
       gtin: { value: '111', sourcePdf: 'a.pdf', contextSnippet: 'x', confidence: 0.5 },

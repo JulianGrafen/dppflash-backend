@@ -62,10 +62,9 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
 }
 
 /**
- * Cumulative memory / Deep-Merge für `products.extracted_attributes`:
- * Roh-JSON aus der DB klonen (`{ ...existing }`), dann nur Keys aus `incoming` setzen,
- * wenn **ein echter Wert** vorliegt (kein `null`, kein leerer String) — bestehende
- * Felder inkl. `sourcePdf`/`contextSnippet` bleiben unangetastet.
+ * Safe-Merge für `products.extracted_attributes` (Cumulative Memory):
+ * `finalAttributes = { ...existing }` plus neue Keys — Überschreiben nur bei nicht-leerem `value`,
+ * damit Archiv-Daten (Doc B/C) beim Upload von Doc A erhalten bleiben inkl. `sourcePdf`.
  */
 export function mergeExtractedAttributesJsonForPersistence(
   existingJsonFromDb: unknown,

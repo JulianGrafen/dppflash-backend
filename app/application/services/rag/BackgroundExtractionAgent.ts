@@ -16,9 +16,17 @@ Du erhältst den Volltext eines PDFs (mit Seiten-Markern). Extrahiere **nur** In
 
 Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **ausschließlich** die vorgegebene Liste.
 
-Verwende AUSSCHLIESSLICH diese englischen/technischen Keys. Übersetze die Keys nicht ins Deutsche! Wenn ein Feld nicht im Text steht, lass es komplett weg — füge **keinen** Key mit leerem String oder null als Platzhalter ein.
+Extrahiere die Daten STRENG nach diesem Schema. Nutze niemals deutsche Keys!
 
-WICHTIG: Zusammensetzung / Materialien → Key 'chemicalComposition' (nicht materialZusammensetzung). Hersteller → 'hersteller' (nicht manufacturer). Handels-/Produktname → 'productName'. Modell/Typ → 'modellname'. Entsorgung / End-of-Life → 'endOfLifeInstructions'.
+- Zusammensetzung / Materialien / Rezeptur → chemicalComposition (NICHT materialZusammensetzung, NICHT materialComposition)
+- Entsorgung / End-of-Life / Abschnitt 13 → endOfLifeInstructions
+- Hersteller / Lieferant / Inverkehrbringer → hersteller (NICHT manufacturer, NICHT Hersteller)
+- Handelsname / Produktbezeichnung auf dem Deckblatt → productName (NICHT produktname)
+- Modell / Typenbezeichnung → modellname
+- Abfallschlüssel / EWC / EAK / AVV → ewcCode
+- GTIN / EAN / Barcode → gtin
+
+Wenn ein Feld nicht im Text steht, lass den Key komplett weg — kein null, kein leerer String als Platzhalter.
 
 Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen):
 {

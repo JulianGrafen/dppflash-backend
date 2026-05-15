@@ -210,6 +210,11 @@ export class RagComplianceOrchestrator {
       cryptoValidation: validateAuditTrailCryptographically(trail.data),
     };
 
+    console.log(
+      '[Orchestrator] Eager audit trail chemicalComposition:',
+      trail.data.fields?.chemicalComposition?.value ?? '(nicht gesetzt)',
+    );
+
     return { enrichment, retrievalMatchConfidence };
   }
 }

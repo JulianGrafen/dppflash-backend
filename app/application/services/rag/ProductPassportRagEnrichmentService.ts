@@ -1,6 +1,6 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
 import type { ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
-import { mergeRagAuditIntoPassport } from '@/app/domain/rag/mergeRagAuditIntoPassport';
+import { mergeRagAuditIntoPassport, type MergeRagAuditOptions } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import {
   stripCryptoInvalidAuditedValues,
   validateAuditTrailCryptographically,
@@ -121,10 +121,24 @@ export class ProductPassportRagEnrichmentService {
     }
 
     const trailForMerge = stripCryptoInvalidAuditedValues(enrichment.auditTrail);
+    const mergeOpts: MergeRagAuditOptions | undefined =
+      gapOutcome !== null ? { fieldShape: 'provenance' } : undefined;
     const { patch, appliedKeys } = mergeRagAuditIntoPassport(
       input.passport,
       trailForMerge,
       mergeAllowKeys,
+      mergeOpts,
+    );
+
+    const dppPreview = { ...p, ...patch } as Record<string, unknown>;
+    const chem = dppPreview.chemicalComposition;
+    console.log(
+      'Synthese abgeschlossen. Finales DPP-Objekt hat chemicalComposition: ',
+      chem !== null &&
+        typeof chem === 'object' &&
+        'value' in (chem as Record<string, unknown>)
+        ? (chem as { value: unknown }).value
+        : chem,
     );
 
     return {

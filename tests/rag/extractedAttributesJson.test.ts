@@ -145,6 +145,20 @@ describe('extractedAttributesToAuditTrailFields', () => {
     expect(fields.hersteller?.value).toBe('X');
   });
 
+  it('maps modellname gap to productName in stored JSON', () => {
+    const stored = {
+      productName: {
+        value: 'Cimsec Handelsname',
+        sourcePdf: 'a.pdf',
+        contextSnippet: 'Produkt',
+        confidence: 0.9,
+      },
+    };
+    const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, ['modellname']);
+    expect(fields.modellname?.value).toBe('Cimsec Handelsname');
+    expect(keyResolution[0]?.usedStoredKey).toBe('productName');
+  });
+
   it('maps ewcCode gap to wasteCode in JSON', () => {
     const stored = {
       wasteCode: {
@@ -157,5 +171,19 @@ describe('extractedAttributesToAuditTrailFields', () => {
     const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, ['ewcCode']);
     expect(fields.ewcCode?.value).toBe('17 02 03');
     expect(keyResolution[0]?.usedStoredKey).toBe('wasteCode');
+  });
+
+  it('maps zusammensetzung gap to chemicalComposition in stored JSON', () => {
+    const stored = {
+      chemicalComposition: {
+        value: 'Quarz; Zement',
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'Abschnitt 3',
+        confidence: 0.85,
+      },
+    };
+    const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, ['zusammensetzung']);
+    expect(fields.zusammensetzung?.value).toBe('Quarz; Zement');
+    expect(keyResolution[0]?.usedStoredKey).toBe('chemicalComposition');
   });
 });

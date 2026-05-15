@@ -55,16 +55,37 @@ function isEmptyPassportScalar(value: unknown): boolean {
 
 function isEmptyForRagGap(key: string, value: unknown): boolean {
   if (key === 'materialComposition') {
-    if (!Array.isArray(value) || value.length === 0) {
-      return true;
+    if (Array.isArray(value) && value.length > 0) {
+      return false;
     }
-    return false;
+    if (typeof value === 'string' && value.trim() !== '') {
+      return false;
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const inner = (value as Record<string, unknown>).value;
+      if (typeof inner === 'string' && inner.trim() !== '') {
+        return false;
+      }
+    }
+    return true;
   }
   if (key === 'chemicalComposition') {
-    if (!Array.isArray(value) || value.length === 0) {
-      return true;
+    if (Array.isArray(value) && value.length > 0) {
+      return false;
     }
-    return false;
+    if (typeof value === 'string' && value.trim() !== '') {
+      return false;
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const inner = (value as Record<string, unknown>).value;
+      if (typeof inner === 'string' && inner.trim() !== '') {
+        return false;
+      }
+      if (typeof inner === 'number' && Number.isFinite(inner)) {
+        return false;
+      }
+    }
+    return true;
   }
   if (key === 'manufacturer') {
     if (value === undefined || value === null || typeof value !== 'object') {

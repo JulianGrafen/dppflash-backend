@@ -32,6 +32,22 @@ function isEmptyPassportValue(value: unknown): boolean {
   if (typeof value === 'string' && value.trim() === 'PENDING_EXTERNAL_MATCH') {
     return true;
   }
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const o = value as Record<string, unknown>;
+    if ('value' in o) {
+      const inner = o.value;
+      if (inner === undefined || inner === null) {
+        return true;
+      }
+      if (typeof inner === 'string' && inner.trim() === '') {
+        return true;
+      }
+      if (typeof inner === 'string' && inner.trim() === 'PENDING_EXTERNAL_MATCH') {
+        return true;
+      }
+      return false;
+    }
+  }
   return false;
 }
 
@@ -52,6 +68,14 @@ function normalizeScalar(key: string, audited: AuditedValue): unknown {
   return raw;
 }
 
+export interface MergeRagAuditOptions {
+  /**
+   * `provenance`: patch values as `{ value, contextSnippet, sourcePdf, pageNumber?, confidence? }`
+   * for UI source attribution (Eager path). Default: scalar-only (backward compatible).
+   */
+  readonly fieldShape?: 'scalar' | 'provenance';
+}
+
 /**
  * Fills only **empty** passport keys from RAG-audited `fields` (and legacy top-level gtin/ewc).
  * Skips entries that require manual review or have null values.
@@ -60,6 +84,7 @@ export function mergeRagAuditIntoPassport(
   passport: ProductPassport,
   trail: AuditTrail,
   allowedKeys: ReadonlySet<string> | readonly string[],
+  options?: MergeRagAuditOptions,
 ): {
   readonly patch: Record<string, unknown>;
   readonly appliedKeys: readonly string[];
@@ -67,6 +92,7 @@ export function mergeRagAuditIntoPassport(
   const allowed = allowedKeys instanceof Set ? allowedKeys : new Set(allowedKeys);
   const patch: Record<string, unknown> = {};
   const applied: string[] = [];
+  const fieldShape = options?.fieldShape ?? 'scalar';
 
   const tryApply = (key: string, audited: AuditedValue | undefined) => {
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
@@ -89,7 +115,17 @@ export function mergeRagAuditIntoPassport(
     if (normalized === null) {
       return;
     }
-    patch[key] = normalized;
+    if (fieldShape === 'provenance') {
+      patch[key] = {
+        value: normalized,
+        contextSnippet: audited.source.contextSnippet,
+        sourcePdf: audited.source.fileName,
+        pageNumber: audited.source.pageNumber,
+        confidence: audited.confidence,
+      };
+    } else {
+      patch[key] = normalized;
+    }
     applied.push(key);
   };
 

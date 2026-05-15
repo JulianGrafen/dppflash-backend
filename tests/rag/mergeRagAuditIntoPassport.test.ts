@@ -157,4 +157,39 @@ describe('mergeRagAuditIntoPassport', () => {
     expect(appliedKeys).toContain('materialComposition');
     expect(patch.materialComposition).toBe('Stahl 60 %, Kunststoff 40 %');
   });
+
+  it('writes provenance-shaped patches when fieldShape is provenance', () => {
+    const passport = {
+      id: 'p6',
+      type: 'CHEMICAL',
+      createdAt: new Date(),
+      language: 'de',
+      hersteller: '',
+      modellname: 'Y',
+    } as ChemicalDPP;
+
+    const trail = parseAuditTrail({
+      fields: {
+        hersteller: {
+          value: 'Henkel',
+          confidence: 0.95,
+          source: { fileName: 'sdb.pdf', pageNumber: 1, contextSnippet: 'Firma Henkel' },
+          requiresManualReview: false,
+        },
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, ['hersteller'], {
+      fieldShape: 'provenance',
+    });
+
+    expect(appliedKeys).toContain('hersteller');
+    expect(patch.hersteller).toEqual({
+      value: 'Henkel',
+      contextSnippet: 'Firma Henkel',
+      sourcePdf: 'sdb.pdf',
+      pageNumber: 1,
+      confidence: 0.95,
+    });
+  });
 });

@@ -1,23 +1,15 @@
 import type { ComplianceLlmPort } from '@/app/application/ports/rag/ComplianceLlmPort';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
 import {
+  EAGER_CANONICAL_FIELD_KEYS,
   eagerExtractionResponseSchema,
   eagerExtractionResponseToRows,
+  normalizeEagerExtractionRawObject,
 } from '@/app/domain/rag/eagerExtractionResponseSchema';
 
 const MAX_DOCUMENT_CHARS = 120_000;
 
-const EAGER_FIELD_KEYS_JSON = JSON.stringify([
-  'hersteller',
-  'modellname',
-  'ewcCode',
-  'wasteCode',
-  'countryOfOrigin',
-  'countryOfManufacturing',
-  'endOfLifeInstructions',
-  'chemicalComposition',
-  'gtin',
-]);
+const EAGER_FIELD_KEYS_JSON = JSON.stringify([...EAGER_CANONICAL_FIELD_KEYS]);
 
 const SYSTEM = `Du bist ein Daten-Extraktor für technische Produktunterlagen (ESPR / Digital Product Passport).
 Du erhältst den Volltext eines PDFs (mit Seiten-Markern). Extrahiere **nur** Informationen, die wörtlich oder eindeutig im Text stehen. Erfinde nichts.
@@ -26,7 +18,7 @@ Antworte mit **genau einem JSON-Objekt** (ohne Markdown). Top-Level-Keys sind **
 
 Verwende AUSSCHLIESSLICH diese englischen/technischen Keys. Übersetze die Keys nicht ins Deutsche! Wenn ein Feld nicht im Text steht, lass es komplett weg — füge **keinen** Key mit leerem String oder null als Platzhalter ein.
 
-WICHTIG: chemische Zusammensetzung / Materialien → Key 'chemicalComposition'. Entsorgung / End-of-Life → 'endOfLifeInstructions'. Produktbezeichnung / Name → 'modellname'.
+WICHTIG: Zusammensetzung / Materialien → Key 'chemicalComposition' (nicht materialZusammensetzung). Hersteller → 'hersteller' (nicht manufacturer). Handels-/Produktname → 'productName'. Modell/Typ → 'modellname'. Entsorgung / End-of-Life → 'endOfLifeInstructions'.
 
 Jeder vorhandene Key mappt zu genau diesem Objekt (keine weiteren Property-Namen):
 {
@@ -79,7 +71,8 @@ ${body}`;
       return {};
     }
 
-    const validated = eagerExtractionResponseSchema.safeParse(parsed);
+    const normalized = normalizeEagerExtractionRawObject(parsed as Record<string, unknown>);
+    const validated = eagerExtractionResponseSchema.safeParse(normalized);
     if (!validated.success) {
       console.warn('[EAGER] Zod validation failed (strict keys only):', validated.error.flatten());
       return {};

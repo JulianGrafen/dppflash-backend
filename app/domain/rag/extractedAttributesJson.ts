@@ -62,9 +62,10 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
 }
 
 /**
- * Persistenz-Merge für `products.extracted_attributes`: Roh-JSON aus der DB klonen,
- * dann nur Keys aus `incoming` überschreiben, wenn **ein echter Wert** vorliegt
- * (kein `null`, kein leerer String) — keine „Null-Leer“-Überschreibungen bestehender Daten.
+ * Cumulative memory / Deep-Merge für `products.extracted_attributes`:
+ * Roh-JSON aus der DB klonen (`{ ...existing }`), dann nur Keys aus `incoming` setzen,
+ * wenn **ein echter Wert** vorliegt (kein `null`, kein leerer String) — bestehende
+ * Felder inkl. `sourcePdf`/`contextSnippet` bleiben unangetastet.
  */
 export function mergeExtractedAttributesJsonForPersistence(
   existingJsonFromDb: unknown,
@@ -135,8 +136,14 @@ function normalizeExtractedFieldKey(key: string): string {
 const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['hersteller', 'manufacturer', 'herstellername', 'herstellerName', 'Manufacturer', 'Hersteller'],
   ['ewcCode', 'wasteCode', 'ewc', 'waste_code', 'ewc_code', 'EWC', 'WasteCode'],
-  ['materialComposition', 'materialZusammensetzung', 'materialzusammensetzung'],
-  ['chemicalComposition', 'chemischeZusammensetzung', 'chemischezusammensetzung'],
+  [
+    'chemicalComposition',
+    'materialComposition',
+    'materialZusammensetzung',
+    'materialzusammensetzung',
+    'chemischeZusammensetzung',
+    'chemischezusammensetzung',
+  ],
   ['countryOfOrigin', 'herkunftsland', 'countryoforigin'],
   ['countryOfManufacturing', 'verarbeitungsland', 'herstellungsland', 'countryofmanufacturing'],
   ['productName', 'productname', 'produktname'],

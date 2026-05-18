@@ -84,6 +84,7 @@ export function CompositionFlowchart({
       >
       <ResponsiveSankey<SankeyNode, SankeyLink>
         data={data}
+        label="label"
         margin={
           isTraceStyle
             ? { top: 28, right: 200, bottom: 28, left: 64 }

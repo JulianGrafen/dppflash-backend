@@ -139,7 +139,7 @@ function renderKeyValueList(
 }
 
 function pickMaterialCompositionPercent(entry: Record<string, unknown>): number | undefined {
-  for (const k of ['percentage', 'sharePercent', 'anteil', 'percent', 'massPercent', 'share', 'concentrationPercent'] as const) {
+  for (const k of ['percentage', 'sharePercent', 'anteil', 'percent', 'massPercent', 'share', 'concentrationPercent', 'prozentAnteil'] as const) {
     if (!(k in entry)) continue;
     const v = entry[k];
     if (typeof v === 'number' && Number.isFinite(v)) {
@@ -157,7 +157,7 @@ function pickMaterialCompositionPercent(entry: Record<string, unknown>): number 
 }
 
 function materialNameFromCompositionEntry(entry: Record<string, unknown>): string | undefined {
-  for (const k of ['material', 'name', 'bezeichnung', 'materialName', 'component', 'substance', 'title'] as const) {
+  for (const k of ['material', 'name', 'bezeichnung', 'materialName', 'stoffname', 'component', 'substance', 'title'] as const) {
     const v = entry[k];
     if (typeof v === 'string' && v.trim()) {
       return v.trim();
@@ -173,69 +173,197 @@ function unwrapProvenanceInner(value: unknown): unknown {
   return value;
 }
 
+type SdsCompositionDisplayRow = {
+  readonly stoffname: string;
+  readonly casDisplay: string;
+  readonly konzentration: string;
+  readonly einstufung: string;
+};
+
+/** SDS-/REACH-Zeilendarstellung (stoffname, casNummer, prozentAnteil, einstufung). */
+function parseSdsCompositionDisplayRow(entry: Record<string, unknown>): SdsCompositionDisplayRow | null {
+  const stoff =
+    (typeof entry.stoffname === 'string' ? entry.stoffname.trim() : '')
+    || (typeof entry.substance === 'string' ? entry.substance.trim() : '')
+    || (typeof entry.name === 'string' ? entry.name.trim() : '');
+  if (!stoff) {
+    return null;
+  }
+
+  const casRaw = entry.casNummer ?? entry.casNumber;
+  const casDisplay =
+    casRaw !== null && casRaw !== undefined && String(casRaw).trim().length > 0
+      ? String(casRaw).trim()
+      : '-';
+
+  let konzentration = '-';
+  if (typeof entry.prozentAnteil === 'string' && entry.prozentAnteil.trim()) {
+    konzentration = entry.prozentAnteil.trim();
+  } else if (typeof entry.concentrationPercent === 'number' && Number.isFinite(entry.concentrationPercent)) {
+    konzentration = `${entry.concentrationPercent} %`;
+  } else if (typeof entry.concentrationPercent === 'string' && entry.concentrationPercent.trim()) {
+    konzentration = entry.concentrationPercent.trim();
+  }
+
+  let einstufung = '-';
+  if (typeof entry.einstufung === 'string' && entry.einstufung.trim()) {
+    einstufung = entry.einstufung.trim();
+  } else if (typeof entry.function === 'string' && entry.function.trim()) {
+    einstufung = entry.function.trim();
+  }
+
+  return { stoffname: stoff, casDisplay, konzentration, einstufung };
+}
+
+function extractSdsCompositionRows(arr: unknown): SdsCompositionDisplayRow[] {
+  if (!Array.isArray(arr)) {
+    return [];
+  }
+  const rows: SdsCompositionDisplayRow[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const row = parseSdsCompositionDisplayRow(item as Record<string, unknown>);
+    if (row) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+/** Heuristik: SDS-Reihen vs. klassisches ESPR-Materialarray ({ material, percentage }). */
+function looksLikeSdsCompositionArray(arr: unknown[]): boolean {
+  if (arr.length === 0) {
+    return false;
+  }
+  let score = 0;
+  for (const item of arr) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    if (typeof o.stoffname === 'string' && o.stoffname.trim()) {
+      score++;
+    } else if (o.casNummer !== null && o.casNummer !== undefined && String(o.casNummer).trim()) {
+      score++;
+    } else if (typeof o.einstufung === 'string' && o.einstufung.trim()) {
+      score++;
+    }
+  }
+  return score >= Math.max(1, Math.ceil(arr.length * 0.5));
+}
+
+/** Entpackt Provenance und optional JSON-String `[...]` aus Speicher/API. */
+function unwrapMaterialZusammensetzungArrayCandidate(value: unknown): unknown[] | undefined {
+  const inner = unwrapProvenanceInner(value);
+  if (Array.isArray(inner)) {
+    return inner;
+  }
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (t.startsWith('[')) {
+      try {
+        const parsed: unknown = JSON.parse(t);
+        return Array.isArray(parsed) ? parsed : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+function renderSdsCompositionTable(label: string, rows: readonly SdsCompositionDisplayRow[]) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-between items-start gap-4 px-5 py-3">
+      <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
+      <dd className="text-sm text-gray-900 min-w-0 flex-1">
+        <div className="overflow-x-auto rounded-lg border border-gray-100">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr>
+                <th className="px-3 py-2">Inhaltsstoff</th>
+                <th className="px-3 py-2 whitespace-nowrap">CAS-Nr.</th>
+                <th className="px-3 py-2 whitespace-nowrap">Konzentration</th>
+                <th className="px-3 py-2">Einstufung</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((r, i) => (
+                <tr key={`${label}-${r.stoffname}-${r.casDisplay}-${i}`} className="bg-white">
+                  <td className="px-3 py-2 font-medium text-gray-900">{r.stoffname}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.casDisplay}</td>
+                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.konzentration}</td>
+                  <td className="px-3 py-2 text-gray-700">{r.einstufung}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </dd>
+    </div>
+  );
+}
+
 /** ESPR Kernfeld materialComposition + legacy Textfeld materialZusammensetzung (z. B. Textilien). */
 function renderMaterialZusammensetzungKernfelder(
   materialComposition: unknown,
   materialZusammensetzung: unknown,
 ) {
-  const entries: KeyValueEntry[] = [];
-  const compositionItems = coerceMaterialCompositionArray(materialComposition);
-  for (const item of compositionItems) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as Record<string, unknown>;
-    const title = materialNameFromCompositionEntry(row);
-    if (!title) continue;
-    const pct = pickMaterialCompositionPercent(row);
-    entries.push({
-      title,
-      details: pct !== undefined ? formatPercentage(pct) : undefined,
-    });
-  }
+  const mzArray = unwrapMaterialZusammensetzungArrayCandidate(materialZusammensetzung);
+  const sdsFromMz = mzArray ? extractSdsCompositionRows(mzArray) : [];
 
-  const mzInner = unwrapProvenanceInner(materialZusammensetzung);
-  if (Array.isArray(mzInner)) {
-    for (const item of mzInner) {
-      if (!item || typeof item !== 'object') continue;
+  const compositionItems = coerceMaterialCompositionArray(materialComposition);
+  const sdsFromMc =
+    sdsFromMz.length === 0 && looksLikeSdsCompositionArray(compositionItems)
+      ? extractSdsCompositionRows(compositionItems)
+      : [];
+
+  const sdsRows = sdsFromMz.length > 0 ? sdsFromMz : sdsFromMc;
+  const tableEl = renderSdsCompositionTable('Material-Zusammensetzung', sdsRows);
+
+  const entries: KeyValueEntry[] = [];
+  const skipGenericCompositionList = sdsFromMc.length > 0;
+
+  if (!skipGenericCompositionList) {
+    for (const item of compositionItems) {
+      if (!item || typeof item !== 'object') {
+        continue;
+      }
       const row = item as Record<string, unknown>;
-      const title =
-        typeof row.stoffname === 'string'
-          ? row.stoffname.trim()
-          : typeof row.substance === 'string'
-            ? row.substance.trim()
-            : '';
-      if (!title) continue;
-      const pct =
-        typeof row.prozentAnteil === 'string' && row.prozentAnteil.trim()
-          ? row.prozentAnteil.trim()
-          : undefined;
-      const ein =
-        typeof row.einstufung === 'string' && row.einstufung.trim()
-          ? row.einstufung.trim()
-          : undefined;
-      const cas =
-        row.casNummer !== null && typeof row.casNummer === 'string' && row.casNummer.trim()
-          ? row.casNummer.trim()
-          : typeof row.casNumber === 'string'
-            ? row.casNumber.trim()
-            : undefined;
-      const details = [pct, cas ? `CAS ${cas}` : undefined, ein].filter(Boolean).join(' · ');
-      entries.push({ title, details: details || undefined });
+      const title = materialNameFromCompositionEntry(row);
+      if (!title) {
+        continue;
+      }
+      const pct = pickMaterialCompositionPercent(row);
+      entries.push({
+        title,
+        details: pct !== undefined ? formatPercentage(pct) : undefined,
+      });
     }
   }
 
+  const mzInner = unwrapProvenanceInner(materialZusammensetzung);
   const legacy =
     typeof materialZusammensetzung === 'string' && materialZusammensetzung.trim().length > 0
       ? materialZusammensetzung.trim()
-      : typeof mzInner === 'string' && mzInner.trim().length > 0
+      : typeof mzInner === 'string' && mzInner.trim().length > 0 && !mzInner.trim().startsWith('[')
         ? mzInner.trim()
         : undefined;
 
-  const list = renderKeyValueList('Material-Zusammensetzung', entries);
-  if (list) {
+  const list = entries.length > 0 ? renderKeyValueList('Material-Zusammensetzung', entries) : null;
+
+  if (tableEl || list) {
     return (
       <>
+        {tableEl}
         {list}
-        {legacy && entries.length > 0 ? (
+        {legacy && (tableEl !== null || (list !== null && entries.length > 0)) ? (
           <Field label="Material-Zusammensetzung (Text)" value={legacy} />
         ) : null}
       </>
@@ -433,8 +561,25 @@ function renderCareRepairDurability(value: unknown) {
 }
 
 function renderChemicalComposition(value: unknown) {
-  const inner = unwrapProvenanceInner(value);
-  if (!Array.isArray(inner)) return null;
+  let inner: unknown = unwrapProvenanceInner(value);
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (t.startsWith('[')) {
+      try {
+        inner = JSON.parse(t);
+      } catch {
+        /* keep string — kein Tabellenlayout */
+      }
+    }
+  }
+  if (!Array.isArray(inner)) {
+    return null;
+  }
+
+  const tableRows = extractSdsCompositionRows(inner);
+  if (tableRows.length > 0) {
+    return renderSdsCompositionTable('Chemische Zusammensetzung', tableRows);
+  }
 
   const entries = inner.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];

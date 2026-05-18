@@ -1,6 +1,10 @@
 import type { RagComplianceOrchestrator } from '@/app/application/use-cases/rag/RagComplianceOrchestrator';
 import type { ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
-import { mergeRagAuditIntoPassport, type MergeRagAuditOptions } from '@/app/domain/rag/mergeRagAuditIntoPassport';
+import {
+  flattenProvenancePatchForPersistence,
+  mergeRagAuditIntoPassport,
+  type MergeRagAuditOptions,
+} from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import {
   stripCryptoInvalidAuditedValues,
   validateAuditTrailCryptographically,
@@ -79,8 +83,9 @@ export class ProductPassportRagEnrichmentService {
         trailForMerge,
         mergeAllowKeys,
       );
+      const passportPatch = flattenProvenancePatchForPersistence(patch);
       return {
-        passportPatch: patch,
+        passportPatch,
         appliedKeys,
         enrichment,
         retrievalMatchConfidence: 0,
@@ -101,8 +106,9 @@ export class ProductPassportRagEnrichmentService {
         trailForMerge,
         mergeAllowKeys,
       );
+      const passportPatch = flattenProvenancePatchForPersistence(patch);
       return {
-        passportPatch: patch,
+        passportPatch,
         appliedKeys,
         enrichment,
         retrievalMatchConfidence: 0,
@@ -160,19 +166,14 @@ export class ProductPassportRagEnrichmentService {
       mergeOpts,
     );
 
-    const dppPreview = { ...p, ...patch } as Record<string, unknown>;
+    const passportPatch = flattenProvenancePatchForPersistence(patch);
+
+    const dppPreview = { ...p, ...passportPatch } as Record<string, unknown>;
     const mz = dppPreview.materialZusammensetzung ?? dppPreview.zusammensetzung;
-    console.log(
-      'Synthese abgeschlossen. Material-/Zusammensetzung (Kernfeld): ',
-      mz !== null &&
-        typeof mz === 'object' &&
-        'value' in (mz as Record<string, unknown>)
-        ? (mz as { value: unknown }).value
-        : mz,
-    );
+    console.log('Synthese abgeschlossen. Material-/Zusammensetzung (Kernfeld): ', mz);
 
     return {
-      passportPatch: patch,
+      passportPatch,
       appliedKeys,
       enrichment,
       retrievalMatchConfidence,

@@ -1,6 +1,29 @@
 import type { AuditTrail, AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
+/** Strings, die wie „leer“ wirken und von echten RAG-Werten überschrieben werden sollen. */
+function isPlaceholderScalarString(value: string): boolean {
+  const t = value.trim();
+  if (t === '') {
+    return true;
+  }
+  const lower = t.toLowerCase();
+  if (
+    lower === 'null'
+    || lower === 'undefined'
+    || lower === 'n/a'
+    || lower === 'na'
+    || t === '—'
+    || t === '-'
+  ) {
+    return true;
+  }
+  if (t === '0' || t === '0.0' || t === '0,0') {
+    return true;
+  }
+  return false;
+}
+
 const NUMERIC_FIELDS = new Set<string>([
   'kapazitaetKWh',
   'nennspannungV',
@@ -26,11 +49,11 @@ function isEmptyPassportValue(value: unknown): boolean {
   if (Array.isArray(value) && value.length === 0) {
     return true;
   }
-  if (typeof value === 'string' && value.trim() === '') {
-    return true;
-  }
-  if (typeof value === 'string' && value.trim() === 'PENDING_EXTERNAL_MATCH') {
-    return true;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (t === '' || t === 'PENDING_EXTERNAL_MATCH' || isPlaceholderScalarString(value)) {
+      return true;
+    }
   }
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const o = value as Record<string, unknown>;
@@ -39,11 +62,11 @@ function isEmptyPassportValue(value: unknown): boolean {
       if (inner === undefined || inner === null) {
         return true;
       }
-      if (typeof inner === 'string' && inner.trim() === '') {
-        return true;
-      }
-      if (typeof inner === 'string' && inner.trim() === 'PENDING_EXTERNAL_MATCH') {
-        return true;
+      if (typeof inner === 'string') {
+        const ts = inner.trim();
+        if (ts === '' || ts === 'PENDING_EXTERNAL_MATCH' || isPlaceholderScalarString(inner)) {
+          return true;
+        }
       }
       if (Array.isArray(inner) && inner.length === 0) {
         return true;
@@ -180,4 +203,36 @@ export function mergeRagAuditIntoPassport(
   tryApply('wasteCode', trail.ewcCode);
 
   return { patch, appliedKeys: applied };
+}
+
+/**
+ * Erkennt RAG-Provenance-Umschläge aus {@link mergeRagAuditIntoPassport} (`sourcePdf` + `value`).
+ */
+export function isRagProvenanceEnvelope(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const o = value as Record<string, unknown>;
+  return (
+    'value' in o
+    && typeof o.sourcePdf === 'string'
+    && o.sourcePdf.trim().length > 0
+    && typeof o.contextSnippet === 'string'
+  );
+}
+
+/**
+ * Für Persistenz/API: Hauptfelder des Passes erhalten das extrahierte `value`, nicht den Provenance-Wrapper.
+ * `ragEnrichment.auditTrail` behält weiterhin die volle Herkunft.
+ */
+export function flattenProvenancePatchForPersistence(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(patch)) {
+    if (isRagProvenanceEnvelope(val)) {
+      out[key] = (val as Record<string, unknown>).value;
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
 }

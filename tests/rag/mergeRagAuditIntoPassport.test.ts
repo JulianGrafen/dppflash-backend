@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mergeRagAuditIntoPassport } from '@/app/domain/rag/mergeRagAuditIntoPassport';
+import {
+  flattenProvenancePatchForPersistence,
+  mergeRagAuditIntoPassport,
+} from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import { parseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
 import type { BatteryDPP, ChemicalDPP, GenericDPP } from '@/app/types/dpp-types';
 
@@ -191,5 +194,45 @@ describe('mergeRagAuditIntoPassport', () => {
       pageNumber: 1,
       confidence: 0.95,
     });
+  });
+
+  it('flattenProvenancePatchForPersistence unwraps provenance envelopes for DB/API', () => {
+    const flat = flattenProvenancePatchForPersistence({
+      hersteller: {
+        value: 'ACME',
+        contextSnippet: 'ctx',
+        sourcePdf: 'a.pdf',
+        pageNumber: 2,
+      },
+      gtin: '123',
+    });
+    expect(flat.hersteller).toBe('ACME');
+    expect(flat.gtin).toBe('123');
+  });
+
+  it('treats placeholder null string hersteller as empty so RAG can fill', () => {
+    const passport = {
+      id: 'p7',
+      type: 'CHEMICAL',
+      createdAt: new Date(),
+      language: 'de',
+      hersteller: 'null',
+      modellname: 'Y',
+    } as ChemicalDPP;
+
+    const trail = parseAuditTrail({
+      fields: {
+        hersteller: {
+          value: 'Real GmbH',
+          confidence: 1,
+          source: { fileName: 'x.pdf', pageNumber: 1, contextSnippet: 'Real GmbH' },
+          requiresManualReview: false,
+        },
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, ['hersteller']);
+    expect(appliedKeys).toContain('hersteller');
+    expect(patch.hersteller).toBe('Real GmbH');
   });
 });

@@ -33,8 +33,9 @@ function materialLabelFromRow(row: Record<string, unknown>): string {
     'name',
     'bezeichnung',
     'materialName',
-    'component',
+    'stoffname',
     'substance',
+    'component',
     'title',
     'description',
   ] as const;
@@ -164,6 +165,19 @@ export function collectPassportCoreMaterialRowsForSankey(
   if (fromFlat.length > 0) {
     return fromFlat;
   }
+
+  const mzRaw = raw.materialZusammensetzung;
+  const mzInner =
+    mzRaw && typeof mzRaw === 'object' && !Array.isArray(mzRaw) && 'value' in mzRaw
+      ? (mzRaw as Record<string, unknown>).value
+      : mzRaw;
+  const fromMzArray = normalizeFlatMaterialArray(
+    Array.isArray(mzInner) ? mzInner : coerceMaterialCompositionArray(mzInner),
+  );
+  if (fromMzArray.length > 0) {
+    return fromMzArray;
+  }
+
   if (typeof raw.materialZusammensetzung === 'string' && raw.materialZusammensetzung.trim()) {
     const fromMz = rowsFromMaterialZusammensetzungString(raw.materialZusammensetzung);
     if (fromMz.length > 0) {

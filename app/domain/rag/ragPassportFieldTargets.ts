@@ -22,6 +22,9 @@ export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
   /** CHEMICAL/PAINT — gleicher Speicher-Slot wie chemicalComposition (Synonym-Merge). */
   'zusammensetzung',
   'entsorgungshinweise',
+  /** Technische Merkblätter → Eager-Extraktion */
+  'applicationInstructions',
+  'cleaningAndMaintenance',
 ]);
 
 const PENDING_GTIN = 'PENDING_EXTERNAL_MATCH';
@@ -102,6 +105,9 @@ const TEXTILE = [
   'herkunftsland',
   'verarbeitungsland',
   'pflegehinweise',
+  // Eager-Keys synonym zu Pflege/Handhabung über extracted_attributes
+  'applicationInstructions',
+  'cleaningAndMaintenance',
   'nachhaltigkeit',
 ] as const;
 
@@ -116,7 +122,16 @@ const ELECTRONICS = [
   'sicherheitsmerkmale',
 ] as const;
 
-const FURNITURE = [...COMMON, 'material', 'abmessungen', 'gewicht', 'zerlegbarkeit', 'nachhaltigkeitszertifikat'] as const;
+const FURNITURE = [
+  ...COMMON,
+  'material',
+  'abmessungen',
+  'gewicht',
+  'zerlegbarkeit',
+  'nachhaltigkeitszertifikat',
+  'applicationInstructions',
+  'cleaningAndMaintenance',
+] as const;
 
 const CHEMICAL = [
   ...COMMON,
@@ -128,6 +143,8 @@ const CHEMICAL = [
   'sicherheitsdatenblatt',
   'hStatements',
   'ghsSymbols',
+  'applicationInstructions',
+  'cleaningAndMaintenance',
 ] as const;
 
 const PAINT = [
@@ -140,6 +157,8 @@ const PAINT = [
   'voc',
   'hStatements',
   'ghsSymbols',
+  'applicationInstructions',
+  'cleaningAndMaintenance',
 ] as const;
 
 const LUBRICANT = [
@@ -152,6 +171,8 @@ const LUBRICANT = [
   'verwendungsbereich',
   'hStatements',
   'ghsSymbols',
+  'applicationInstructions',
+  'cleaningAndMaintenance',
 ] as const;
 
 /**

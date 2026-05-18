@@ -55,6 +55,8 @@ export const EAGER_CANONICAL_FIELD_KEYS = [
   'gtin',
   'hStatements',
   'ghsSymbols',
+  'applicationInstructions',
+  'cleaningAndMaintenance',
 ] as const;
 
 export type EagerCanonicalFieldKey = (typeof EAGER_CANONICAL_FIELD_KEYS)[number];
@@ -97,6 +99,15 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   uniqueproductidentifier: 'upi',
   uniqueformulaidentifier: 'upi',
   formulakennung: 'upi',
+  /** Technische Merkblätter: Verarbeitungs- und Pflege-Anweisungen (ESPR-/Produktdienstleistung). */
+  verarbeitungshinweise: 'applicationInstructions',
+  processinginstructions: 'applicationInstructions',
+  anwendungsanweisungen: 'applicationInstructions',
+  handhabungshinweise: 'applicationInstructions',
+  reinigung: 'cleaningAndMaintenance',
+  reinigungshinweise: 'cleaningAndMaintenance',
+  pflegehinweise: 'cleaningAndMaintenance',
+  wartungshinweise: 'cleaningAndMaintenance',
   /** Gemischbezogene Kodierungen (unterhalb substancesOfConcern in Abschnitt 2 SDS). */
   hazardstatements: 'hStatements',
   gefahrenhinweise: 'hStatements',
@@ -240,6 +251,8 @@ export const eagerExtractionResponseSchema = z
     upi: eagerExtractionFieldRowSchema.optional(),
     hStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
     ghsSymbols: eagerRegulatoryCodesArrayRowSchema.optional(),
+    applicationInstructions: eagerExtractionFieldRowSchema.optional(),
+    cleaningAndMaintenance: eagerExtractionFieldRowSchema.optional(),
   })
   .strict();
 

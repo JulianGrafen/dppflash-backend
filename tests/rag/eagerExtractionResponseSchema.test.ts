@@ -131,6 +131,22 @@ describe('eagerExtractionResponseSchema', () => {
       throw r.error;
     }
   });
+
+  it('accepts Merkblatt-Felder applicationInstructions und cleaningAndMaintenance', () => {
+    const r = eagerExtractionResponseSchema.safeParse({
+      applicationInstructions: {
+        value: 'Temperatur 5–35 °C, Schutzhandschuhe DIN EN.',
+        sourcePdf: 't.pdf',
+        contextSnippet: 'Verarbeitungs-Hinweise',
+      },
+      cleaningAndMaintenance: {
+        value: 'Werkzeug sofort nach Gebrauch mit Wasser reinigen.',
+        sourcePdf: 't.pdf',
+        contextSnippet: 'Reinigung',
+      },
+    });
+    expect(r.success).toBe(true);
+  });
 });
 
 describe('eagerExtractionResponseToRows', () => {

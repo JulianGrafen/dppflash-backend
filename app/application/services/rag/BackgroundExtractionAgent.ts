@@ -65,6 +65,15 @@ Leite die GHS-Symbole (z.B. GHS05, GHS07) zwingend ab. Wenn Symbole als Bild im 
 
 ---
 
+WICHTIGE REGEL FÜR MERKBLÄTTER UND ANLEITUNGEN:
+Achte explizit auf Absätze mit Titeln wie 'HINWEISE', 'Verarbeitung' oder 'Reinigung'.
+
+Extrahiere Vorgaben zur Verarbeitung (z.B. Normen, Schutzmaßnahmen) und speichere sie zusammengefasst in 'applicationInstructions.value'. Lasse juristische Haftungsausschlüsse weg!
+
+Extrahiere Anweisungen zur Reinigung von Werkzeugen oder Vermeidung von Flecken und speichere sie in 'cleaningAndMaintenance.value'.
+
+---
+
 ## Alle anderen Felder
 
 - Entsorgung / Abschnitt 13 → endOfLifeInstructions
@@ -76,8 +85,10 @@ Leite die GHS-Symbole (z.B. GHS05, GHS07) zwingend ab. Wenn Symbole als Bild im 
 - GTIN / EAN → gtin
 - Gemischbezogene **Gefahrenhinweis-Codes** (Summe/Zeilen aus Abschnitt 2 ohne einzelnen Stoffzuordnung) → \`hStatements.value\` als **Array von Strings**, z.B. ["H302","EUH208"]
 - **GHS-Kennzeichnungscode** für das Produktgemisch → \`ghsSymbols.value\` als **Array**, z.B. ["GHS05"]
+- **Technische Merkblätter** — zusammengefasste Verarbeitungs-/Schutz-/Normbezugshinweise ohne Haftungsausschlüsse → \`applicationInstructions\`
+- **Reinigung, Werkzeug-Pflege, Vermeidung von Flecken** → \`cleaningAndMaintenance\`
 
-**Andere Felder** außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`: wie gewohnt
+**Andere Felder** außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`/\`applicationInstructions\`/\`cleaningAndMaintenance\`: wie gewohnt
 
 {
   "value": string | null,
@@ -88,7 +99,7 @@ Leite die GHS-Symbole (z.B. GHS05, GHS07) zwingend ab. Wenn Symbole als Bild im 
 Für \`hStatements\` und \`ghsSymbols\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\` und \`contextSnippet\` bleiben pro Zeile Pflichtfelder wie oben.
 
 Regeln:
-- Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\` als String in "value".
+- Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`/\`applicationInstructions\`/\`cleaningAndMaintenance\` als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
 
 Wenn ein Feld nicht extrahierbar ist: Top-Level-Key weglassen — keine leeren Platzhalter.`;

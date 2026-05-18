@@ -20,6 +20,9 @@ export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   upi: 'UPI, UFI, Unique Product Identifier, Unique Formula Identifier, Produktkennzeichnung, Formel-Identifier',
   hStatements: 'H-Sätze, Gefahrenhinweise, CLP Kennzeichnung, Hazard statements',
   ghsSymbols: 'GHS-Symbole, GHS Piktogramme, GHS05, GHS07, Symbol-Codes nach CLP',
+  applicationInstructions:
+    'Verarbeitung Verarbeitungsvorschriften Handhabung Normen Schutzmaßnahmen technisches Merkblatt',
+  cleaningAndMaintenance: 'Reinigung Pflege Werkzeugreinigung Flecken vermeiden Wartungsmerkblatt Hinweise Reinigungspflege',
   endOfLifeInstructions: 'Entsorgung, Abschnitt 13, End-of-Life, Recyclinghinweise',
   countryOfOrigin: 'Ursprungsland, Herkunftsland, country of origin',
   countryOfManufacturing: 'Herstellungsland, Produktionsland',

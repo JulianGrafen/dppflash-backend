@@ -105,6 +105,22 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['upi', 'ufi', 'uniqueProductIdentifier', 'uniqueFormulaIdentifier'],
   ['hStatements', 'hazardStatements', 'hSaetze', 'productHazardStatements'],
   ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme', 'gefahrenSymbole'],
+  [
+    'applicationInstructions',
+    'verarbeitungshinweise',
+    'verarbeitung',
+    'processingInstructions',
+    'anwendungsanweisungen',
+    /** Gemisch-Anwendungs-Hinweise (Chemie/Lacke → oft „Verwendung“ auf dem Passport). */
+    'verwendung',
+  ],
+  [
+    'cleaningAndMaintenance',
+    'pflegehinweise',
+    'reinigungsanweisungen',
+    'reinigungsHinweise',
+    'wartungshinweise',
+  ],
 ];
 
 function synonymLowerNamesForPassportField(passportFieldKey: string): ReadonlySet<string> {
@@ -290,9 +306,25 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
 }
 
 /**
+ * Freitext-Slots aus technischen Merkblättern: bei erneuter Extraktion kürzeren Text NICHT gegen
+ * längere Archiv-/Vorgänger-Volltexte austauschen (informationsbewahrendes Überschreiben).
+ */
+const MERGE_PREFER_KEEP_LONGER_SCALAR_KEYS = new Set<string>([
+  'applicationInstructions',
+  'cleaningAndMaintenance',
+]);
+
+function trimmedScalarLength(row: ExtractedAttributeRow): number {
+  return typeof row.value === 'string' ? row.value.trim().length : 0;
+}
+
+/**
  * Safe-Merge für `products.extracted_attributes` (Cumulative Memory):
  * `finalAttributes = { ...existing }` plus neue Keys — Überschreiben nur bei nicht-leerem `value`,
  * damit Archiv-Daten (Doc B/C) beim Upload von Doc A erhalten bleiben inkl. `sourcePdf`.
+ *
+ * Bei \`applicationInstructions\` / \`cleaningAndMaintenance\` bleibt der **längere** bestehende Freitext
+ * erhalten, damit spätere Extrakte mit Kurzauszügen keine ausführlicheren älteren Merkblatt-Ausschnitte löschen.
  */
 export function mergeExtractedAttributesJsonForPersistence(
   existingJsonFromDb: unknown,
@@ -306,15 +338,27 @@ export function mergeExtractedAttributesJsonForPersistence(
   const mergedAttributes: Record<string, unknown> = { ...existingAttributes };
 
   for (const [key, fieldData] of Object.entries(incoming)) {
-    if (fieldData && hasNonEmptyExtractedRowValue(fieldData.value)) {
-      mergedAttributes[key] = {
-        value: fieldData.value,
-        sourcePdf: fieldData.sourcePdf,
-        contextSnippet: fieldData.contextSnippet,
-        pageNumber: fieldData.pageNumber ?? 1,
-        confidence: fieldData.confidence,
-      };
+    if (!fieldData || !hasNonEmptyExtractedRowValue(fieldData.value)) {
+      continue;
     }
+    if (MERGE_PREFER_KEEP_LONGER_SCALAR_KEYS.has(key)) {
+      const priorRaw = existingAttributes[key];
+      const priorParsed = priorRaw !== undefined ? coerceRow(priorRaw, key) : null;
+      if (
+        priorParsed
+        && hasNonEmptyExtractedRowValue(priorParsed.value)
+        && trimmedScalarLength(priorParsed) >= trimmedScalarLength(fieldData)
+      ) {
+        continue;
+      }
+    }
+    mergedAttributes[key] = {
+      value: fieldData.value,
+      sourcePdf: fieldData.sourcePdf,
+      contextSnippet: fieldData.contextSnippet,
+      pageNumber: fieldData.pageNumber ?? 1,
+      confidence: fieldData.confidence,
+    };
   }
 
   return mergedAttributes;

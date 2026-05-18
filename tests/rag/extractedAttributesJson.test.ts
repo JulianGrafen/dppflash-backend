@@ -114,6 +114,62 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
     const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
     expect((merged.gtin as { value: string }).value).toBe('222');
   });
+
+  it('protects richer Merkblatt rows: keeps longer cleaningAndMaintenance/applicationInstructions text', () => {
+    const existing = {
+      applicationInstructions: {
+        value:
+          'Detaillierte Verarbeitungsvorgaben über mehrere Absätze inklusive Normbezug DIN EN sowie Schutzmaßnahmen und Arbeitsabstand.',
+        sourcePdf: 'merk.pdf',
+        contextSnippet: 'Verarbeitungs-HINWEISE',
+        confidence: 0.92,
+      },
+      cleaningAndMaintenance: {
+        value: 'Sofort spülen; gründliche Nassreinigung der Werkzeuge zweimal mit klarem Leitungswasser.',
+        sourcePdf: 'merk.pdf',
+        contextSnippet: 'Reinigungshinweise — Werkzeuge und Flecken',
+        confidence: 0.92,
+      },
+    };
+    const incoming = {
+      applicationInstructions: {
+        value: 'Kurz merken: Handschuhe tragen.',
+        sourcePdf: 'docB.pdf',
+        contextSnippet: 'Hinweise',
+        confidence: 0.88,
+      },
+      cleaningAndMaintenance: {
+        value: 'Werkzeug nach Gebrauch reinigen.',
+        sourcePdf: 'docB.pdf',
+        contextSnippet: 'Reinigung',
+        confidence: 0.88,
+      },
+    };
+    const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
+    expect((merged.applicationInstructions as { value: string }).value).toBe(existing.applicationInstructions.value);
+    expect((merged.cleaningAndMaintenance as { value: string }).value).toBe(existing.cleaningAndMaintenance.value);
+  });
+
+  it('may upgrade shorter Merkblatt rows when incoming excerpt is materially longer', () => {
+    const existing = {
+      cleaningAndMaintenance: {
+        value: 'Kurz',
+        sourcePdf: 'alt.pdf',
+        contextSnippet: 'x',
+        confidence: 0.9,
+      },
+    };
+    const incoming = {
+      cleaningAndMaintenance: {
+        value: 'Nach Gebrauch Werkzeug sofort mehrfach unter fließendem Wasser abspülen und trocknen; Flecken sofort entsorgen.',
+        sourcePdf: 'neu.pdf',
+        contextSnippet: 'Ausführliche Reinigung',
+        confidence: 0.91,
+      },
+    };
+    const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
+    expect((merged.cleaningAndMaintenance as { value: string }).value).toBe(incoming.cleaningAndMaintenance.value);
+  });
 });
 
 describe('extractedAttributesToAuditTrailFields', () => {

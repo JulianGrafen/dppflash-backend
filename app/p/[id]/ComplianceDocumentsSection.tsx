@@ -10,6 +10,10 @@ function documentTypeLabel(type: string): string {
       return 'Sicherheitsdatenblatt';
     case 'technical_brief':
       return 'Technisches Merkblatt';
+    case 'rohs_confirmation':
+      return 'RoHS Confirmation';
+    case 'regulatory_data_sheet':
+      return 'Regulatorisches Datenblatt';
     case 'compliance_pdf':
       return 'Compliance-Dokument';
     default:

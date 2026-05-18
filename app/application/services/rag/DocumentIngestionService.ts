@@ -1,7 +1,10 @@
 import { basename } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import type { ComplianceSourceDocument } from '@/app/domain/rag/sourceDocuments';
-import { dedupeComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
+import {
+  classifyComplianceDocument,
+  dedupeComplianceSourceDocuments,
+} from '@/app/domain/rag/sourceDocuments';
 import { uploadComplianceDocumentToStorage } from '@/app/infrastructure/rag/complianceDocumentStorage';
 import { buildSemanticChunks } from '@/app/domain/rag/semanticChunker';
 import { enrichChunkTextWithProductContext } from '@/app/domain/rag/documentContextEnrichment';
@@ -133,13 +136,24 @@ export class DocumentIngestionService {
     readonly fileName: string;
     readonly pdf: Buffer;
     readonly titleHint?: string;
+    readonly fullDocumentText: string;
   }): Promise<ComplianceSourceDocument | null> {
+    const classification = classifyComplianceDocument(params.fileName, params.fullDocumentText);
+    if (!classification) {
+      console.info('[DPP] compliance_document_skip', {
+        reason: 'not_compliance_document',
+        fileName: params.fileName,
+      });
+      return null;
+    }
+
     const storageProductKey = params.dppProductId?.trim() || params.productEntityId;
     const upload = await uploadComplianceDocumentToStorage({
       productId: storageProductKey,
       fileName: params.fileName,
       pdf: params.pdf,
-      titleHint: params.titleHint,
+      titleHint: params.titleHint?.trim() || classification.title,
+      documentType: classification.type,
     });
 
     if (!upload.ok) {
@@ -228,6 +242,7 @@ export class DocumentIngestionService {
         fileName: input.fileName,
         pdf: input.pdf,
         titleHint: input.documentTitleHint ?? input.primaryProductNameHint,
+        fullDocumentText,
       });
       if (docRef) {
         sourceDocumentsCollected.push(docRef);

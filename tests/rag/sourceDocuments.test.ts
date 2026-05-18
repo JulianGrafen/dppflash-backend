@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendSourceDocumentToExtractedAttributes,
+  classifyComplianceDocument,
   dedupeComplianceSourceDocuments,
   inferComplianceDocumentType,
   parseComplianceSourceDocuments,
@@ -28,8 +29,33 @@ describe('sourceDocuments', () => {
     expect(docs).toHaveLength(1);
   });
 
-  it('infers SDS type from filename', () => {
+  it('classifies RoHS confirmations and RDS documents as compliance documents', () => {
+    expect(
+      classifyComplianceDocument(
+        'rohs.pdf',
+        'RoHS Confirmation\nWe confirm compliance with Directive 2011/65/EU.',
+      ),
+    ).toMatchObject({ type: 'rohs_confirmation' });
+
+    expect(
+      classifyComplianceDocument(
+        'datenblatt.pdf',
+        'Regulatorisches Datenblatt\nProdukt: Test',
+      ),
+    ).toMatchObject({ type: 'regulatory_data_sheet', title: 'Regulatorisches Datenblatt' });
+  });
+
+  it('does not classify normal product data sheets as compliance documents', () => {
+    expect(
+      classifyComplianceDocument(
+        'produktdaten.pdf',
+        'Technisches Datenblatt\nProduktdaten\nVerarbeitung und Eigenschaften',
+      ),
+    ).toBeNull();
+  });
+
+  it('infers SDS type from filename but not technical product data sheets', () => {
     expect(inferComplianceDocumentType('Produkt-SDB-final.pdf')).toBe('safety_data_sheet');
-    expect(inferComplianceDocumentType('Technisches_Merkblatt.pdf')).toBe('technical_brief');
+    expect(inferComplianceDocumentType('Technisches_Merkblatt.pdf')).toBe('compliance_pdf');
   });
 });

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import {
-  inferComplianceDocumentType,
   titleFromFileName,
   type ComplianceSourceDocument,
 } from '@/app/domain/rag/sourceDocuments';
@@ -19,6 +18,7 @@ export type UploadComplianceDocumentInput = {
   readonly fileName: string;
   readonly pdf: Buffer;
   readonly titleHint?: string;
+  readonly documentType: string;
 };
 
 export type UploadComplianceDocumentResult = {
@@ -75,7 +75,7 @@ export async function uploadComplianceDocumentToStorage(
     const document: ComplianceSourceDocument = {
       title,
       url: publicUrl,
-      type: inferComplianceDocumentType(safeName),
+      type: input.documentType,
     };
 
     console.info('[DPP] compliance_storage_upload_ok', {

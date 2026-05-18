@@ -8,11 +8,81 @@ export type ComplianceSourceDocument = {
   readonly type: string;
 };
 
+export type ComplianceDocumentClassification = {
+  readonly type: 'safety_data_sheet' | 'rohs_confirmation' | 'regulatory_data_sheet';
+  readonly title: string;
+};
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-export function inferComplianceDocumentType(fileName: string): string {
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function isSafetyDataSheet(fileName: string, documentText: string): boolean {
+  const haystack = normalizeSearchText(`${fileName}\n${documentText.slice(0, 12_000)}`);
+  return (
+    haystack.includes('sicherheitsdatenblatt')
+    || /\bsdb\b/.test(haystack)
+    || haystack.includes('safety data sheet')
+    || /\bsds\b/.test(haystack)
+    || /\bmsds\b/.test(haystack)
+  );
+}
+
+function isRohsConfirmation(fileName: string, documentText: string): boolean {
+  const haystack = normalizeSearchText(`${fileName}\n${documentText.slice(0, 24_000)}`);
+  return (
+    /\brohs\b/.test(haystack)
+    && (
+      haystack.includes('confirmation')
+      || haystack.includes('confirms')
+      || haystack.includes('declaration')
+      || haystack.includes('conformity')
+      || haystack.includes('compliance')
+      || haystack.includes('bestatigung')
+      || haystack.includes('konformitat')
+      || haystack.includes('konformitaet')
+    )
+  );
+}
+
+function isRegulatoryDataSheet(documentText: string): boolean {
+  const firstPages = normalizeSearchText(documentText.slice(0, 16_000));
+  return (
+    /^\s*regulatorisches datenblatt\b/im.test(firstPages)
+    || /\n\s*regulatorisches datenblatt\b/i.test(firstPages)
+    || /\brds\b.{0,80}\bregulatorisches datenblatt\b/i.test(firstPages)
+    || /\bregulatorisches datenblatt\b.{0,80}\brds\b/i.test(firstPages)
+  );
+}
+
+export function classifyComplianceDocument(
+  fileName: string,
+  documentText: string,
+): ComplianceDocumentClassification | null {
+  if (isRegulatoryDataSheet(documentText)) {
+    return { type: 'regulatory_data_sheet', title: 'Regulatorisches Datenblatt' };
+  }
+  if (isRohsConfirmation(fileName, documentText)) {
+    return { type: 'rohs_confirmation', title: 'RoHS Confirmation' };
+  }
+  if (isSafetyDataSheet(fileName, documentText)) {
+    return { type: 'safety_data_sheet', title: 'Sicherheitsdatenblatt' };
+  }
+  return null;
+}
+
+export function inferComplianceDocumentType(fileName: string, documentText = ''): string {
+  const classified = classifyComplianceDocument(fileName, documentText);
+  if (classified) {
+    return classified.type;
+  }
   const lower = fileName.toLowerCase();
   if (
     lower.includes('sdb')
@@ -22,14 +92,6 @@ export function inferComplianceDocumentType(fileName: string): string {
     || lower.includes('sds')
   ) {
     return 'safety_data_sheet';
-  }
-  if (
-    lower.includes('merkblatt')
-    || lower.includes('technisch')
-    || lower.includes('technical')
-    || lower.includes('tds')
-  ) {
-    return 'technical_brief';
   }
   return 'compliance_pdf';
 }

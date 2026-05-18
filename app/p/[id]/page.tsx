@@ -1026,39 +1026,6 @@ function formatManufacturerRichText(
   return flatHersteller;
 }
 
-/** Kurz für Hero-Badge — erste sinnvolle Zeile, nicht der komplette SDB-Kontaktblock. */
-function manufacturerHeroLabel(raw: Record<string, unknown>, p: EsprProductData): string {
-  const docChunk = pickManufacturerDocumentChunk(raw)?.trim();
-  if (docChunk) {
-    const firstLine =
-      docChunk.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0)
-      ?? docChunk;
-    const max = 76;
-    if (firstLine.length <= max) {
-      return firstLine;
-    }
-    return `${firstLine.slice(0, max - 1)}…`;
-  }
-
-  const rich = formatManufacturerRichText(raw, p.manufacturer);
-  let first =
-    rich
-      ?.split(/\n/)
-      .map((l) => l.trim())
-      .find((l) => l.length > 0) ?? '';
-
-  if (!first || /^[+.\d\s()/-]{12,}$/i.test(first)) {
-    first = p.manufacturer.name.trim()
-      || (typeof p.hersteller === 'string' ? p.hersteller.split(/\n/)[0]?.trim() : '')
-      || first;
-  }
-
-  const max = 76;
-  if (first.length > max) {
-    return `${first.slice(0, max - 1)}…`;
-  }
-  return first;
-}
 
 /** Human-in-the-loop: Abnahme-Anzeige (Auditor · Zeitpunkt oder Ausstehend). */
 function formatHumanVerificationLine(raw: Record<string, unknown>): string {
@@ -1285,12 +1252,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const manufacturerPublication = resolveManufacturerPublication(raw, p);
   const manufacturerDisplayBlock = manufacturerPublication.displayText;
 
-  const manufacturerBadgeLabel =
-    manufacturerHeroLabel(raw, p).trim()
-    || p.hersteller.trim()
-    || p.manufacturer.name.trim()
-    || '—';
-
   const chemicalCompositionSankey = tryChemicalCompositionToSankey(
     raw.chemicalComposition,
     displayProductName,
@@ -1361,7 +1322,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-[#0c1929] ring-1 ring-slate-200/80">
               <Battery className="h-4 w-4 text-sky-600" strokeWidth={2} aria-hidden />
-              {manufacturerBadgeLabel} <span className="text-slate-400">·</span> {p.modellname || '—'}
+              {p.modellname || '—'}
             </span>
           </div>
           <div className="mt-4 flex justify-center">

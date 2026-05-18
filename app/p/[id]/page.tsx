@@ -24,6 +24,7 @@ import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
 import { IsccPlusSection } from './IsccPlusSection';
+import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
 
@@ -84,9 +85,9 @@ function Field({
   const text = String(value);
   if (multiline) {
     return (
-      <div className="flex flex-col gap-1.5 px-5 py-3.5">
+      <div className="flex flex-col gap-1.5 px-5 py-3.5 sm:max-w-none">
         <dt className="text-[13px] font-medium leading-snug text-slate-500">{label}</dt>
-        <dd className="whitespace-pre-line text-[13px] font-semibold leading-relaxed text-slate-900">
+        <dd className="w-full max-w-none whitespace-pre-line text-[13px] font-semibold leading-relaxed text-slate-900">
           <span>{text}</span>
           {sourceBadge ? (
             <span
@@ -816,6 +817,94 @@ function pickFirstStringFromRecord(
   return undefined;
 }
 
+function provenanceContextSnippet(envelopeValue: unknown): string | undefined {
+  if (!isRagProvenanceEnvelope(envelopeValue)) {
+    return undefined;
+  }
+  const snippet = String((envelopeValue as Record<string, unknown>).contextSnippet ?? '').trim();
+  return snippet.length > 0 ? snippet : undefined;
+}
+
+/** Wörtlicher PDF-/Index-Belegauszug zu Hersteller (Eager-/RAG-Provenance `contextSnippet`). */
+function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | undefined {
+  const fromPassportEnvelope =
+    provenanceContextSnippet(raw.hersteller)
+    ?? provenanceContextSnippet(raw.manufacturer)
+    ?? provenanceContextSnippet(raw.Hersteller);
+  if (fromPassportEnvelope) {
+    return fromPassportEnvelope;
+  }
+
+  const enrichment = raw.ragEnrichment;
+  const enrichmentRecord =
+    typeof enrichment === 'object' && enrichment !== null && !Array.isArray(enrichment)
+      ? (enrichment as Record<string, unknown>)
+      : undefined;
+  if (
+    !enrichmentRecord
+    || !('auditTrail' in enrichmentRecord)
+    || enrichmentRecord.success !== true
+  ) {
+    return undefined;
+  }
+  const auditTrail = enrichmentRecord.auditTrail;
+  if (!auditTrail || typeof auditTrail !== 'object' || Array.isArray(auditTrail)) {
+    return undefined;
+  }
+  const trailRec = auditTrail as Record<string, unknown>;
+  const fields =
+    trailRec.fields && typeof trailRec.fields === 'object' && trailRec.fields !== null
+      ? (trailRec.fields as Record<string, unknown>)
+      : undefined;
+
+  const keysToTry = [
+    'hersteller',
+    'manufacturer',
+    'herstellerName',
+    'herstellername',
+    'Manufacturer',
+  ] as const;
+  for (const key of keysToTry) {
+    const audited = fields?.[key];
+    if (!audited || typeof audited !== 'object' || audited === null) {
+      continue;
+    }
+    const src = 'source' in audited ? (audited as { source?: unknown }).source : undefined;
+    if (!src || typeof src !== 'object' || Array.isArray(src)) {
+      continue;
+    }
+    const snippetRaw = (src as Record<string, unknown>).contextSnippet;
+    const sn = typeof snippetRaw === 'string' ? snippetRaw.trim() : '';
+    if (sn.length > 0) {
+      return sn;
+    }
+  }
+  return undefined;
+}
+
+/** Priorisiert dokumentnahen Chunk, sonst strukturierten Freitext. */
+function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprProductData): {
+  readonly displayText: string;
+  readonly showedDocumentChunk: boolean;
+} {
+  const chunk = pickManufacturerDocumentChunk(raw)?.trim();
+  const synthesized =
+    formatManufacturerRichText(raw, p.manufacturer).trim()
+    || p.manufacturer.name.trim()
+    || p.hersteller.trim();
+
+  if (chunk?.length) {
+    return {
+      displayText: chunk,
+      showedDocumentChunk: true,
+    };
+  }
+  if (synthesized.length > 0) {
+    return { displayText: synthesized, showedDocumentChunk: false };
+  }
+  return { displayText: '', showedDocumentChunk: false };
+}
+
 function formatTelDisplay(phone: string | undefined): string | undefined {
   if (!phone?.trim()) {
     return undefined;
@@ -939,6 +1028,18 @@ function formatManufacturerRichText(
 
 /** Kurz für Hero-Badge — erste sinnvolle Zeile, nicht der komplette SDB-Kontaktblock. */
 function manufacturerHeroLabel(raw: Record<string, unknown>, p: EsprProductData): string {
+  const docChunk = pickManufacturerDocumentChunk(raw)?.trim();
+  if (docChunk) {
+    const firstLine =
+      docChunk.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0)
+      ?? docChunk;
+    const max = 76;
+    if (firstLine.length <= max) {
+      return firstLine;
+    }
+    return `${firstLine.slice(0, max - 1)}…`;
+  }
+
   const rich = formatManufacturerRichText(raw, p.manufacturer);
   let first =
     rich
@@ -1138,10 +1239,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
   const displayProductName = readDisplayProductName(raw, p);
 
-  const manufacturerDisplayBlock =
-    formatManufacturerRichText(raw, p.manufacturer).trim()
-    || p.manufacturer.name.trim()
-    || p.hersteller.trim();
+  const manufacturerPublication = resolveManufacturerPublication(raw, p);
+  const manufacturerDisplayBlock = manufacturerPublication.displayText;
 
   const manufacturerBadgeLabel =
     manufacturerHeroLabel(raw, p).trim()
@@ -1283,6 +1382,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               label="Hersteller / Verantwortlicher"
               value={manufacturerDisplayBlock}
               multiline
+              sourceBadge={
+                manufacturerPublication.showedDocumentChunk
+                  ? 'Dokumentbeleg'
+                  : ragSuppliedFields.includes('hersteller')
+                    ? 'RAG'
+                    : undefined
+              }
             />
           ) : null}
           <ReviewField

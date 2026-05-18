@@ -210,6 +210,32 @@ describe('mergeRagAuditIntoPassport', () => {
     expect(flat.gtin).toBe('123');
   });
 
+  it('merges hStatements when requiresManualReview is true (regulatory code list)', () => {
+    const passport = {
+      id: 'p-h',
+      type: 'PAINT',
+      createdAt: new Date(),
+      language: 'de',
+      hersteller: 'X',
+      modellname: 'Y',
+    } as ChemicalDPP;
+
+    const trail = parseAuditTrail({
+      fields: {
+        hStatements: {
+          value: ['H302', 'H315'],
+          confidence: 0.88,
+          source: { fileName: 'sdb.pdf', pageNumber: 2, contextSnippet: '—' },
+          requiresManualReview: true,
+        },
+      },
+    });
+
+    const { patch, appliedKeys } = mergeRagAuditIntoPassport(passport, trail, ['hStatements']);
+    expect(appliedKeys).toEqual(['hStatements']);
+    expect(patch.hStatements).toEqual(['H302', 'H315']);
+  });
+
   it('treats placeholder null string hersteller as empty so RAG can fill', () => {
     const passport = {
       id: 'p7',

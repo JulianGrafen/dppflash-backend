@@ -75,6 +75,11 @@ const COMMON = [
   'endOfLifeInstructions',
   'materialComposition',
   'chemicalComposition',
+  /** CLP-Kennzeichnung (Abschnitt 2) — für alle Produkttypen nachziehbar */
+  'hStatements',
+  'pStatements',
+  'ghsSymbols',
+  'substancesOfConcern',
 ] as const;
 
 const BATTERY = [

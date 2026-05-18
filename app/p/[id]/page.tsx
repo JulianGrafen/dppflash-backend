@@ -487,10 +487,22 @@ type SubstanceOfConcernDisplayRow = {
   readonly classification: string;
 };
 
+function normalizeHazardCodeCandidate(v: unknown): unknown {
+  let x = unwrapProvenanceInner(v);
+  if (x && typeof x === 'object' && !Array.isArray(x)) {
+    const o = x as Record<string, unknown>;
+    if ('value' in o && ('confidence' in o || 'source' in o || 'requiresManualReview' in o)) {
+      x = o.value;
+    }
+  }
+  return x;
+}
+
 /** Sammelt H-/P-/GHS-Kennungen aus deutsch/englisch benannten JSON-Feldern. */
 function collectDistinctHazardCodes(...vals: unknown[]): string[] {
   const out: string[] = [];
-  for (const v of vals) {
+  for (const raw of vals) {
+    const v = normalizeHazardCodeCandidate(raw);
     if (v === undefined || v === null) {
       continue;
     }
@@ -508,6 +520,75 @@ function collectDistinctHazardCodes(...vals: unknown[]): string[] {
     }
   }
   return [...new Set(out)];
+}
+
+function readRagAuditTrailFieldValues(raw: Record<string, unknown>, keys: readonly string[]): unknown[] {
+  const rag = raw.ragEnrichment;
+  if (!rag || typeof rag !== 'object' || Array.isArray(rag)) {
+    return [];
+  }
+  const ragRec = rag as Record<string, unknown>;
+  if (ragRec.success !== true) {
+    return [];
+  }
+  const trail = ragRec.auditTrail;
+  if (!trail || typeof trail !== 'object' || Array.isArray(trail)) {
+    return [];
+  }
+  const fields = (trail as Record<string, unknown>).fields;
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+    return [];
+  }
+  const vals: unknown[] = [];
+  for (const key of keys) {
+    const entry = (fields as Record<string, unknown>)[key];
+    if (entry && typeof entry === 'object' && !Array.isArray(entry) && 'value' in entry) {
+      vals.push((entry as Record<string, unknown>).value);
+    }
+  }
+  return vals;
+}
+
+function aggregateSubstanceRowHazardCodes(
+  raw: Record<string, unknown>,
+  kind: 'h' | 'p' | 'ghs',
+): string[] {
+  const inner =
+    parseHazardFieldToStructuredArray(raw.substancesOfConcern)
+    ?? parseHazardFieldToStructuredArray(raw.gefahrenstoffe);
+  if (!inner?.length || inner.every((x) => typeof x === 'string')) {
+    return [];
+  }
+  const hKeys = ['hStatements', 'hazardStatements', 'hSaetze'] as const;
+  const pKeys = ['pStatements', 'precautionaryStatements', 'pSaetze'] as const;
+  const gKeys = ['ghsPictograms', 'ghsSymbols', 'gefahrenpiktogramme'] as const;
+  const keys = kind === 'h' ? hKeys : kind === 'p' ? pKeys : gKeys;
+  const vals: unknown[] = [];
+  for (const entry of inner) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const o = entry as Record<string, unknown>;
+    for (const k of keys) {
+      vals.push(o[k]);
+    }
+  }
+  return collectDistinctHazardCodes(...vals);
+}
+
+function resolveProductLevelHazardCodes(
+  raw: Record<string, unknown>,
+  passportKeys: readonly string[],
+  synonymKeys: readonly string[],
+  substanceKind: 'h' | 'p' | 'ghs',
+): string[] {
+  const passportVals = synonymKeys.flatMap((k) => [unwrapProvenanceInner(raw[k]), raw[k]]);
+  const trailVals = readRagAuditTrailFieldValues(raw, passportKeys);
+  const direct = collectDistinctHazardCodes(...passportVals, ...trailVals);
+  if (direct.length > 0) {
+    return direct;
+  }
+  return aggregateSubstanceRowHazardCodes(raw, substanceKind);
 }
 
 function formatCodeCellDisplay(codes: readonly string[]): string {
@@ -1260,24 +1341,26 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
   const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
-  const productLevelHStatements = collectDistinctHazardCodes(
-    unwrapProvenanceInner(raw.hStatements),
-    raw.hStatements,
-    raw.hazardStatements,
-    raw.hSaetze,
+  const productLevelHStatements = resolveProductLevelHazardCodes(
+    raw,
+    ['hStatements'],
+    ['hStatements', 'hazardStatements', 'hSaetze'],
+    'h',
   );
-  const productLevelPStatements = collectDistinctHazardCodes(
-    unwrapProvenanceInner(raw.pStatements),
-    raw.pStatements,
-    raw.precautionaryStatements,
-    raw.pSaetze,
+  const productLevelPStatements = resolveProductLevelHazardCodes(
+    raw,
+    ['pStatements'],
+    ['pStatements', 'precautionaryStatements', 'pSaetze'],
+    'p',
   );
-  const productLevelGhsSymbols = collectDistinctHazardCodes(
-    unwrapProvenanceInner(raw.ghsSymbols),
-    raw.ghsSymbols,
-    raw.ghsPictograms,
-    raw.gefahrenpiktogramme,
+  const productLevelGhsSymbols = resolveProductLevelHazardCodes(
+    raw,
+    ['ghsSymbols'],
+    ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme'],
+    'ghs',
   );
+  const hazardFromRagAudit = (key: string) =>
+    readRagAuditTrailFieldValues(raw, [key]).length > 0 && !ragSuppliedFields.includes(key);
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 
@@ -1473,17 +1556,23 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field
             label="H-Sätze (Gefahrenhinweise)"
             value={productLevelHStatements.length > 0 ? productLevelHStatements.join(', ') : undefined}
-            sourceBadge={ragSuppliedFields.includes('hStatements') ? 'RAG' : undefined}
+            sourceBadge={
+              ragSuppliedFields.includes('hStatements') || hazardFromRagAudit('hStatements') ? 'RAG' : undefined
+            }
           />
           <Field
             label="P-Sätze (Sicherheitshinweise)"
             value={productLevelPStatements.length > 0 ? productLevelPStatements.join(', ') : undefined}
-            sourceBadge={ragSuppliedFields.includes('pStatements') ? 'RAG' : undefined}
+            sourceBadge={
+              ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements') ? 'RAG' : undefined
+            }
           />
           <Field
             label="GHS-Symbole"
             value={productLevelGhsSymbols.length > 0 ? productLevelGhsSymbols.join(', ') : undefined}
-            sourceBadge={ragSuppliedFields.includes('ghsSymbols') ? 'RAG' : undefined}
+            sourceBadge={
+              ragSuppliedFields.includes('ghsSymbols') || hazardFromRagAudit('ghsSymbols') ? 'RAG' : undefined
+            }
           />
           <ReviewField
             label="GTIN"

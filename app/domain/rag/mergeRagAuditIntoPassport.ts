@@ -140,6 +140,19 @@ function formatGefahrenstoffStringsFromStructured(rows: readonly unknown[]): str
   });
 }
 
+const REGULATORY_CODE_LIST_KEYS = new Set(['hStatements', 'pStatements', 'ghsSymbols']);
+
+function isRegulatoryCodeListAudited(key: string, audited: AuditedValue): boolean {
+  if (!REGULATORY_CODE_LIST_KEYS.has(key) || audited.value === null) {
+    return false;
+  }
+  return (
+    Array.isArray(audited.value)
+    && audited.value.length > 0
+    && audited.value.every((x) => typeof x === 'string' && x.trim() !== '')
+  );
+}
+
 function normalizeScalar(key: string, audited: AuditedValue): unknown {
   const raw = audited.value;
   if (raw === null) {
@@ -198,7 +211,10 @@ export function mergeRagAuditIntoPassport(
     if (Object.prototype.hasOwnProperty.call(patch, key)) {
       return;
     }
-    if (!audited || audited.value === null || audited.requiresManualReview) {
+    if (!audited || audited.value === null) {
+      return;
+    }
+    if (audited.requiresManualReview && !isRegulatoryCodeListAudited(key, audited)) {
       return;
     }
     if (!allowed.has(key)) {

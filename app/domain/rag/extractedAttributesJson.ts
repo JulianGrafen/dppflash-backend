@@ -378,10 +378,19 @@ export function mergeExtractedAttributesMaps(
   return out;
 }
 
+function isFlatRegulatoryCodeList(value: ExtractedStructuredValue): boolean {
+  return (
+    Array.isArray(value)
+    && value.length > 0
+    && value.every((x) => typeof x === 'string' && x.trim() !== '')
+  );
+}
+
 function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
-  const requiresSnippet =
-    row.value !== null
-    && (typeof row.value === 'string' ? row.contextSnippet.trim().length < 2 : row.contextSnippet.trim().length < 2);
+  const snippetTooShort = row.contextSnippet.trim().length < 2;
+  /** H/P/GHS-Code-Listen aus Eager sollen ins Pass, auch wenn das Snippet kurz ist. */
+  const requiresManualReview =
+    row.value !== null && snippetTooShort && !isFlatRegulatoryCodeList(row.value);
 
   let valueOut: AuditedValue['value'];
   if (row.value !== null && Array.isArray(row.value)) {
@@ -404,7 +413,7 @@ function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
       pageNumber: row.pageNumber ?? 1,
       contextSnippet: row.contextSnippet.trim().length > 0 ? row.contextSnippet : '—',
     },
-    requiresManualReview: requiresSnippet,
+    requiresManualReview,
   };
 }
 

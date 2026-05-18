@@ -234,6 +234,20 @@ describe('extractedAttributesToAuditTrailFields', () => {
     expect(keyResolution[0]?.usedStoredKey).toBe('chemicalComposition');
   });
 
+  it('does not flag flat H-code lists for manual review when snippet is short', () => {
+    const stored = {
+      hStatements: {
+        value: ['H315', 'H317'],
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'x',
+        confidence: 0.9,
+      },
+    };
+    const { fields } = extractedAttributesToAuditTrailFields(stored, ['hStatements']);
+    expect(fields.hStatements?.value).toEqual(['H315', 'H317']);
+    expect(fields.hStatements?.requiresManualReview).toBe(false);
+  });
+
   it('maps pStatements/substancesOfConcern via synonyms from stored JSON arrays', () => {
     const stored = {
       precautionaryStatements: {

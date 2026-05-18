@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
 import {
   compositionGraphHasMeaningfulFlows,
+  formatPassportCoreMaterialSummary,
   parseChemicalConcentrationBandMidpoint,
   tryChemicalCompositionToSankey,
   tryMaterialCompositionToSankey,
@@ -79,6 +80,27 @@ describe('parseChemicalConcentrationBandMidpoint', () => {
     expect(parseChemicalConcentrationBandMidpoint('<1 %')).toBeCloseTo(0.5, 5);
     expect(parseChemicalConcentrationBandMidpoint('-')).toBeNull();
     expect(parseChemicalConcentrationBandMidpoint('—')).toBeNull();
+  });
+});
+
+describe('formatPassportCoreMaterialSummary', () => {
+  it('matches Kernfeld materialComposition rows', () => {
+    const s = formatPassportCoreMaterialSummary({
+      materialComposition: [
+        { material: 'Recyceltes Polyester', percentage: 95 },
+        { material: 'Elasthan', percentage: 5 },
+      ],
+    });
+    expect(s).toContain('Polyester');
+    expect(s).toContain('95');
+    expect(s).toContain('Elasthan');
+  });
+
+  it('parses textile materialZusammensetzung string like Kernfeld-Sankey', () => {
+    const s = formatPassportCoreMaterialSummary({
+      materialZusammensetzung: '95% Recyceltes Polyester, 5% Elasthan',
+    });
+    expect(s).toContain('Polyester');
   });
 });
 

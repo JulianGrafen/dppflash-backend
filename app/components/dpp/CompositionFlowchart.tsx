@@ -78,10 +78,10 @@ export function CompositionFlowchart({
   }
 
   return (
-    <div
-      className={`w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm ${className}`}
-      style={{ height }}
-    >
+      <div
+        className={`w-full overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-inner ${className}`}
+        style={{ height }}
+      >
       <ResponsiveSankey<SankeyNode, SankeyLink>
         data={data}
         margin={

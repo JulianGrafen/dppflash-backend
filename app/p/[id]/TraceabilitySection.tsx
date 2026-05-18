@@ -48,24 +48,22 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
     : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung — nicht aus RAG und nicht aus der chemischen Zusammensetzung abgeleitet.';
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/[0.04]">
-      <header className="flex items-start gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-4 sm:px-5 sm:py-5">
+    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
         <div
-          className="flex shrink-0 items-center justify-center rounded-xl bg-slate-900 p-2.5 text-white shadow-sm"
+          className="flex shrink-0 items-center justify-center rounded-xl bg-white/[0.12] p-2.5"
           aria-hidden
         >
-          <Truck size={22} strokeWidth={2} />
+          <Truck size={22} strokeWidth={1.75} className="text-sky-300" />
         </div>
         <div className="min-w-0 pt-0.5">
-          <h2 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
-            Rückverfolgbarkeit
-          </h2>
-          <p className="mt-1 text-[11px] font-bold uppercase leading-snug tracking-[0.18em] text-slate-500">
+          <h2 className="text-[15px] font-semibold tracking-tight">Rückverfolgbarkeit</h2>
+          <p className="mt-1 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-slate-400">
             {chainSubtitle}
           </p>
         </div>
       </header>
-      <div className="space-y-3 bg-gradient-to-b from-slate-50/90 via-white to-white px-3 pb-5 pt-4 sm:px-5 sm:pb-6 sm:pt-5">
+      <div className="space-y-3 bg-gradient-to-b from-slate-50/60 via-white to-white px-3 pb-5 pt-5 sm:px-5 sm:pb-6 sm:pt-5">
         <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
       </div>

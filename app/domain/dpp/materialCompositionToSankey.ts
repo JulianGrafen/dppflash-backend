@@ -241,6 +241,13 @@ export function collectPassportCoreMaterialRowsForSankey(
     return fromMzArray;
   }
 
+  if (typeof mzInner === 'string' && mzInner.trim() && !mzInner.trim().startsWith('[')) {
+    const fromMzWrappedText = rowsFromMaterialZusammensetzungString(mzInner.trim());
+    if (fromMzWrappedText.length > 0) {
+      return fromMzWrappedText;
+    }
+  }
+
   if (typeof raw.materialZusammensetzung === 'string' && raw.materialZusammensetzung.trim()) {
     const fromMz = rowsFromMaterialZusammensetzungString(raw.materialZusammensetzung);
     if (fromMz.length > 0) {
@@ -248,6 +255,35 @@ export function collectPassportCoreMaterialRowsForSankey(
     }
   }
   return [];
+}
+
+function formatDeRoughPercentForSummary(n: number): string {
+  if (Math.abs(n - Math.round(n)) < 0.051) {
+    return `${Math.round(n)} %`;
+  }
+  return `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
+}
+
+/**
+ * Material-Zusammensetzung als Freitext — gleiche Datenbasis wie Sankey/`collectPassportCoreMaterialRowsForSankey`.
+ */
+export function formatPassportCoreMaterialSummary(
+  raw: Record<string, unknown>,
+  options?: { readonly maxChars?: number },
+): string | undefined {
+  const maxChars = options?.maxChars ?? 480;
+  const rows = [...collectPassportCoreMaterialRowsForSankey(raw)];
+  if (rows.length === 0) {
+    return undefined;
+  }
+  const parts = rows.map((r) =>
+    r.percentage > 0.05 ? `${r.material} (${formatDeRoughPercentForSummary(r.percentage)})` : r.material,
+  );
+  let s = parts.join(', ');
+  if (s.length > maxChars) {
+    s = `${s.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+  }
+  return s;
 }
 
 export function compositionGraphHasMeaningfulFlows(graph: CompositionGraphPayload): boolean {

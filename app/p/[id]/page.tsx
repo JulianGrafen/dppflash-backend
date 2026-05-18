@@ -1,6 +1,20 @@
 import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
-import { ShieldCheck, Battery, AlertTriangle } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle,
+  Battery,
+  Building2,
+  ClipboardList,
+  Cpu,
+  FileStack,
+  Gauge,
+  Globe2,
+  Menu,
+  Recycle,
+  ShieldCheck,
+  Trash2,
+} from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
 import {
   coerceMaterialCompositionArray,
@@ -22,17 +36,33 @@ interface PageProps {
 
 function Section({
   title,
+  subtitle,
+  icon: Icon,
   children,
 }: {
   title: string;
+  subtitle?: string;
+  icon?: LucideIcon;
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 px-5 py-3 border-b border-gray-50 bg-gray-50">
-        {title}
-      </h2>
-      <dl className="divide-y divide-gray-50">{children}</dl>
+    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      <div className="flex items-center gap-3 bg-[#0c1929] px-5 py-4 text-white">
+        {Icon ? (
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.12] backdrop-blur-sm">
+            <Icon className="h-5 w-5 text-sky-300" strokeWidth={1.75} aria-hidden />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold leading-snug tracking-tight">{title}</h2>
+          {subtitle ? (
+            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <dl className="divide-y divide-slate-100">{children}</dl>
     </section>
   );
 }
@@ -49,13 +79,13 @@ function Field({
 }) {
   if (value === undefined || value === null || value === '') return null;
   return (
-    <div className="flex justify-between items-start gap-4 px-5 py-3">
-      <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm font-medium text-gray-900 text-right">
+    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
         <span>{String(value)}</span>
         {sourceBadge ? (
           <span
-            className="ml-2 inline-flex align-middle rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800"
+            className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
             title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
           >
             {sourceBadge}
@@ -84,13 +114,13 @@ function ReviewField({
   if (value === undefined || value === null || value === '') return null;
 
   return (
-    <div className="flex justify-between items-start gap-4 px-5 py-3 bg-yellow-50 border-l-4 border-yellow-300">
-      <dt className="text-sm text-yellow-700 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm font-semibold text-yellow-900 text-right">
+    <div className="flex flex-col gap-0.5 bg-amber-50/80 px-5 py-3.5 ring-1 ring-inset ring-amber-200/60 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-amber-800 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="text-[13px] font-semibold leading-snug text-amber-950 sm:max-w-[58%] sm:text-right">
         <span>{String(value)}</span>
         {sourceBadge ? (
           <span
-            className="ml-2 inline-flex align-middle rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-800"
+            className="ml-2 inline-flex align-middle rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900 ring-1 ring-amber-200/80"
             title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
           >
             {sourceBadge}
@@ -127,14 +157,14 @@ function renderKeyValueList(
   if (entries.length === 0) return null;
 
   return (
-    <div className="flex justify-between items-start gap-4 px-5 py-3">
-      <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm font-medium text-gray-900 text-right space-y-1">
+    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="space-y-2 text-[13px] font-semibold text-slate-900 sm:max-w-[58%] sm:text-right">
         {entries.map((entry) => (
           <div key={`${label}-${entry.title}-${entry.details ?? ''}`}>
             <div>{entry.title}</div>
             {entry.details ? (
-              <div className="text-xs text-gray-500">{entry.details}</div>
+              <div className="mt-0.5 text-[12px] font-normal leading-snug text-slate-500">{entry.details}</div>
             ) : null}
           </div>
         ))}
@@ -285,26 +315,26 @@ function renderSdsCompositionTable(label: string, rows: readonly SdsCompositionD
   }
 
   return (
-    <div className="flex justify-between items-start gap-4 px-5 py-3">
-      <dt className="text-sm text-gray-500 shrink-0 w-44">{label}</dt>
-      <dd className="text-sm text-gray-900 min-w-0 flex-1">
-        <div className="overflow-x-auto rounded-lg border border-gray-100">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[58%]">
+        <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm">
+          <table className="min-w-full text-left text-[13px]">
+            <thead className="bg-sky-50/90 text-[11px] font-bold uppercase tracking-wider text-slate-600">
               <tr>
-                <th className="px-3 py-2">Inhaltsstoff</th>
-                <th className="px-3 py-2 whitespace-nowrap">CAS-Nr.</th>
-                <th className="px-3 py-2 whitespace-nowrap">Konzentration</th>
-                <th className="px-3 py-2">Einstufung</th>
+                <th className="px-3 py-2.5">Inhaltsstoff</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">CAS-Nr.</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Konzentration</th>
+                <th className="px-3 py-2.5">Einstufung</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
                 <tr key={`${label}-${r.stoffname}-${r.casDisplay}-${i}`} className="bg-white">
-                  <td className="px-3 py-2 font-medium text-gray-900">{r.stoffname}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.casDisplay}</td>
-                  <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{r.konzentration}</td>
-                  <td className="px-3 py-2 text-gray-700">{r.einstufung}</td>
+                  <td className="px-3 py-2 font-semibold text-slate-900">{r.stoffname}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600 tabular-nums">{r.casDisplay}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600">{r.konzentration}</td>
+                  <td className="px-3 py-2 text-slate-700">{r.einstufung}</td>
                 </tr>
               ))}
             </tbody>
@@ -422,47 +452,118 @@ function renderCarbonFootprint(value: unknown) {
   return renderKeyValueList('CO₂-Fußabdruck', entries);
 }
 
-function renderSubstancesOfConcern(value: unknown) {
-  const inner = unwrapProvenanceInner(value);
-  if (!Array.isArray(inner)) return null;
+type SubstanceOfConcernDisplayRow = {
+  readonly name: string;
+  readonly casDisplay: string;
+  readonly concentration: string;
+  readonly classification: string;
+};
 
-  const entries = inner.flatMap((entry) => {
-    if (!entry || typeof entry !== 'object') return [];
-
+function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfConcernDisplayRow[] {
+  const rows: SubstanceOfConcernDisplayRow[] = [];
+  for (const entry of inner) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const o = entry as Record<string, unknown>;
     const name =
-      ('name' in entry && typeof entry.name === 'string' ? entry.name : undefined)
-      ?? ('stoffname' in entry && typeof entry.stoffname === 'string' ? entry.stoffname : undefined);
-    const casNumber =
-      ('casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined)
-      ?? ('casNummer' in entry && entry.casNummer !== null && typeof entry.casNummer === 'string'
-        ? entry.casNummer
-        : undefined);
-    const concentration =
-      'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
-    const pctStr =
-      'anteilOderGrenzwert' in entry && typeof entry.anteilOderGrenzwert === 'string'
-      && entry.anteilOderGrenzwert.trim()
-        ? entry.anteilOderGrenzwert.trim()
-        : undefined;
-    const hazardClass =
-      ('hazardClass' in entry && typeof entry.hazardClass === 'string' && entry.hazardClass
-        ? entry.hazardClass
-        : undefined)
-      ?? ('hinweis' in entry && typeof entry.hinweis === 'string' && entry.hinweis.trim()
-        ? entry.hinweis.trim()
-        : undefined);
+      (typeof o.name === 'string' ? o.name.trim() : '')
+      || (typeof o.stoffname === 'string' ? o.stoffname.trim() : '');
+    if (!name) {
+      continue;
+    }
 
-    if (!name) return [];
+    const casRaw = o.casNumber ?? o.casNummer;
+    const casDisplay =
+      casRaw !== null && casRaw !== undefined && String(casRaw).trim().length > 0
+        ? String(casRaw).trim()
+        : '—';
 
-    const details = [casNumber, pctStr ?? concentration, hazardClass].filter(Boolean).join(' · ');
+    let concentration = '—';
+    if (typeof o.anteilOderGrenzwert === 'string' && o.anteilOderGrenzwert.trim()) {
+      concentration = o.anteilOderGrenzwert.trim();
+    } else if (typeof o.concentrationPercent === 'number' && Number.isFinite(o.concentrationPercent)) {
+      concentration = formatPercentage(o.concentrationPercent) ?? '—';
+    } else if (typeof o.concentrationPercent === 'string' && o.concentrationPercent.trim()) {
+      concentration = o.concentrationPercent.trim();
+    }
 
-    return [{
-      title: name,
-      details: details || undefined,
-    }];
-  });
+    const classification =
+      (typeof o.hazardClass === 'string' && o.hazardClass.trim() ? o.hazardClass.trim() : '')
+      || (typeof o.hinweis === 'string' && o.hinweis.trim() ? o.hinweis.trim() : '')
+      || '—';
 
-  return renderKeyValueList('Besorgniserregende Stoffe', entries);
+    rows.push({ name, casDisplay, concentration, classification });
+  }
+  return rows;
+}
+
+function renderSubstancesOfConcernTable(rows: readonly SubstanceOfConcernDisplayRow[]) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-semibold leading-snug text-slate-800 sm:w-[40%] sm:shrink-0">
+        Besorgniserregende Stoffe{' '}
+        <span className="block pt-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-400">
+          Substances of concern
+        </span>
+      </dt>
+      <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[58%]">
+        <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm">
+          <table className="min-w-full text-left text-[13px]">
+            <thead className="bg-amber-50/90 text-[11px] font-bold uppercase tracking-wider text-slate-700">
+              <tr>
+                <th className="px-3 py-2.5">Stoff / Bezeichnung</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">CAS-Nr.</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">Konzentration / Grenzwert</th>
+                <th className="px-3 py-2.5">Hinweis / Einstufung</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r, i) => (
+                <tr key={`${r.name}-${r.casDisplay}-${i}`} className="bg-white">
+                  <td className="px-3 py-2 font-semibold text-slate-900">{r.name}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-sm text-slate-800">{r.casDisplay}</td>
+                  <td className="px-3 py-2 text-slate-700">{r.concentration}</td>
+                  <td className="px-3 py-2 text-slate-700">{r.classification}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </dd>
+    </div>
+  );
+}
+
+function renderSubstancesOfConcern(value: unknown) {
+  let inner: unknown = unwrapProvenanceInner(value);
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (t.startsWith('[')) {
+      try {
+        inner = JSON.parse(t) as unknown;
+      } catch {
+        return null;
+      }
+    }
+  }
+  if (!Array.isArray(inner) || inner.length === 0) {
+    return null;
+  }
+
+  if (inner.every((x) => typeof x === 'string')) {
+    return renderKeyValueList(
+      'Besorgniserregende Stoffe (Substances of concern)',
+      inner.map((s) => ({ title: typeof s === 'string' ? s : String(s) })),
+    );
+  }
+
+  const rows = parseSubstancesOfConcernRows(inner);
+  return renderSubstancesOfConcernTable(rows);
 }
 
 function renderGefahrenstoffeKernfelder(value: unknown) {
@@ -680,13 +781,15 @@ function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData
 
 function ConfidenceBadge({ score }: { score: number }) {
   const pct = Math.round(score * 100);
-  const color =
-    pct >= 75 ? 'bg-green-100 text-green-700' :
-    pct >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                'bg-red-100 text-red-700';
+  const ring =
+    pct >= 75 ? 'bg-emerald-50 text-emerald-800 ring-emerald-200/70' :
+    pct >= 50 ? 'bg-amber-50 text-amber-900 ring-amber-200/70' :
+                'bg-rose-50 text-rose-800 ring-rose-200/70';
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${color}`}>
-      {pct} % Konfidenz
+    <span
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${ring}`}
+    >
+      Konfidenz {pct}%
     </span>
   );
 }
@@ -816,36 +919,78 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     || asString(enrichmentReview?.status) === 'PENDING';
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
+    <div className="min-h-screen bg-[#eef1f8] pb-4">
+      {/* Top bar — Circularise-Style App-Rahmen */}
+      <nav className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/90 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0c1929] text-[11px] font-bold leading-none text-white">
+              DPP
+            </span>
+            <span className="text-sm font-bold tracking-tight text-[#0c1929]">
+              flash <span className="font-normal text-slate-400">· Produktpass</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100"
+            aria-label="Menü"
+          >
+            <Menu className="h-5 w-5" strokeWidth={1.75} />
+          </button>
+        </div>
+      </nav>
 
-      {/* ── Page header ── */}
-      <header className="bg-white border-b px-4 py-7 text-center shadow-sm">
-        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 ${
-          isReviewRequired ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
-        }`}>
-          <ShieldCheck size={14} /> {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'} · ESPR 2024/1781
-        </div>
-        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">{displayProductName}</h1>
-        <p className="text-gray-500 text-sm mt-1">Digitaler Produktpass</p>
-        <p className="text-gray-400 text-xs mt-2">
-          <code className="bg-gray-100 px-2 py-1 rounded">{p.id}</code>
-        </p>
-        <div className="mt-4 flex items-center justify-center gap-3">
-          <span className="inline-flex items-center gap-1.5 text-base font-bold text-blue-600">
-            <Battery size={18} />
-            {p.hersteller || '—'} · {p.modellname || '—'}
-          </span>
-        </div>
-        <div className="mt-2">
-          <ConfidenceBadge score={p.extractionConfidence} />
+      {/* Hero */}
+      <header className="relative border-b border-slate-200/80 bg-white">
+        <div
+          className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-[#0c1929] to-sky-500"
+          aria-hidden
+        />
+        <div className="mx-auto max-w-4xl px-6 pb-10 pt-10 text-center sm:px-8">
+          <div className="mb-4 flex justify-center">
+            <div className="inline-flex flex-wrap items-center justify-center gap-2">
+              <span
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset ${
+                  isReviewRequired
+                    ? 'bg-amber-50 text-amber-900 ring-amber-200/80'
+                    : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+                }`}
+              >
+                <ShieldCheck size={14} strokeWidth={2} aria-hidden />
+                {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'}
+                <span className="text-[10px] font-semibold text-slate-500 normal-case tracking-normal">
+                  · ESPR 2024/1781
+                </span>
+              </span>
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#0c1929] sm:text-3xl">
+            {displayProductName}
+          </h1>
+          <p className="mt-2 text-sm font-medium text-slate-500">Digitaler Produktpass</p>
+          <p className="mt-3">
+            <code className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600 ring-1 ring-slate-200/80">
+              {p.id}
+            </code>
+          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-[#0c1929] ring-1 ring-slate-200/80">
+              <Battery className="h-4 w-4 text-sky-600" strokeWidth={2} aria-hidden />
+              {p.hersteller || '—'} <span className="text-slate-400">·</span> {p.modellname || '—'}
+            </span>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <ConfidenceBadge score={p.extractionConfidence} />
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-4">
+      <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 sm:space-y-6">
 
         {/* ── Extraction warnings ── */}
         {hasWarnings && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+          <div className="rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 shadow-sm ring-1 ring-amber-900/[0.04]">
             <div className="flex items-start gap-2 text-amber-700">
               <AlertTriangle size={16} className="mt-0.5 shrink-0" />
               <div>
@@ -861,7 +1006,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         )}
 
         {isReviewRequired && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-5 py-4 space-y-3">
+          <div className="space-y-3 rounded-2xl border border-amber-200/90 bg-amber-50/80 px-5 py-5 shadow-sm ring-1 ring-amber-900/[0.04]">
             <p className="text-sm font-semibold text-yellow-800">
               Enrichment-Werte wurden automatisch aus Web-Quellen ergänzt. Bitte prüfen und bestätigen.
             </p>
@@ -890,7 +1035,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         )}
 
         {/* ── Identity ── */}
-        <Section title="Allgemeine Informationen">
+        <Section icon={Building2} title="Allgemeine Informationen" subtitle="Identität & Kennzeichnung">
           <Field label="Hersteller"        value={p.manufacturer.name || p.hersteller} />
           <Field label="Adresse"           value={p.manufacturer.address} />
           <Field label="Land"              value={p.manufacturer.country} />
@@ -908,7 +1053,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Technical spec ── */}
-        <Section title="Technische Spezifikation">
+        <Section icon={Cpu} title="Technische Spezifikation" subtitle="Technische Daten">
           <Field label="Kapazität"       value={p.capacityKwh !== undefined ? `${p.capacityKwh} kWh` : undefined} />
           <Field label="Chemisches System" value={p.chemistry} />
           <Field label="Batterietyp"     value={p.batteryType} />
@@ -929,7 +1074,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         ) : null}
 
         {/* ── DPP Core fields (new extraction schema) ── */}
-        <Section title="DPP-Kernfelder (ESPR)">
+        <Section icon={FileStack} title="DPP-Kernfelder (ESPR)" subtitle="Regulatorische Datenblätter">
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
@@ -964,7 +1109,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <RagProvenanceSection ragEnrichment={raw.ragEnrichment} />
 
         {/* ── Carbon footprint (Art. 7) ── */}
-        <Section title="CO₂-Fußabdruck (Art. 7 EU 2023/1542)">
+        <Section icon={Globe2} title="CO₂-Fußabdruck" subtitle="Art. 7 EU 2023/1542">
           <Field label="Gesamt (kg CO₂e)"   value={p.carbonFootprint.totalKg} />
           <Field label="Pro kWh (kg CO₂e)"  value={p.carbonFootprint.perKwhKg} />
           <Field label="Methodik"            value={p.carbonFootprint.methodology} />
@@ -972,7 +1117,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Recycled content (Art. 8) ── */}
-        <Section title="Recyclinganteil (Art. 8 EU 2023/1542)">
+        <Section icon={Recycle} title="Recyclinganteile" subtitle="Art. 8 EU 2023/1542">
           <Pct label="Kobalt"   value={p.recycledContent.cobaltPct} />
           <Pct label="Lithium"  value={p.recycledContent.lithiumPct} />
           <Pct label="Nickel"   value={p.recycledContent.nickelPct} />
@@ -980,7 +1125,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Lifecycle (Art. 10) ── */}
-        <Section title="Lebensdauer & Reparierbarkeit (Art. 10)">
+        <Section icon={Gauge} title="Lebensdauer & Reparierbarkeit" subtitle="Art. 10 EU 2023/1542">
           <Field label="Erwartete Ladezyklen"  value={p.lifecycle.expectedCycles} />
           <Field label="Reparierbarkeitsindex" value={p.lifecycle.repairabilityScore !== undefined ? `${p.lifecycle.repairabilityScore} / 10` : undefined} />
           <Field label="Ersatzteil-Verfügbarkeit" value={p.lifecycle.sparePartsAvailableYears !== undefined ? `${p.lifecycle.sparePartsAvailableYears} Jahre` : undefined} />
@@ -988,7 +1133,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── End-of-life (Art. 11) ── */}
-        <Section title="Entsorgung & Recycling (Art. 11)">
+        <Section icon={Trash2} title="Entsorgung & Recycling" subtitle="Art. 11 EU 2023/1542">
           <Field label="Recyclinganweisungen"  value={p.endOfLife.recyclingInstructions} />
           <Field label="Entsorgungshinweise"   value={p.endOfLife.disposalInstructions} />
           {p.endOfLife.hazardousSubstances?.length ? (
@@ -997,7 +1142,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Regulatory ── */}
-        <Section title="Zertifizierung & Compliance">
+        <Section icon={ClipboardList} title="Zertifizierung & Compliance" subtitle="Referenzen & Hinweise">
           <Field label="Zertifizierungsstelle" value={p.certificationBody} />
           <Field label="Rechtsgrundlage"        value={p.regulatoryReference} />
           <Field label="Rechtliche Hinweise"    value={p.legalNotes} />
@@ -1006,10 +1151,18 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
       </main>
 
-      {/* ── Footer ── */}
-      <footer className="mt-12 text-center text-gray-400 text-xs px-6 space-y-1">
-        <p>Datenverfügbarkeit garantiert bis {expiryYear} gemäß EU-Verordnung.</p>
-        <p>100 % lokal verarbeitet · DSGVO-konform</p>
+      <footer className="mt-4 border-t border-slate-200/90 bg-[#0c1929] px-6 py-12 text-center text-sm text-slate-400">
+        <p className="font-semibold tracking-wide text-slate-300">Digital Product Pass</p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-500">
+          Datenverfügbarkeit garantiert bis {expiryYear} gemäß EU-Verordnung.
+          <span className="mx-2 text-slate-600">·</span>
+          100&nbsp;% lokal verarbeitet · DSGVO-konform
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-x-8 gap-y-2 text-[11px] font-medium uppercase tracking-wider text-slate-500">
+          <span>Über DPPflash</span>
+          <span>Partner</span>
+          <span>Produkte</span>
+        </div>
       </footer>
     </div>
   );

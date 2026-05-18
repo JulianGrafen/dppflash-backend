@@ -38,16 +38,17 @@ if (!globalThis.__dpp_store__) {
       hersteller: 'PHILIPS Domestic Appliances',
       modellname: 'Bio-circular Material Stream',
       productName: 'Bio-circular',
+      materialComposition: [
+        { material: 'Bio-circular polymer compound', percentage: 60 },
+        { material: 'Post-consumer recycled technical plastic', percentage: 40 },
+      ],
       isccPlus: {
         headline: 'Bio-circular',
         scheme: 'ISCC PLUS - Mass Balance',
         quantityKg: 500,
         brandLine: 'PHILIPS Domestic Appliances',
-        manufacturingSite: 'Drachten (NL)',
         certificate: 'ISCC-PLUS-CERT-2024-DE-0842',
-        rawMaterialCategory: 'Bio-circular / recycled plastics',
-        feedstockType: 'Post-consumer mixed technical polymers',
-        ghgEmissions: '2,1 kg CO₂e / kg (Scope 3, attributiert)',
+        ghgEmissions: 'Referenzprojekt · Massenbilanz-attribuierte Emissionen (siehe Sachbilanz)',
         chainOfCustody: [
           {
             at: '2022-08-27T14:52:00.000Z',

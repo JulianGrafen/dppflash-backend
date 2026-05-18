@@ -8,6 +8,7 @@ import {
   Scale,
   Truck,
 } from 'lucide-react';
+import { formatPassportCoreMaterialSummary } from '@/app/domain/dpp/materialCompositionToSankey';
 
 type IsccPlusSectionProps = {
   readonly raw: Record<string, unknown>;
@@ -27,11 +28,96 @@ function asNumber(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
+function unwrapValue(v: unknown): unknown {
+  if (v && typeof v === 'object' && !Array.isArray(v) && 'value' in v) {
+    return (v as Record<string, unknown>).value;
+  }
+  return v;
+}
+
+function unwrapString(v: unknown): string | undefined {
+  const u = unwrapValue(v);
+  return typeof u === 'string' && u.trim() ? u.trim() : undefined;
+}
+
 function truncateProductId(id: string): string {
   if (id.length <= 14) {
     return id;
   }
   return `${id.slice(0, 5)}···${id.slice(-5)}`;
+}
+
+function deriveManufacturingSite(raw: Record<string, unknown>): string | undefined {
+  const manufactured = unwrapString(raw.countryOfManufacturing);
+  const origin = unwrapString(raw.countryOfOrigin) ?? asString(raw.herkunftsland);
+  const m = asRecord(raw.manufacturer);
+  const fromMfr = m ? [asString(m.name), asString(m.country), asString(m.address)].filter(Boolean).join(', ') : '';
+  const parts = [fromMfr, manufactured, origin].flatMap((p) => (p && p.trim() ? [p.trim()] : []));
+  const seen = new Set<string>();
+  const uniq: string[] = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniq.push(p);
+    }
+  }
+  return uniq.length > 0 ? uniq.join(' · ') : undefined;
+}
+
+function deriveRecycledSummary(raw: Record<string, unknown>): string | undefined {
+  const rc = asRecord(raw.recycledContent);
+  if (!rc) {
+    return undefined;
+  }
+  const pairs: string[] = [];
+  const defs = [
+    ['cobaltPct', 'Kobalt'],
+    ['lithiumPct', 'Lithium'],
+    ['nickelPct', 'Nickel'],
+    ['leadPct', 'Blei'],
+  ] as const;
+  for (const [key, label] of defs) {
+    const n = asNumber(rc[key]);
+    if (n !== undefined && n > 0) {
+      pairs.push(`${label}: ${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`);
+    }
+  }
+  return pairs.length > 0 ? pairs.join(' · ') : undefined;
+}
+
+function deriveCarbonSummary(raw: Record<string, unknown>): string | undefined {
+  const fromFlatTotal = asNumber(raw.co2FussabdruckKgGesamt);
+  const fromFlatPer = asNumber(raw.co2FussabdruckKgProKwh);
+  const cf = asRecord(raw.carbonFootprint);
+  const cfTotal =
+    cf
+      ? asNumber(cf.totalKg) ?? asNumber(cf.valueKgCo2e)
+      : undefined;
+  const cfPer = cf ? asNumber(cf.perKwhKg) : undefined;
+
+  const total = fromFlatTotal ?? cfTotal;
+  const per = fromFlatPer ?? cfPer;
+
+  const parts: string[] = [];
+  if (total !== undefined) {
+    parts.push(`Gesamt ${total.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg CO₂e`);
+  }
+  if (per !== undefined) {
+    parts.push(`pro kWh ${per.toLocaleString('de-DE', { maximumFractionDigits: 3 })} kg CO₂e`);
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+function brandCorner(raw: Record<string, unknown>, block: Record<string, unknown> | undefined): string | undefined {
+  const explicit =
+    block ? asString(block.brandLine) ?? asString(block.brand) : undefined;
+  if (explicit) {
+    return explicit;
+  }
+  const m = asRecord(raw.manufacturer);
+  return (m ? asString(m.name) : undefined) ?? asString(raw.hersteller);
 }
 
 type CustodyEntry = {
@@ -41,12 +127,12 @@ type CustodyEntry = {
   readonly deltaKg?: number;
 };
 
-function parseCustody(raw: unknown): CustodyEntry[] {
-  if (!Array.isArray(raw)) {
+function parseCustody(rawList: unknown): CustodyEntry[] {
+  if (!Array.isArray(rawList)) {
     return [];
   }
   const out: CustodyEntry[] = [];
-  for (const item of raw) {
+  for (const item of rawList) {
     const o = asRecord(item);
     if (!o) {
       continue;
@@ -83,34 +169,94 @@ function parseCustody(raw: unknown): CustodyEntry[] {
 }
 
 /**
- * ISCC PLUS / Mass-Balance – Kartenlayout angelehnt an gängige DPP-Referenz-UI (Badges, Icons, Custody-Zeile).
- * Datenquelle: `raw.isccPlus` (optionaler Block im Produktpass).
+ * Zertifikats-/Nachweiskarte wie Referenz-ISCC UI, befüllt mit:
+ * - Optional `raw.isccPlus` (Overrides, Custody).
+ * - Denselben **Kernfeldern** wie Material-Sankey / „Material‑Zusammensetzung“ (`formatPassportCoreMaterialSummary`, Gewicht,
+ *   Standort, Zertifikatsstellen, CO₂-Kernfelder, Rezyklatanteile).
  */
 export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlusSectionProps) {
   const block = asRecord(raw.isccPlus);
-  if (!block) {
-    return null;
-  }
 
-  const scheme = asString(block.scheme) ?? asString(block.certificationScheme);
-  const quantityKg = asNumber(block.quantityKg) ?? asNumber(block.massBalanceKg);
-  const manufacturingSite = asString(block.manufacturingSite);
-  const certificate = asString(block.certificate) ?? asString(block.isccCertificate) ?? asString(block.certificateId);
-  const rawMaterialCategory = asString(block.rawMaterialCategory) ?? asString(block.rawMaterial);
-  const feedstockType = asString(block.feedstockType) ?? asString(block.feedstock);
-  const ghgEmissions = asString(block.ghgEmissions);
-  const brandLine = asString(block.brandLine) ?? asString(block.brand);
-  const headline = asString(block.headline) ?? asString(block.title);
+  const materialFromPassport = formatPassportCoreMaterialSummary(raw);
+  const derivedSite = deriveManufacturingSite(raw);
+  const derivedCert =
+    unwrapString(raw.zertifizierungsstelle) ?? unwrapString(raw.certificationBody);
+  const derivedWeight = asNumber(raw.gewichtKg) ?? asNumber(raw.weightKg);
+  const derivedGhg = deriveCarbonSummary(raw);
+  const derivedRecycle = deriveRecycledSummary(raw);
+  const derivedChem = unwrapString(raw.chemischesSystem) ?? unwrapString(raw.chemistry);
 
-  const custody = parseCustody(block.chainOfCustody);
+  const scheme = block ? asString(block.scheme) ?? asString(block.certificationScheme) : undefined;
+
+  const quantityKg =
+    (block ? asNumber(block.quantityKg) ?? asNumber(block.massBalanceKg) : undefined) ?? derivedWeight;
+
+  const manufacturingSite =
+    (block ? asString(block.manufacturingSite) : undefined) ?? derivedSite;
+
+  const certificate =
+    (
+      block
+        ? asString(block.certificate) ?? asString(block.isccCertificate) ?? asString(block.certificateId)
+        : undefined
+    ) ?? derivedCert;
+
+  const rawMaterialCategory =
+    (block ? asString(block.rawMaterialCategory) ?? asString(block.rawMaterial) : undefined)
+    ?? materialFromPassport;
+
+  const feedstockType =
+    (block ? asString(block.feedstockType) ?? asString(block.feedstock) : undefined)
+    ?? derivedRecycle
+    ?? derivedChem;
+
+  const ghgEmissions =
+    (block ? asString(block.ghgEmissions) : undefined) ?? derivedGhg;
+
+  const headline = block ? asString(block.headline) ?? asString(block.title) : undefined;
+  const brandText = brandCorner(raw, block);
+  const custody = block ? parseCustody(block.chainOfCustody) : [];
+
+  const isccContext =
+    scheme !== undefined
+    || !!(block && (
+      asString(block.certificate)
+      ?? asString(block.isccCertificate)
+      ?? asString(block.certificateId)
+    ));
 
   const tracedRows = [
-    { key: 'site', label: 'Standort / Produktion', icon: Building2, value: manufacturingSite },
-    { key: 'cert', label: 'ISCC PLUS Zertifikat', icon: FileText, value: certificate },
-    { key: 'raw', label: 'Rohstoffkategorie', icon: Drum, value: rawMaterialCategory },
-    { key: 'feed', label: 'Feedstock-Typ', icon: Package, value: feedstockType },
-    { key: 'ghg', label: 'THG-Emissionen (attributiert)', icon: Globe, value: ghgEmissions },
-  ].filter((row) => row.value);
+    {
+      key: 'site',
+      label: 'Standort / Produktion',
+      icon: Building2,
+      value: manufacturingSite,
+    },
+    {
+      key: 'cert',
+      label: isccContext ? 'ISCC PLUS Zertifikat' : 'Zertifizierung / Zertifikat',
+      icon: FileText,
+      value: certificate,
+    },
+    {
+      key: 'raw',
+      label: 'Material-Zusammensetzung',
+      icon: Drum,
+      value: rawMaterialCategory,
+    },
+    {
+      key: 'feed',
+      label: 'Rezyklat / Produktbezug',
+      icon: Package,
+      value: feedstockType,
+    },
+    {
+      key: 'ghg',
+      label: 'THG / CO₂ (Kernfeld)',
+      icon: Globe,
+      value: ghgEmissions,
+    },
+  ].filter((row) => typeof row.value === 'string' && row.value.trim().length > 0);
 
   const hasHeroPills = scheme !== undefined || quantityKg !== undefined;
   const hasTraced = tracedRows.length > 0;
@@ -120,36 +266,51 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
     return null;
   }
 
+  const tracedSectionTitle = scheme
+    ? 'ISCC PLUS — nachvollziehbare Datenpunkte'
+    : 'Material & Herkunft (DPP-Kernfelder)';
+
+  const titleMain = headline ?? displayProductName;
+
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md ring-1 ring-slate-900/[0.04]">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-5 sm:px-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      <div className="bg-[#0c1929] px-5 py-6 text-white sm:px-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-              {headline ?? displayProductName}
-            </h2>
-            <p className="mt-1 font-mono text-xs text-slate-500">
-              Produkt-ID: {truncateProductId(productId)}
+            <div className="flex items-center gap-2">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                <Award className="h-5 w-5 text-amber-300" strokeWidth={1.75} aria-hidden />
+              </span>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-400/90">
+                  {scheme ? scheme.split('–')[0]?.trim() ?? 'Zertifizierung' : 'Nachweis'}
+                </p>
+                <h2 className="mt-0.5 text-xl font-bold tracking-tight sm:text-2xl">{titleMain}</h2>
+              </div>
+            </div>
+            <p className="mt-4 font-mono text-xs text-slate-400">
+              Produkt-ID:{' '}
+              <span className="text-slate-200">{truncateProductId(productId)}</span>
             </p>
           </div>
-          {brandLine ? (
-            <p className="shrink-0 text-right text-xs font-semibold uppercase tracking-wide text-slate-400 sm:max-w-[40%] sm:pt-1">
-              {brandLine}
+          {brandText ? (
+            <p className="shrink-0 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:max-w-[42%] sm:pt-1">
+              {brandText}
             </p>
           ) : null}
         </div>
 
         {hasHeroPills ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap gap-2">
             {quantityKg !== undefined ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800">
-                <Scale className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-                {quantityKg.toLocaleString('de-DE')} kg
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.12] px-3 py-1.5 text-sm font-medium ring-1 ring-white/15">
+                <Scale className="h-4 w-4 shrink-0 text-sky-200" aria-hidden />
+                {quantityKg.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg
               </span>
             ) : null}
             {scheme ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800">
-                <Award className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.12] px-3 py-1.5 text-sm font-medium ring-1 ring-white/15">
+                <Award className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
                 {scheme}
               </span>
             ) : null}
@@ -158,19 +319,19 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
       </div>
 
       {hasTraced ? (
-        <div className="border-b border-slate-100 px-4 py-5 sm:px-6">
-          <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
-            ISCC PLUS — nachvollziehbare Datenpunkte
+        <div className="border-t border-sky-300/25 bg-gradient-to-b from-sky-50/80 to-white px-5 py-5 sm:px-6">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-sky-900/70">
+            {tracedSectionTitle}
           </h3>
           <ul className="mt-4 space-y-4">
             {tracedRows.map((row) => (
               <li key={row.key} className="flex gap-3 sm:gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                  <row.icon className="h-5 w-5" strokeWidth={2} aria-hidden />
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[#0c1929]">
+                  <row.icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-slate-500">{row.label}</p>
-                  <p className="mt-1 inline-flex max-w-full rounded-full bg-slate-100 px-3 py-1.5 text-sm leading-snug text-slate-900">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{row.label}</p>
+                  <p className="mt-1 inline-flex max-w-full rounded-full bg-white px-3 py-1.5 text-sm leading-snug text-slate-900 ring-1 ring-slate-200/90 shadow-sm">
                     <span className="break-words">{row.value}</span>
                   </p>
                 </div>
@@ -181,22 +342,22 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
       ) : null}
 
       {hasCustody ? (
-        <div className="bg-slate-50/50 px-4 py-5 sm:px-6">
-          <h3 className="text-sm font-bold text-slate-900">Lieferkettennachweis</h3>
+        <div className="border-t border-slate-100 bg-slate-50/80 px-5 py-5 sm:px-6">
+          <h3 className="text-sm font-bold text-[#0c1929]">Lieferkettennachweis</h3>
           <ul className="mt-4 space-y-5">
             {custody.map((entry, i) => (
               <li key={`${entry.at}-${i}`} className="flex gap-3 text-sm text-slate-800">
-                <Truck className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+                <Truck className="mt-0.5 h-5 w-5 shrink-0 text-sky-700" aria-hidden />
                 <div className="min-w-0">
                   {entry.at ? (
-                    <p className="text-xs text-slate-500">{entry.at}</p>
+                    <p className="text-xs font-medium text-slate-500">{entry.at}</p>
                   ) : null}
                   <p className="mt-1 leading-relaxed">
                     <span>{entry.summary}</span>
                     {entry.referenceId ? (
                       <>
                         {' '}
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-slate-800 ring-1 ring-slate-200/80">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-slate-800 ring-1 ring-slate-200/90">
                           <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-hidden />
                           {entry.referenceId}
                         </span>

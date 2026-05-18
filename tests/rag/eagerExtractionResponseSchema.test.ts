@@ -65,6 +65,32 @@ describe('normalizeEagerExtractionRawObject', () => {
       { stoffname: 'AAA', casNummer: null, prozentAnteil: '', einstufung: null },
     ]);
   });
+
+  it('maps ufi canonical alias to top-level upi', () => {
+    const n = normalizeEagerExtractionRawObject({
+      ufi: { value: 'X0000-AAAA-BBBB-CCCC-VVNN', sourcePdf: 'mix.pdf', contextSnippet: 'Abschnitt 1.2' },
+    });
+    expect(n.upi).toMatchObject({
+      value: 'X0000-AAAA-BBBB-CCCC-VVNN',
+      sourcePdf: 'mix.pdf',
+    });
+  });
+
+  it('prefers richer hStatements bucket when synonyms collide', () => {
+    const n = normalizeEagerExtractionRawObject({
+      hStatements: {
+        value: ['H302'],
+        sourcePdf: 'a.pdf',
+        contextSnippet: 'x',
+      },
+      gefahrenhinweise: {
+        value: ['H302', 'H315'],
+        sourcePdf: 'b.pdf',
+        contextSnippet: 'y',
+      },
+    });
+    expect((n.hStatements as { value: unknown }).value).toEqual(['H302', 'H315']);
+  });
 });
 
 describe('eagerExtractionResponseSchema', () => {
@@ -93,6 +119,18 @@ describe('eagerExtractionResponseSchema', () => {
     });
     expect(r.success).toBe(false);
   });
+
+  it('accepts regulatorische Produktfelder upi / hStatements / ghsSymbols', () => {
+    const r = eagerExtractionResponseSchema.safeParse({
+      upi: { value: 'U123', sourcePdf: 's.pdf', contextSnippet: 'UFI/UPI' },
+      hStatements: { value: ['H315', 'H317'], sourcePdf: 's.pdf', contextSnippet: 'Abschnitt 2.1' },
+      ghsSymbols: { value: ['GHS05', 'GHS07'], sourcePdf: 's.pdf', contextSnippet: 'Kennzeichnung' },
+    });
+    expect(r.success).toBe(true);
+    if (!r.success) {
+      throw r.error;
+    }
+  });
 });
 
 describe('eagerExtractionResponseToRows', () => {
@@ -102,6 +140,17 @@ describe('eagerExtractionResponseToRows', () => {
     });
     const rows = eagerExtractionResponseToRows(data, 'f.pdf');
     expect(rows.substancesOfConcern?.value).toEqual([sampleConcernRow]);
+  });
+
+  it('persistiert Produkt-Level hStatements/ghsSymbols in extracted_attributes', () => {
+    const data = eagerExtractionResponseSchema.parse({
+      hStatements: { value: ['H302'], sourcePdf: 's.pdf', contextSnippet: 'CLP Abschnitt 2' },
+      ghsSymbols: { value: ['GHS06'], sourcePdf: 's.pdf', contextSnippet: 'Piktogramm' },
+    });
+    const rows = eagerExtractionResponseToRows(data, 'fallback.pdf');
+    expect(rows.hStatements?.value).toEqual(['H302']);
+    expect(rows.ghsSymbols?.value).toEqual(['GHS06']);
+    expect(rows.hStatements?.sourcePdf).toBe('s.pdf');
   });
 
   it('normalisiert hazardStatements / synonyme Felder zu H-, P-, GHS-Arrays', () => {

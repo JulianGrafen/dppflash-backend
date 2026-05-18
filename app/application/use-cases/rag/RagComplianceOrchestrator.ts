@@ -171,6 +171,8 @@ export class RagComplianceOrchestrator {
     console.info(`[Orchestrator] Eager Data gefunden für Produkt-ID: ${resolved.productId}`);
 
     const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, missingFields);
+    // Produkt-Level (Eager): upi, hStatements, ghsSymbols → Audit keys = missingFields ∩ extracted_attributes (+ Synonyme).
+
     console.log('[Orchestrator] Eager key resolution (passportKey <- storedKey):', JSON.stringify(keyResolution, null, 2));
 
     if (Object.keys(fields).length === 0) {

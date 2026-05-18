@@ -15,6 +15,10 @@ export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
   'materialZusammensetzung',
   'substancesOfConcern',
   'gefahrenstoffe',
+  /** CLP-/ESPR-Produktkennzeichnung aus Eager-Extraktion */
+  'upi',
+  'hStatements',
+  'ghsSymbols',
   /** CHEMICAL/PAINT — gleicher Speicher-Slot wie chemicalComposition (Synonym-Merge). */
   'zusammensetzung',
   'entsorgungshinweise',
@@ -58,6 +62,7 @@ const COMMON = [
   'hersteller',
   'modellname',
   'gtin',
+  'upi',
   'ewcCode',
   'wasteCode',
   'productName',
@@ -121,6 +126,8 @@ const CHEMICAL = [
   'lagerbedingungen',
   'entsorgungshinweise',
   'sicherheitsdatenblatt',
+  'hStatements',
+  'ghsSymbols',
 ] as const;
 
 const PAINT = [
@@ -131,6 +138,8 @@ const PAINT = [
   'lagerbedingungen',
   'entsorgungshinweise',
   'voc',
+  'hStatements',
+  'ghsSymbols',
 ] as const;
 
 const LUBRICANT = [
@@ -141,6 +150,8 @@ const LUBRICANT = [
   'temperaturbereich',
   'umweltfreundlichkeit',
   'verwendungsbereich',
+  'hStatements',
+  'ghsSymbols',
 ] as const;
 
 /**

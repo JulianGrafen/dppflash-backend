@@ -55,16 +55,29 @@ Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: Key \`subst
 
 ---
 
+WICHTIG FÜR REGULATORISCHE DATEN:
+
+Suche explizit nach der UPI (Unique Product Identifier) oder UFI (Unique Formula Identifier).
+
+Extrahiere alle H-Sätze (Gefahrenhinweise, z.B. H315, H317) als Array in 'hStatements'.
+
+Leite die GHS-Symbole (z.B. GHS05, GHS07) zwingend ab. Wenn Symbole als Bild im PDF waren, nutze die extrahierten H-Sätze, um nach der CLP-Verordnung das korrekte GHS-Symbol zu erschließen und als Array in 'ghsSymbols' einzutragen.
+
+---
+
 ## Alle anderen Felder
 
 - Entsorgung / Abschnitt 13 → endOfLifeInstructions
 - Hersteller → hersteller (nicht manufacturer)
 - Produktbezeichnung Deckblatt → productName
 - Modell → modellname
+- Kennzeichnung UPI / UFI im Text → \`upi\` (Skalarfeld mit value/sourcePdf/contextSnippet)
 - EWC / AVV → ewcCode
 - GTIN / EAN → gtin
+- Gemischbezogene **Gefahrenhinweis-Codes** (Summe/Zeilen aus Abschnitt 2 ohne einzelnen Stoffzuordnung) → \`hStatements.value\` als **Array von Strings**, z.B. ["H302","EUH208"]
+- **GHS-Kennzeichnungscode** für das Produktgemisch → \`ghsSymbols.value\` als **Array**, z.B. ["GHS05"]
 
-**Andere Felder** außer chemicalComposition/substancesOfConcern: wie gewohnt
+**Andere Felder** außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`: wie gewohnt
 
 {
   "value": string | null,
@@ -72,8 +85,10 @@ Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: Key \`subst
   "contextSnippet": string
 }
 
+Für \`hStatements\` und \`ghsSymbols\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\` und \`contextSnippet\` bleiben pro Zeile Pflichtfelder wie oben.
+
 Regeln:
-- Kennzahlen außerhalb chemicalComposition/substancesOfConcern als String in "value".
+- Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\` als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
 
 Wenn ein Feld nicht extrahierbar ist: Top-Level-Key weglassen — keine leeren Platzhalter.`;

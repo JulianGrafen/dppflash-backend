@@ -7,7 +7,9 @@ export type ExtractedStructuredValue =
   | string
   | null
   | readonly SdsCompositionEntry[]
-  | readonly SubstanceConcernEntry[];
+  | readonly SubstanceConcernEntry[]
+  /** Gemisch-Level H-/GHS-Code Listen aus Eager-Extraktion. */
+  | readonly string[];
 
 /**
  * JSONB shape in `products.extracted_attributes` (per field, from background extraction).
@@ -29,7 +31,16 @@ export function hasNonEmptyExtractedRowValue(value: ExtractedStructuredValue): b
   if (typeof value === 'string') {
     return value.trim() !== '';
   }
-  return Array.isArray(value) && value.length > 0;
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return false;
+    }
+    if (typeof value[0] === 'string') {
+      return value.some((x) => typeof x === 'string' && x.trim() !== '');
+    }
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -91,6 +102,9 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['nachhaltigkeit', 'sustainability'],
   ['gewichtKg', 'gewicht', 'weightKg', 'weight'],
   ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],
+  ['upi', 'ufi', 'uniqueProductIdentifier', 'uniqueFormulaIdentifier'],
+  ['hStatements', 'hazardStatements', 'hSaetze', 'productHazardStatements'],
+  ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme', 'gefahrenSymbole'],
 ];
 
 function synonymLowerNamesForPassportField(passportFieldKey: string): ReadonlySet<string> {
@@ -110,6 +124,24 @@ function isCompositionStorageKey(fieldKey: string): boolean {
 
 function isSubstancesConcernStorageKey(fieldKey: string): boolean {
   return synonymLowerNamesForPassportField('substancesOfConcern').has(normalizeExtractedFieldKey(fieldKey));
+}
+
+function isFlatStringCodesExtractedSlot(fieldKey: string): boolean {
+  return ['hStatements', 'ghsSymbols'].some((canonical) =>
+    synonymLowerNamesForPassportField(canonical).has(normalizeExtractedFieldKey(fieldKey)),
+  );
+}
+
+function parseStoredFlatStringCodesArray(rawValue: unknown): readonly string[] | null {
+  if (!Array.isArray(rawValue)) {
+    return null;
+  }
+  const codes = rawValue
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const uniq = [...new Set(codes)];
+  return uniq.length > 0 ? uniq : null;
 }
 
 function parseStoredCompositionArray(rawValue: unknown): readonly SdsCompositionEntry[] | null {
@@ -214,6 +246,9 @@ function coerceRow(raw: unknown, fieldKey: string): ExtractedAttributeRow | null
     } else {
       value = String(rawVal);
     }
+  } else if (isFlatStringCodesExtractedSlot(fieldKey)) {
+    const codes = parseStoredFlatStringCodesArray(rawVal);
+    value = codes ?? (typeof rawVal === 'string' ? rawVal : String(rawVal));
   } else if (typeof rawVal === 'string') {
     value = rawVal;
   } else {
@@ -306,7 +341,13 @@ function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
 
   let valueOut: AuditedValue['value'];
   if (row.value !== null && Array.isArray(row.value)) {
-    valueOut = row.value.map((e) => ({ ...e })) as AuditedValue['value'];
+    const firstEl = row.value[0];
+    if (typeof firstEl === 'string') {
+      const codes = row.value.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+      valueOut = [...new Set(codes)] as AuditedValue['value'];
+    } else {
+      valueOut = row.value.map((e) => ({ ...e })) as AuditedValue['value'];
+    }
   } else {
     valueOut = row.value as AuditedValue['value'];
   }

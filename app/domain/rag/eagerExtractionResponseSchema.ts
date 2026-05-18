@@ -30,11 +30,21 @@ export const eagerSubstancesConcernFieldRowSchema = z
   })
   .strict();
 
+/** UPI/UFI, gemischtspezifische H-Satz- und GHS-Code-Arrays (Abschnitt 2 SDS / Kennzeichnung). */
+const eagerRegulatoryCodesArrayRowSchema = z
+  .object({
+    value: z.array(z.string()).nullable(),
+    sourcePdf: z.string(),
+    contextSnippet: z.string(),
+  })
+  .strict();
+
 /** Kanonische Top-Level-Keys (Reihenfolge für deterministische Alias-Kollisionen). */
 export const EAGER_CANONICAL_FIELD_KEYS = [
   'hersteller',
   'productName',
   'modellname',
+  'upi',
   'ewcCode',
   'wasteCode',
   'countryOfOrigin',
@@ -43,6 +53,8 @@ export const EAGER_CANONICAL_FIELD_KEYS = [
   'chemicalComposition',
   'substancesOfConcern',
   'gtin',
+  'hStatements',
+  'ghsSymbols',
 ] as const;
 
 export type EagerCanonicalFieldKey = (typeof EAGER_CANONICAL_FIELD_KEYS)[number];
@@ -80,6 +92,21 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   besorgniserregendestoffe: 'substancesOfConcern',
   besorgniserregende_stoffe: 'substancesOfConcern',
   svhc: 'substancesOfConcern',
+  /** UFI gilt typischerweise als eindeutiges Formelmittel-ID; ebenfalls oft „UPI“ im Lieferanten-Bereich verwendet. */
+  ufi: 'upi',
+  uniqueproductidentifier: 'upi',
+  uniqueformulaidentifier: 'upi',
+  formulakennung: 'upi',
+  /** Gemischbezogene Kodierungen (unterhalb substancesOfConcern in Abschnitt 2 SDS). */
+  hazardstatements: 'hStatements',
+  gefahrenhinweise: 'hStatements',
+  gehsaetze: 'hStatements',
+  hsätze: 'hStatements',
+  hsatze: 'hStatements',
+  ghssymbols: 'ghsSymbols',
+  gefahrensymbole: 'ghsSymbols',
+  gefahrensymbolecodes: 'ghsSymbols',
+  gefahrenpiktogramme: 'ghsSymbols',
 };
 
 function resolveCanonicalEagerKey(rawKey: string): EagerCanonicalFieldKey | null {
@@ -156,7 +183,12 @@ export function normalizeEagerExtractionRawObject(source: Record<string, unknown
   };
 
   const scoreRow = (canonical: EagerCanonicalFieldKey, row: Record<string, unknown>): number => {
-    if (canonical === 'chemicalComposition' || canonical === 'substancesOfConcern') {
+    if (
+      canonical === 'chemicalComposition'
+      || canonical === 'substancesOfConcern'
+      || canonical === 'hStatements'
+      || canonical === 'ghsSymbols'
+    ) {
       return scoreArrayRow(row);
     }
     return scoreScalarRow(row);
@@ -205,6 +237,9 @@ export const eagerExtractionResponseSchema = z
     chemicalComposition: eagerChemicalCompositionFieldRowSchema.optional(),
     substancesOfConcern: eagerSubstancesConcernFieldRowSchema.optional(),
     gtin: eagerExtractionFieldRowSchema.optional(),
+    upi: eagerExtractionFieldRowSchema.optional(),
+    hStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
+    ghsSymbols: eagerRegulatoryCodesArrayRowSchema.optional(),
   })
   .strict();
 
@@ -222,7 +257,12 @@ function eagerChunkHasExtractableValue(key: EagerCanonicalFieldKey, chunk: { val
   if (chunk.value === null) {
     return false;
   }
-  if (key === 'chemicalComposition' || key === 'substancesOfConcern') {
+  if (
+    key === 'chemicalComposition'
+    || key === 'substancesOfConcern'
+    || key === 'hStatements'
+    || key === 'ghsSymbols'
+  ) {
     return Array.isArray(chunk.value) && chunk.value.length > 0;
   }
   return String(chunk.value).trim() !== '';

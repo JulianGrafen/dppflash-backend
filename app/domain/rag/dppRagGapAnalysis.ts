@@ -17,6 +17,9 @@ export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   productName: 'Produktname, Handelsname, Bezeichnung',
   wasteCode: 'Abfallschlüssel, EWC, EAK, AVV, Abfallschlüsselnummer',
   ewcCode: 'Abfallschlüssel, EWC, EAK, AVV',
+  upi: 'UPI, UFI, Unique Product Identifier, Unique Formula Identifier, Produktkennzeichnung, Formel-Identifier',
+  hStatements: 'H-Sätze, Gefahrenhinweise, CLP Kennzeichnung, Hazard statements',
+  ghsSymbols: 'GHS-Symbole, GHS Piktogramme, GHS05, GHS07, Symbol-Codes nach CLP',
   endOfLifeInstructions: 'Entsorgung, Abschnitt 13, End-of-Life, Recyclinghinweise',
   countryOfOrigin: 'Ursprungsland, Herkunftsland, country of origin',
   countryOfManufacturing: 'Herstellungsland, Produktionsland',
@@ -112,6 +115,32 @@ function isEmptyForRagGap(key: string, value: unknown): boolean {
         return false;
       }
       if (typeof inner === 'string' && inner.trim() !== '') {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (key === 'upi') {
+    if (typeof value === 'string') {
+      const t = value.trim();
+      return t === '' || t === PENDING;
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const inner = (value as Record<string, unknown>).value;
+      if (typeof inner === 'string') {
+        const ts = inner.trim();
+        return ts === '' || ts === PENDING;
+      }
+    }
+    return true;
+  }
+  if (key === 'hStatements' || key === 'ghsSymbols') {
+    if (Array.isArray(value) && value.some((x) => typeof x === 'string' && x.trim())) {
+      return false;
+    }
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const inner = (value as Record<string, unknown>).value;
+      if (Array.isArray(inner) && inner.some((x) => typeof x === 'string' && x.trim())) {
         return false;
       }
     }

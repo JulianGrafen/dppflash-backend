@@ -28,10 +28,18 @@ const auditedScalarValueSchema = z
   })
   .pipe(z.union([z.string().min(1), z.null()]));
 
-/** Skalar, SDS-Zusammensetzung oder besorgniserregende Stoffe (Eager/RAG). */
+const auditedFlatStringCodesSchema = z
+  .array(z.string())
+  .transform((xs) =>
+    [...new Set(xs.map((s) => s.trim()).filter((x) => x.length > 0))],
+  )
+  .refine((xs) => xs.length > 0, { message: 'At least one code is required.' });
+
+/** Skalar, SDS-Zusammensetzung, besorgniserregende Stoffe oder Listen von CLP-/GHS-Kodierungen (H…, GHS…). */
 export const auditedPassportFieldValueSchema = z.union([
   substanceConcernArraySchema,
   sdsCompositionArraySchema,
+  auditedFlatStringCodesSchema,
   auditedScalarValueSchema,
 ]);
 

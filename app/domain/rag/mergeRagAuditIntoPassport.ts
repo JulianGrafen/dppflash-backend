@@ -150,6 +150,10 @@ function normalizeScalar(key: string, audited: AuditedValue): unknown {
     if (key === 'gefahrenstoffe') {
       return formatGefahrenstoffStringsFromStructured(raw);
     }
+    if (raw.length > 0 && raw.every((x) => typeof x === 'string')) {
+      const codes = [...new Set(raw.map((x) => String(x).trim()).filter(Boolean))];
+      return codes.length > 0 ? codes : null;
+    }
     return raw;
   }
 

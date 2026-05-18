@@ -1060,6 +1060,49 @@ function manufacturerHeroLabel(raw: Record<string, unknown>, p: EsprProductData)
   return first;
 }
 
+/** Human-in-the-loop: Abnahme-Anzeige (Auditor · Zeitpunkt oder Ausstehend). */
+function formatHumanVerificationLine(raw: Record<string, unknown>): string {
+  const rev = asRecord(raw.enrichmentReview);
+  const auditor =
+    asString(rev?.validatedBy)?.trim()
+    ?? asString(rev?.auditor)?.trim()
+    ?? asString(rev?.reviewer)?.trim()
+    ?? asString(raw.validatedBy)?.trim()
+    ?? asString(raw.verifiziertDurch)?.trim();
+
+  const status = asString(rev?.status);
+  const validatedAtIso = asString(rev?.validatedAt);
+  const humanValidated = status === 'VALIDATED';
+  const hasValidatedAt = Boolean(validatedAtIso?.trim());
+
+  if (!humanValidated && !hasValidatedAt) {
+    return 'Ausstehend — Human Review / Abnahme noch nicht abgeschlossen';
+  }
+
+  let dateSuffix: string | undefined;
+  if (validatedAtIso) {
+    const d = new Date(validatedAtIso);
+    dateSuffix =
+      Number.isFinite(d.getTime())
+        ? d.toLocaleString('de-DE', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
+        : validatedAtIso.trim();
+  }
+
+  if (auditor && dateSuffix) {
+    return `${auditor} · ${dateSuffix}`;
+  }
+  if (auditor) {
+    return auditor;
+  }
+  if (dateSuffix) {
+    return `Abnahme am ${dateSuffix} (Auditor nicht hinterlegt)`;
+  }
+  return 'Abnahme erfasst — Zeitstempel fehlt in den Daten';
+}
+
 function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData): string {
   const candidateValues = [
     raw.productName,
@@ -1362,9 +1405,26 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
                 ))}
               </ul>
             ) : null}
-            <form action="/api/products/validate" method="post">
+            <form action="/api/products/validate" method="post" className="space-y-3">
               <input type="hidden" name="productId" value={p.id} />
               <input type="hidden" name="returnUrl" value={`/p/${p.id}`} />
+              <div>
+                <label htmlFor="validatedBy" className="block text-xs font-semibold text-amber-950">
+                  Auditor / prüfende Person
+                </label>
+                <input
+                  id="validatedBy"
+                  name="validatedBy"
+                  type="text"
+                  autoComplete="name"
+                  maxLength={240}
+                  className="mt-1.5 w-full max-w-md rounded-lg border border-amber-200/90 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                  placeholder="z. B. Name oder interne Kennung"
+                />
+                <p className="mt-1 text-[11px] text-amber-800/90">
+                  Wird nach Abnahme unter „Allgemeine Informationen“ als Verifizierender angezeigt.
+                </p>
+              </div>
               <button
                 type="submit"
                 className="inline-flex items-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white hover:bg-yellow-700"
@@ -1391,6 +1451,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               }
             />
           ) : null}
+          <Field label="Verifiziert durch · Human Review" value={formatHumanVerificationLine(raw)} />
           <ReviewField
             label="Ursprungsland"
             value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}

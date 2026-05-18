@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateProduct } from '@/app/services/productService';
+import { updateProduct, getProduct } from '@/app/services/productService';
 import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { safeRelativeRedirectPath } from '@/app/lib/security/safeRedirectPath';
 
@@ -21,12 +21,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid productId' }, { status: 400 });
     }
 
+    const validatedByField = formData.get('validatedBy');
+    const auditor = typeof validatedByField === 'string' ? validatedByField.trim() : '';
+
+    const existing = await getProduct(safeProductId);
+    const prevReview =
+      existing && existing.enrichmentReview && typeof existing.enrichmentReview === 'object'
+        ? { ...(existing.enrichmentReview as Record<string, unknown>) }
+        : {};
+
     await updateProduct(safeProductId, {
       complianceStatus: 'COMPLIANT',
       enrichmentReview: {
+        ...prevReview,
         required: false,
         status: 'VALIDATED',
         validatedAt: new Date().toISOString(),
+        ...(auditor.length > 0 ? { validatedBy: auditor } : {}),
       },
     } as never);
 

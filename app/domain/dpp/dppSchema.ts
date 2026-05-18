@@ -74,6 +74,8 @@ export interface EnrichmentReview {
   readonly requiresManualReview?: boolean;
   readonly reviewReason?: string | null;
   readonly validatedAt?: string;
+  /** Human-in-the-loop: Name oder Kennung der prüfenden Person */
+  readonly validatedBy?: string;
 }
 
 export interface DppProductPassport {

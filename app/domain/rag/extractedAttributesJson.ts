@@ -1,6 +1,7 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import type { SdsCompositionEntry } from '@/app/domain/rag/sdsCompositionSchema';
 import type { SubstanceConcernEntry } from '@/app/domain/rag/substanceConcernSchema';
+import { substanceConcernEntrySchema } from '@/app/domain/rag/substanceConcernSchema';
 
 export type ExtractedStructuredValue =
   | string
@@ -72,7 +73,15 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
     'chemischezusammensetzung',
     'zusammensetzung',
   ],
-  ['substancesOfConcern', 'gefahrenstoffe', 'besorgniserregendestoffe', 'besorgniserregendeStoffe', 'svhc'],
+  [
+    'substancesOfConcern',
+    'gefahrenstoffe',
+    'gefaehrlicheInhaltsstoffe',
+    'gefährlicheInhaltsstoffe',
+    'besorgniserregendestoffe',
+    'besorgniserregendeStoffe',
+    'svhc',
+  ],
   ['countryOfOrigin', 'herkunftsland', 'countryoforigin'],
   ['countryOfManufacturing', 'verarbeitungsland', 'herstellungsland', 'countryofmanufacturing'],
   ['productName', 'productname', 'produktname', 'modellname', 'modelName', 'modell', 'model'],
@@ -158,43 +167,22 @@ function parseStoredSubstancesArray(rawValue: unknown): readonly SubstanceConcer
     if (!isRecord(item)) {
       continue;
     }
-    const name =
-      typeof item.name === 'string'
-        ? item.name.trim()
-        : typeof item.stoffname === 'string'
-          ? item.stoffname.trim()
-          : '';
-    if (!name) {
-      continue;
+    const patched: Record<string, unknown> = { ...item };
+    const hasName = typeof patched.name === 'string' && String(patched.name).trim().length > 0;
+    if (!hasName && typeof item.stoffname === 'string' && item.stoffname.trim()) {
+      patched.name = item.stoffname;
     }
-    let casNummer: string | null = null;
-    if (item.casNummer === null) {
-      casNummer = null;
-    } else if (typeof item.casNummer === 'string') {
-      casNummer = item.casNummer;
-    } else if (typeof item.casNumber === 'string') {
-      casNummer = item.casNumber;
+    if (
+      (typeof patched.hinweis !== 'string' || String(patched.hinweis).trim() === '')
+      && typeof item.einstufung === 'string'
+      && item.einstufung.trim()
+    ) {
+      patched.hinweis = item.einstufung;
     }
-    const anteil =
-      typeof item.anteilOderGrenzwert === 'string'
-        ? item.anteilOderGrenzwert
-        : typeof item.concentrationPercent !== 'undefined'
-          ? String(item.concentrationPercent)
-          : null;
-    const hinweis =
-      typeof item.hinweis === 'string'
-        ? item.hinweis
-        : typeof item.einstufung === 'string'
-          ? item.einstufung
-          : typeof item.hazardClass === 'string'
-            ? item.hazardClass
-            : null;
-    entries.push({
-      name,
-      casNummer,
-      anteilOderGrenzwert: anteil,
-      hinweis,
-    });
+    const parsed = substanceConcernEntrySchema.safeParse(patched);
+    if (parsed.success) {
+      entries.push(parsed.data);
+    }
   }
   return entries.length > 0 ? entries : null;
 }

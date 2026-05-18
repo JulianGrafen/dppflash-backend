@@ -21,12 +21,21 @@ export interface SubstanceOfConcern {
   readonly casNumber?: string;
   readonly concentrationPercent?: number;
   readonly hazardClass?: string;
+  /** GHS Hazard Statement Codes, z. B. H315 */
+  readonly hazardStatements?: readonly string[];
+  /** GHS Precautionary Statement Codes, z. B. P280 */
+  readonly precautionaryStatements?: readonly string[];
+  /** GHS-Piktogramme / Kennzeichnung, z. B. GHS07 */
+  readonly ghsPictograms?: readonly string[];
 }
 
 export interface ManufacturerInfo {
   readonly name: string;
   readonly address?: string;
   readonly country?: string;
+  readonly phone?: string;
+  readonly email?: string;
+  readonly website?: string;
 }
 
 export interface SupplyChainEntry {

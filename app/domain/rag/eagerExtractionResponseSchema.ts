@@ -75,6 +75,8 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   endoflifeinstructions: 'endOfLifeInstructions',
   ean: 'gtin',
   gefahrenstoffe: 'substancesOfConcern',
+  gefahrlicheinhaltsstoffe: 'substancesOfConcern',
+  gefaehrlicheinhaltsstoffe: 'substancesOfConcern',
   besorgniserregendestoffe: 'substancesOfConcern',
   besorgniserregende_stoffe: 'substancesOfConcern',
   svhc: 'substancesOfConcern',

@@ -178,9 +178,12 @@ Return only JSON with this exact shape:
     "productName": "clear commercial or technical product name",
     "wasteCode": "EAK/EWC waste code such as 08 04 09* when visible anywhere in the document; use empty string only if no European waste catalogue code appears in any section",
     "manufacturer": {
-      "name": "string",
-      "address": "optional string",
-      "country": "optional ISO country code or country name"
+      "name": "string — legal name as in SDS section 1 / company header",
+      "address": "optional string — full postal address (street, PLZ city) as printed, may be multiple lines joined with spaces or newlines",
+      "country": "optional ISO country code or country name such as Deutschland",
+      "phone": "optional string — telephone and/or fax exactly as on the sheet including country code, e.g. Tel.: +49 …",
+      "email": "optional string — contact emails for product/regulatory info (e.g. SDSinfo.*@…)",
+      "website": "optional string — company or product URL if visible"
     },
     "countryOfOrigin": "optional string",
     "countryOfManufacturing": "optional string",
@@ -219,9 +222,12 @@ Return only JSON with this exact shape:
     },
     "substancesOfConcern": [{
       "name": "string",
-      "casNumber": "optional string",
+      "casNumber": "optional string — copy verbatim",
       "concentrationPercent": 0,
-      "hazardClass": "optional string"
+      "hazardClass": "optional string",
+      "hazardStatements": ["H315 — optional array of verbatim H codes linked to this substance"],
+      "precautionaryStatements": ["P102 — optional P codes linked to this substance"],
+      "ghsPictograms": ["GHS07 — optional GHS pictogram codes if explicitly tied to row or SDS section"]
     }]
   },
   "confidence": 0.0,
@@ -245,7 +251,7 @@ Extraction robustness rules:
 - wasteCode: always scan the full document for EWC/EAK/AVV/Abfallschlüssel (including section 12–15, Entsorgungshinweise, transport/environment tables, footnotes). Populate wasteCode whenever any such code appears; use empty string only if none exists in the source.
 - Never hallucinate identifiers. If UPI or GTIN are not explicit in document, set them to "${PENDING_EXTERNAL_MATCH}".
 - For UPI prioritization, scan the header first for SDB-Nr, Artikelnummer, product code, item number.
-- manufacturer should identify the legal manufacturer or brand owner when visible.
+- manufacturer must capture the SDS section 1 block when present: company legal name, physical address, country, telephone/fax, and contact email(s); keep wording as close to the document as possible (do not drop phone or email when printed under the manufacturer).
 - countryOfOrigin and countryOfManufacturing may differ; extract both separately when the document distinguishes them.
 - supplierAndProcessInformation should capture supplier/process details only when the document clearly states the level or stage.
 - careRepairDurability should summarize care, repair, maintenance, service life or durability guidance in concise business wording.
@@ -260,9 +266,12 @@ Example target output for an adhesive product sheet:
     "productName": "Industriekleber UltraFix 5000",
     "wasteCode": "08 04 09*",
     "manufacturer": {
-      "name": "Henkel",
-      "address": "Düsseldorf, Germany",
-      "country": "DE"
+      "name": "Henkel AG & Co. KGaA",
+      "address": "Henkelstr. 67, 40589 Düsseldorf",
+      "country": "Deutschland",
+      "phone": "+49 211 797 0",
+      "email": "SDSinfo.Adhesive@henkel.com",
+      "website": ""
     },
     "countryOfOrigin": "Germany",
     "countryOfManufacturing": "Germany",
@@ -312,7 +321,10 @@ Example target output for an adhesive product sheet:
         "name": "Epoxidharz (Bisphenol-A)",
         "casNumber": "25068-38-6",
         "concentrationPercent": 65,
-        "hazardClass": ""
+        "hazardClass": "",
+        "hazardStatements": ["H315"],
+        "precautionaryStatements": ["P280", "P302+P352"],
+        "ghsPictograms": ["GHS07"]
       }
     ]
   },

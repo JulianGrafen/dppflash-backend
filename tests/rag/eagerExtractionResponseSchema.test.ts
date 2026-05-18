@@ -103,4 +103,34 @@ describe('eagerExtractionResponseToRows', () => {
     const rows = eagerExtractionResponseToRows(data, 'f.pdf');
     expect(rows.substancesOfConcern?.value).toEqual([sampleConcernRow]);
   });
+
+  it('normalisiert hazardStatements / synonyme Felder zu H-, P-, GHS-Arrays', () => {
+    const data = eagerExtractionResponseSchema.parse({
+      substancesOfConcern: {
+        value: [
+          {
+            name: 'Toluol',
+            hazardStatements: 'H315, H336',
+            precautionaryStatements: ['P261'],
+            ghsSymbols: ['GHS08'],
+            casNummer: '108-88-3',
+            anteilOderGrenzwert: '< 25 %',
+            hinweis: 'Beispiel',
+          },
+        ],
+        sourcePdf: 'x.pdf',
+        contextSnippet: 'Abschnitt 3',
+      },
+    });
+    const rows = eagerExtractionResponseToRows(data, 'f.pdf');
+    expect(rows.substancesOfConcern?.value).toMatchObject([
+      {
+        name: 'Toluol',
+        hStatements: expect.arrayContaining(['H315', 'H336']),
+        pStatements: ['P261'],
+        ghsPictograms: ['GHS08'],
+        casNummer: '108-88-3',
+      },
+    ]);
+  });
 });

@@ -77,6 +77,41 @@ function isEmptyPassportValue(value: unknown): boolean {
   return false;
 }
 
+/** Formatiert H/P/GHS-Listen aus einem Strukturfragment (RAG-Passport oder LLM-Zeilen). */
+function formatHazardStatementAppendix(o: Record<string, unknown>): string[] {
+  const pickStrings = (v: unknown): string[] => {
+    if (!Array.isArray(v)) {
+      return [];
+    }
+    return v
+      .filter((x): x is string => typeof x === 'string')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+  const h = [...pickStrings(o.hStatements), ...pickStrings(o.hazardStatements), ...pickStrings(o.hSaetze)];
+  const p = [
+    ...pickStrings(o.pStatements),
+    ...pickStrings(o.precautionaryStatements),
+    ...pickStrings(o.pSaetze),
+  ];
+  const g = [...pickStrings(o.ghsPictograms), ...pickStrings(o.ghsSymbols), ...pickStrings(o.gefahrenpiktogramme)];
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  const hu = uniq(h);
+  const pu = uniq(p);
+  const gu = uniq(g);
+  const out: string[] = [];
+  if (hu.length > 0) {
+    out.push(`H ${hu.join(', ')}`);
+  }
+  if (pu.length > 0) {
+    out.push(`P ${pu.join(', ')}`);
+  }
+  if (gu.length > 0) {
+    out.push(`GHS ${gu.join(', ')}`);
+  }
+  return out;
+}
+
 /** Konvertiert strukturierte besorgniserregende Stoffe → `gefahrenstoffe?: string[]` auf dem Produktpass. */
 function formatGefahrenstoffStringsFromStructured(rows: readonly unknown[]): string[] {
   return rows.map((item) => {
@@ -99,7 +134,8 @@ function formatGefahrenstoffStringsFromStructured(rows: readonly unknown[]): str
       o.hinweis !== null && o.hinweis !== undefined && String(o.hinweis).trim()
         ? String(o.hinweis).trim()
         : '';
-    const line = [name || '(ohne Namen)', cas, anteil, hinweis].filter(Boolean).join(' · ');
+    const hpParts = formatHazardStatementAppendix(o);
+    const line = [...[name || '(ohne Namen)', cas, anteil, hinweis].filter(Boolean), ...hpParts].join(' · ');
     return line.length > 0 ? line : JSON.stringify(o);
   });
 }

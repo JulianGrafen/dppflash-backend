@@ -22,8 +22,10 @@ export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   countryOfManufacturing: 'Herstellungsland, Produktionsland',
   declaredProductType: 'Produktkategorie, Produkttyp, Anwendung',
   zusammensetzung: 'Zusammensetzung, Inhaltsstoffe, Rezeptur, Abschnitt 3, Anteile',
-  substancesOfConcern: 'besorgniserregende Stoffe, SVHC, Grenzwert, Zulassungsbedingungen',
-  gefahrenstoffe: 'Gefahrenstoffe, besorgniserregende Stoffe, SVHC, Abschnitt 3, Länderliste',
+  substancesOfConcern: 'besorgniserregende Stoffe, Gefahrstoffe, gefährliche Inhaltsstoffe, H-Sätze, P-Sätze, GHS, SVHC',
+  gefahrenstoffe: 'Gefahrenstoffe, gefährliche Inhaltsstoffe, besorgniserregende Stoffe, SVHC, H-Sätze, P-Sätze, GHS-Piktogramme',
+  gefahrlicheInhaltsstoffe:
+    'Gefahrstoffe, gefährliche Inhaltsstoffe, besorgniserregende Stoffe, CAS, H-Sätze, P-Sätze, GHS',
   herkunftsland: 'Herkunftsland, Ursprung, Made in',
   entsorgungshinweise: 'Entsorgung, Abschnitt 13, Entsorgungshinweise',
   recyclingAnweisungen: 'Recycling, Rücknahme, Entsorgung',

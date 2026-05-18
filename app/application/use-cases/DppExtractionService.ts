@@ -80,7 +80,18 @@ function collectWasteCodeSearchTexts(dpp: DppProductPassport): readonly string[]
   }
 
   for (const s of dpp.substancesOfConcern ?? []) {
-    push([s.name, s.hazardClass, s.casNumber].filter(Boolean).join(' '));
+    push(
+      [
+        s.name,
+        s.hazardClass,
+        s.casNumber,
+        ...(s.hazardStatements ?? []),
+        ...(s.precautionaryStatements ?? []),
+        ...(s.ghsPictograms ?? []),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
   }
 
   return texts;

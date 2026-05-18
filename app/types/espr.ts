@@ -23,10 +23,16 @@ export type ProductCategory = 'BATTERY' | 'TEXTILE' | 'ELECTRONICS' | 'FURNITURE
 export interface Manufacturer {
   readonly name: string;
   readonly address?: string;
-  /** ISO 3166-1 alpha-2, e.g. "DE", "CN" */
+  /** ISO 3166-1 alpha-2, e.g. "DE", "CN" — im DPP oft auch voller Ländername (SDB Abschn. 1) */
   readonly country?: string;
   /** EU Operator Registration and Identification number */
   readonly eoriNumber?: string;
+  /** Telefon / Fax wie im SDB (z. B. +49 …) */
+  readonly phone?: string;
+  /** Kontakt-E-Mail (z. B. SDSinfo…) */
+  readonly email?: string;
+  /** Webseite oder Service-URL */
+  readonly website?: string;
 }
 
 /** Carbon footprint declaration per EU 2023/1542 Art. 7 */

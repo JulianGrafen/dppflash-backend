@@ -38,15 +38,18 @@ Pflicht für diese Objekte:
 
 ---
 
-## substancesOfConcern — besorgniserregende / ausgewiesene Stoffe **separat**
+## substancesOfConcern — **Gefährliche / besorgniserregende Inhaltsstoffe** (separat von Massen-%)
 
-Alles was im SDB **explizit als besorgniserregend**, SVHC, Grenzwert-/Zulassungsbedingungen, **spezifische Konzentrationsgrenzen** oder vergleichbare **gesonderte Hinweise** geführt wird (oft eigene Unterabschnitte, Grenzwerte, SVHC-Tabelle): als **eigenes Objekt** im Array \`substancesOfConcern.value\` ausgeben — **nicht** mit den Massen-% der Gesamtzusammensetzung vermischen.
+Alles was im SDB **explizit als besorgniserregend**, **gefährlich**, SVHC, Grenzwert-/Zulassungsbedingungen, **spezifische Konzentrationsgrenzen**, **H- und P-Sätze für einzelne Stoffe** oder vergleichbare **gesonderte Hinweise** geführt wird (Abschnitt 2/3, Grenzwerttabellen, SVHC-Listen): als **eigenes Objekt** im Array \`substancesOfConcern.value\` — **nicht** mit den Massen-% der Gesamtzusammensetzung vermischen.
 
-Felder:
-- \`name\`: Bezeichnung wie im Dokument.
-- \`casNummer\`: CAS oder null.
+Pflicht / empfohlen pro Eintrag:
+- \`name\`: Bezeichnung wie im Dokument (oder \`stoffname\` als Synonym).
+- \`casNummer\`: CAS-Nummer wörtlich wie im SDB oder null.
 - \`anteilOderGrenzwert\`: zulässiger Anteil / Grenzwert / Konzentration wie angegeben oder null.
-- \`hinweis\`: regulatorischer Hinweis (z. B. SVHC, spezifische Einstufung) oder null.
+- \`hinweis\`: regulatorischer Kurz-Hinweis (z. B. SVHC, EUH) oder null.
+- \`hStatements\`: **Array** der Gefahrenhinweis-Codes für diesen Stoff, z. B. \`["H315","H317"]\` — aus Abschnitt 2/3 sofern dem Stoff zugeordnet; sonst weglassen oder leer lassen.
+- \`pStatements\`: **Array** der Sicherheitshinweis-Codes, z. B. \`["P102","P280"]\`; sonst weglassen.
+- \`ghsPictograms\`: **Array** der zugeordneten **GHS-Piktogramm-Codes** wie im Dokument (z. B. \`["GHS07","GHS09"]\` oder die im SDB verwendete Kennzeichnung); nur übernehmen, wenn dem Stoff/Gemisch **explizit** zugeordnet — nicht raten.
 
 Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: Key \`substancesOfConcern\` **weglassen**.
 

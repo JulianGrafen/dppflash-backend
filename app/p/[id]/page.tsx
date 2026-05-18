@@ -71,18 +71,40 @@ function Field({
   label,
   value,
   sourceBadge,
+  multiline,
 }: {
   label: string;
   value?: string | number;
   /** Short provenance label, e.g. RAG from indexed PDF */
   sourceBadge?: string;
+  /** SDS-style mehrzeiliger Herstellernachweis (Abschnitt 1) */
+  multiline?: boolean;
 }) {
   if (value === undefined || value === null || value === '') return null;
+  const text = String(value);
+  if (multiline) {
+    return (
+      <div className="flex flex-col gap-1.5 px-5 py-3.5">
+        <dt className="text-[13px] font-medium leading-snug text-slate-500">{label}</dt>
+        <dd className="whitespace-pre-line text-[13px] font-semibold leading-relaxed text-slate-900">
+          <span>{text}</span>
+          {sourceBadge ? (
+            <span
+              className="mt-2 inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
+              title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
+            >
+              {sourceBadge}
+            </span>
+          ) : null}
+        </dd>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
       <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
       <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
-        <span>{String(value)}</span>
+        <span>{text}</span>
         {sourceBadge ? (
           <span
             className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
@@ -164,7 +186,9 @@ function renderKeyValueList(
           <div key={`${label}-${entry.title}-${entry.details ?? ''}`}>
             <div>{entry.title}</div>
             {entry.details ? (
-              <div className="mt-0.5 text-[12px] font-normal leading-snug text-slate-500">{entry.details}</div>
+              <div className="mt-0.5 whitespace-pre-line text-[12px] font-normal leading-snug text-slate-500">
+                {entry.details}
+              </div>
             ) : null}
           </div>
         ))}
@@ -455,9 +479,58 @@ function renderCarbonFootprint(value: unknown) {
 type SubstanceOfConcernDisplayRow = {
   readonly name: string;
   readonly casDisplay: string;
+  readonly hDisplay: string;
+  readonly pDisplay: string;
+  readonly ghsDisplay: string;
   readonly concentration: string;
   readonly classification: string;
 };
+
+/** Sammelt H-/P-/GHS-Kennungen aus deutsch/englisch benannten JSON-Feldern. */
+function collectDistinctHazardCodes(...vals: unknown[]): string[] {
+  const out: string[] = [];
+  for (const v of vals) {
+    if (v === undefined || v === null) {
+      continue;
+    }
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        if (typeof x === 'string' && x.trim()) {
+          out.push(x.trim());
+        }
+      }
+    } else if (typeof v === 'string' && v.trim()) {
+      const t = v.trim();
+      out.push(
+        ...t.split(/[,;]|(?=\s+H\d)|(?=\s+P\d)|(?=\s+GHS\d{2}\b)/i).map((s) => s.trim()).filter(Boolean),
+      );
+    }
+  }
+  return [...new Set(out)];
+}
+
+function formatCodeCellDisplay(codes: readonly string[]): string {
+  return codes.length > 0 ? codes.join(', ') : '—';
+}
+
+/** Entpackt Provenance + `[...]`-JSON-Strings — gleiche Semantik wie bisher zwei getrennte Renderpfade. */
+function parseHazardFieldToStructuredArray(candidate: unknown): unknown[] | null {
+  let inner: unknown = unwrapProvenanceInner(candidate);
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (t.startsWith('[')) {
+      try {
+        inner = JSON.parse(t) as unknown;
+      } catch {
+        return null;
+      }
+    }
+  }
+  if (!Array.isArray(inner) || inner.length === 0) {
+    return null;
+  }
+  return inner;
+}
 
 function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfConcernDisplayRow[] {
   const rows: SubstanceOfConcernDisplayRow[] = [];
@@ -488,47 +561,65 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
       concentration = o.concentrationPercent.trim();
     }
 
+    const hCodes = collectDistinctHazardCodes(o.hStatements, o.hazardStatements, o.hSaetze);
+    const pCodes = collectDistinctHazardCodes(o.pStatements, o.precautionaryStatements, o.pSaetze);
+    const gCodes = collectDistinctHazardCodes(o.ghsPictograms, o.ghsSymbols, o.gefahrenpiktogramme);
+
     const classification =
       (typeof o.hazardClass === 'string' && o.hazardClass.trim() ? o.hazardClass.trim() : '')
       || (typeof o.hinweis === 'string' && o.hinweis.trim() ? o.hinweis.trim() : '')
       || '—';
 
-    rows.push({ name, casDisplay, concentration, classification });
+    rows.push({
+      name,
+      casDisplay,
+      hDisplay: formatCodeCellDisplay(hCodes),
+      pDisplay: formatCodeCellDisplay(pCodes),
+      ghsDisplay: formatCodeCellDisplay(gCodes),
+      concentration,
+      classification,
+    });
   }
   return rows;
 }
 
-function renderSubstancesOfConcernTable(rows: readonly SubstanceOfConcernDisplayRow[]) {
+function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDisplayRow[]) {
   if (rows.length === 0) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-      <dt className="text-[13px] font-semibold leading-snug text-slate-800 sm:w-[40%] sm:shrink-0">
-        Besorgniserregende Stoffe{' '}
+      <dt className="text-[13px] font-semibold leading-snug text-slate-800 sm:w-[38%] sm:shrink-0">
+        Gefährliche Inhaltsstoffe{' '}
         <span className="block pt-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-400">
-          Substances of concern
+          Substances of concern · CAS · GHS · H/P
         </span>
       </dt>
-      <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[58%]">
+      <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[62%]">
         <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm">
-          <table className="min-w-full text-left text-[13px]">
+          <table className="min-w-full table-fixed text-left text-[13px]">
             <thead className="bg-amber-50/90 text-[11px] font-bold uppercase tracking-wider text-slate-700">
               <tr>
-                <th className="px-3 py-2.5">Stoff / Bezeichnung</th>
-                <th className="px-3 py-2.5 whitespace-nowrap">CAS-Nr.</th>
-                <th className="px-3 py-2.5 whitespace-nowrap">Konzentration / Grenzwert</th>
-                <th className="px-3 py-2.5">Hinweis / Einstufung</th>
+                <th className="px-3 py-2.5 w-[18%]">Stoff</th>
+                <th className="px-3 py-2.5 whitespace-nowrap w-[11%]">CAS</th>
+                <th className="px-3 py-2.5 w-[14%]">H</th>
+                <th className="px-3 py-2.5 w-[14%]">P</th>
+                <th className="px-3 py-2.5 w-[13%]">GHS</th>
+                <th className="px-3 py-2.5 w-[14%] whitespace-nowrap">Anteil&nbsp;/ Grenze</th>
+                <th className="px-3 py-2.5 w-[16%]">Hinweis</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r, i) => (
-                <tr key={`${r.name}-${r.casDisplay}-${i}`} className="bg-white">
-                  <td className="px-3 py-2 font-semibold text-slate-900">{r.name}</td>
-                  <td className="px-3 py-2 whitespace-nowrap font-mono text-sm text-slate-800">{r.casDisplay}</td>
-                  <td className="px-3 py-2 text-slate-700">{r.concentration}</td>
-                  <td className="px-3 py-2 text-slate-700">{r.classification}</td>
+                <tr key={`${r.name}-${r.casDisplay}-${i}`} className="bg-white align-top">
+                  <td className="px-3 py-2 font-semibold text-slate-900 break-words">{r.name}</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-mono text-[12px] text-slate-800">{r.casDisplay}</td>
+                  <td className="px-3 py-2 text-slate-700 break-words text-[12px] leading-snug">{r.hDisplay}</td>
+                  <td className="px-3 py-2 text-slate-700 break-words text-[12px] leading-snug">{r.pDisplay}</td>
+                  <td className="px-3 py-2 font-mono text-[12px] text-slate-800 break-words">{r.ghsDisplay}</td>
+                  <td className="px-3 py-2 text-slate-700 break-words text-[12px]">{r.concentration}</td>
+                  <td className="px-3 py-2 text-slate-600 break-words text-[12px] leading-snug">{r.classification}</td>
                 </tr>
               ))}
             </tbody>
@@ -539,79 +630,27 @@ function renderSubstancesOfConcernTable(rows: readonly SubstanceOfConcernDisplay
   );
 }
 
-function renderSubstancesOfConcern(value: unknown) {
-  let inner: unknown = unwrapProvenanceInner(value);
-  if (typeof inner === 'string') {
-    const t = inner.trim();
-    if (t.startsWith('[')) {
-      try {
-        inner = JSON.parse(t) as unknown;
-      } catch {
-        return null;
-      }
-    }
-  }
-  if (!Array.isArray(inner) || inner.length === 0) {
+/**
+ * Kombiniert `substancesOfConcern` und Kernfeld `gefahrenstoffe` (Chemikalien-Slot) ohne doppeltes Rendering.
+ */
+function renderUnifiedHazardousIngredients(substancesOfConcernRaw: unknown, gefahrenstoffeRaw: unknown) {
+  const primary = parseHazardFieldToStructuredArray(substancesOfConcernRaw);
+  const secondary = parseHazardFieldToStructuredArray(gefahrenstoffeRaw);
+  const inner = primary ?? secondary;
+
+  if (!inner?.length) {
     return null;
   }
 
   if (inner.every((x) => typeof x === 'string')) {
     return renderKeyValueList(
-      'Besorgniserregende Stoffe (Substances of concern)',
+      'Gefährliche Inhaltsstoffe · Substances of concern',
       inner.map((s) => ({ title: typeof s === 'string' ? s : String(s) })),
     );
   }
 
   const rows = parseSubstancesOfConcernRows(inner);
-  return renderSubstancesOfConcernTable(rows);
-}
-
-function renderGefahrenstoffeKernfelder(value: unknown) {
-  const inner = unwrapProvenanceInner(value);
-  if (inner === undefined || inner === null) return null;
-  if (!Array.isArray(inner) || inner.length === 0) return null;
-
-  if (typeof inner[0] === 'string') {
-    return renderKeyValueList(
-      'Gefahren- / besorgniserregende Stoffe',
-      inner.map((s) => ({ title: typeof s === 'string' ? s : String(s) })),
-    );
-  }
-
-  const entries = inner.flatMap((entry) => {
-    if (!entry || typeof entry !== 'object') return [];
-    const o = entry as Record<string, unknown>;
-    const name = typeof o.name === 'string' ? o.name.trim() : '';
-    if (!name) return [];
-    const parts = [
-      o.casNummer != null && String(o.casNummer).trim() ? `CAS ${String(o.casNummer).trim()}` : '',
-      o.anteilOderGrenzwert != null && String(o.anteilOderGrenzwert).trim()
-        ? String(o.anteilOderGrenzwert).trim()
-        : '',
-      o.hinweis != null && String(o.hinweis).trim() ? String(o.hinweis).trim() : '',
-    ].filter(Boolean);
-    return [{ title: name, details: parts.join(' · ') || undefined }];
-  });
-
-  return renderKeyValueList('Gefahren- / besorgniserregende Stoffe', entries);
-}
-
-function renderManufacturerDetails(value: unknown) {
-  if (!value || typeof value !== 'object') return null;
-
-  const entries = compactEntries([
-    'name' in value && typeof value.name === 'string' && value.name
-      ? { title: value.name }
-      : null,
-    'address' in value && typeof value.address === 'string' && value.address
-      ? { title: 'Adresse', details: value.address }
-      : null,
-    'country' in value && typeof value.country === 'string' && value.country
-      ? { title: 'Land', details: value.country }
-      : null,
-  ]);
-
-  return renderKeyValueList('Herstellerdetails', entries);
+  return renderHazardousIngredientsTable(rows);
 }
 
 function renderSupplierAndProcessInformation(value: unknown) {
@@ -761,6 +800,165 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function pickFirstStringFromRecord(
+  rec: Record<string, unknown> | undefined,
+  keys: readonly string[],
+): string | undefined {
+  if (!rec) {
+    return undefined;
+  }
+  for (const k of keys) {
+    const v = rec[k];
+    if (typeof v === 'string' && v.trim()) {
+      return v.trim();
+    }
+  }
+  return undefined;
+}
+
+function formatTelDisplay(phone: string | undefined): string | undefined {
+  if (!phone?.trim()) {
+    return undefined;
+  }
+  const t = phone.trim();
+  if (/^(?:tel\.?|fax):/i.test(t)) {
+    return t;
+  }
+  return `Tel.: ${t}`;
+}
+
+/** Anzeigentext wie SDB Abschnitt 1: Firma, Anschrift, Tel., E-Mail … */
+function formatManufacturerRichText(
+  raw: Record<string, unknown>,
+  manufacturerView: EsprProductData['manufacturer'],
+): string {
+  const rec = asRecord(raw.manufacturer);
+
+  const preformatted = pickFirstStringFromRecord(rec, [
+    'contactBlock',
+    'contactDetails',
+    'fullContact',
+    'herstellerBlock',
+    'herstellerAngaben',
+    'kontakt',
+  ]);
+  if (preformatted) {
+    return preformatted;
+  }
+
+  const phoneFromRec = pickFirstStringFromRecord(rec, [
+    'phone',
+    'telephone',
+    'tel',
+    'Telefon',
+    'telefon',
+    'phoneNumber',
+    'fax',
+    'Fax',
+    'Telefax',
+  ]);
+
+  const emailFromRec = pickFirstStringFromRecord(rec, [
+    'email',
+    'eMail',
+    'mail',
+    'e-mail',
+    'E-Mail',
+    'contactEmail',
+    'kontaktEmail',
+    'serviceEmail',
+  ]);
+
+  const websiteFromRec = pickFirstStringFromRecord(rec, [
+    'website',
+    'url',
+    'web',
+    'homepage',
+    'Homepage',
+    'internet',
+  ]);
+
+  const lines: string[] = [];
+
+  const name =
+    manufacturerView.name?.trim()
+    || pickFirstStringFromRecord(rec, ['name', 'company', 'firma'])
+    || '';
+  if (name) {
+    lines.push(name);
+  }
+  if (manufacturerView.address?.trim()) {
+    lines.push(manufacturerView.address.trim());
+  }
+  if (manufacturerView.country?.trim()) {
+    lines.push(manufacturerView.country.trim());
+  }
+
+  const tel = formatTelDisplay(manufacturerView.phone ?? phoneFromRec);
+  if (tel) {
+    lines.push(tel);
+  }
+
+  const email = manufacturerView.email?.trim() ?? emailFromRec;
+  if (email) {
+    lines.push(email);
+  }
+
+  const website = manufacturerView.website?.trim() ?? websiteFromRec;
+  if (website) {
+    lines.push(website);
+  }
+
+  if (manufacturerView.eoriNumber?.trim()) {
+    lines.push(`EORI: ${manufacturerView.eoriNumber.trim()}`);
+  }
+
+  const structured = lines.join('\n').trim();
+  const flatHersteller = typeof raw.hersteller === 'string' ? raw.hersteller.trim() : '';
+
+  if (flatHersteller) {
+    const structPackedLen = structured.replace(/\s/g, '').length;
+    const flatSignalsContact = /[@+]|\btel\b|https?:\/\//i.test(flatHersteller);
+    const structSignalsContact =
+      /@|\btel\b|\+?\d[\d\s().-]{10,}|https?:\/\//i.test(structured.replace(/Tel\.:\s*/gi, ''));
+
+    if (
+      flatSignalsContact
+      && (flatHersteller.length > structured.length + 14 || structPackedLen < 16)
+      && (!structSignalsContact || flatHersteller.length > structured.length + 28)
+    ) {
+      return flatHersteller;
+    }
+  }
+
+  if (structured) {
+    return structured;
+  }
+  return flatHersteller;
+}
+
+/** Kurz für Hero-Badge — erste sinnvolle Zeile, nicht der komplette SDB-Kontaktblock. */
+function manufacturerHeroLabel(raw: Record<string, unknown>, p: EsprProductData): string {
+  const rich = formatManufacturerRichText(raw, p.manufacturer);
+  let first =
+    rich
+      ?.split(/\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) ?? '';
+
+  if (!first || /^[+.\d\s()/-]{12,}$/i.test(first)) {
+    first = p.manufacturer.name.trim()
+      || (typeof p.hersteller === 'string' ? p.hersteller.split(/\n/)[0]?.trim() : '')
+      || first;
+  }
+
+  const max = 76;
+  if (first.length > max) {
+    return `${first.slice(0, max - 1)}…`;
+  }
+  return first;
+}
+
 function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData): string {
   const candidateValues = [
     raw.productName,
@@ -831,11 +1029,43 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
     manufacturer: manufacturer
       ? {
-          name: asString(manufacturer.name) ?? asString(raw.hersteller) ?? '',
-          address: asString(manufacturer.address),
-          country: asString(manufacturer.country),
+          name:
+            asString(manufacturer.name)?.trim()
+            ?? (typeof raw.hersteller === 'string' ? raw.hersteller.split(/\n/)[0]?.trim() : undefined)
+            ?? '',
+          address: asString(manufacturer.address)?.trim(),
+          country: asString(manufacturer.country)?.trim(),
+          eoriNumber: asString(manufacturer.eoriNumber)?.trim(),
+          phone: pickFirstStringFromRecord(manufacturer, [
+            'phone',
+            'telephone',
+            'tel',
+            'Telefon',
+            'telefon',
+            'phoneNumber',
+          ]),
+          email: pickFirstStringFromRecord(manufacturer, [
+            'email',
+            'eMail',
+            'mail',
+            'E-Mail',
+            'contactEmail',
+            'kontaktEmail',
+          ]),
+          website: pickFirstStringFromRecord(manufacturer, [
+            'website',
+            'url',
+            'web',
+            'homepage',
+            'Homepage',
+            'internet',
+          ]),
         }
-      : { name: asString(raw.hersteller) ?? '' },
+      : {
+          name:
+            (typeof raw.hersteller === 'string' ? raw.hersteller.split(/\n/)[0]?.trim() : undefined)
+            ?? '',
+        },
     hersteller:    asString(raw.hersteller)   ?? asString(manufacturer?.name) ?? '',
     model:         asString(raw.model)        ?? asString(raw.modellname) ?? '',
     modellname:    asString(raw.modellname)   ?? asString(raw.model) ?? '',
@@ -907,6 +1137,18 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const hasWarnings = p.extractionWarnings.length > 0;
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
   const displayProductName = readDisplayProductName(raw, p);
+
+  const manufacturerDisplayBlock =
+    formatManufacturerRichText(raw, p.manufacturer).trim()
+    || p.manufacturer.name.trim()
+    || p.hersteller.trim();
+
+  const manufacturerBadgeLabel =
+    manufacturerHeroLabel(raw, p).trim()
+    || p.hersteller.trim()
+    || p.manufacturer.name.trim()
+    || '—';
+
   const chemicalCompositionSankey = tryChemicalCompositionToSankey(
     raw.chemicalComposition,
     displayProductName,
@@ -977,7 +1219,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-[#0c1929] ring-1 ring-slate-200/80">
               <Battery className="h-4 w-4 text-sky-600" strokeWidth={2} aria-hidden />
-              {p.hersteller || '—'} <span className="text-slate-400">·</span> {p.modellname || '—'}
+              {manufacturerBadgeLabel} <span className="text-slate-400">·</span> {p.modellname || '—'}
             </span>
           </div>
           <div className="mt-4 flex justify-center">
@@ -1036,9 +1278,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
         {/* ── Identity ── */}
         <Section icon={Building2} title="Allgemeine Informationen" subtitle="Identität & Kennzeichnung">
-          <Field label="Hersteller"        value={p.manufacturer.name || p.hersteller} />
-          <Field label="Adresse"           value={p.manufacturer.address} />
-          <Field label="Land"              value={p.manufacturer.country} />
+          {manufacturerDisplayBlock ? (
+            <Field
+              label="Hersteller / Verantwortlicher"
+              value={manufacturerDisplayBlock}
+              multiline
+            />
+          ) : null}
           <ReviewField
             label="Ursprungsland"
             value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}
@@ -1084,14 +1330,12 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             highlighted={enrichmentFields.includes('gtin')}
             sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
           />
-          {renderManufacturerDetails(raw.manufacturer)}
           {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
           {renderChemicalComposition(raw.chemicalComposition)}
           {renderRecycledContent(raw.recycledContent)}
           {renderCarbonFootprint(raw.carbonFootprint)}
           {renderEnvironmentalImpact(raw.environmentalImpact)}
-          {renderSubstancesOfConcern(raw.substancesOfConcern)}
-          {renderGefahrenstoffeKernfelder(raw.gefahrenstoffe)}
+          {renderUnifiedHazardousIngredients(raw.substancesOfConcern, raw.gefahrenstoffe)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
           <Field

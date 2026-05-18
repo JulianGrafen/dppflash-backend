@@ -11,6 +11,69 @@ function clampLabel(s: string, max: number): string {
   return `${t.slice(0, Math.max(0, max - 1))}…`;
 }
 
+function unwrapPassportValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'value' in value) {
+    return (value as Record<string, unknown>).value;
+  }
+  return value;
+}
+
+/**
+ * Mittelwert eines angegebenen Konzentrationsbereichs (SDS/chemische Zusammensetzung), z. B.:
+ * `40-60 %`, `5-<10 %`, `1-<5 %`, `<1 %`.
+ * Leer bzw. nur `–` → `null`.
+ */
+export function parseChemicalConcentrationBandMidpoint(text: string): number | null {
+  let s = text
+    .replace(/\u00a0/g, ' ')
+    .replace(/٫/g, '.')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!s || s === '-' || s === '—' || s.toLowerCase() === 'n/a') {
+    return null;
+  }
+  s = s.replace(/%/g, '').trim();
+
+  const parseN = (x: string): number | null => {
+    const n = Number(x.replace(/\s+/g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const ltBand = s.match(/^(\d+(?:[.,]\d+)?)\s*[-–]?\s*<\s*(\d+(?:[.,]\d+)?)$/);
+  if (ltBand) {
+    const a = parseN(ltBand[1] ?? '');
+    const b = parseN(ltBand[2] ?? '');
+    if (a !== null && b !== null) {
+      return (a + b) / 2;
+    }
+  }
+
+  const dashBand = s.match(/^(\d+(?:[.,]\d+)?)\s*[-–]\s*(\d+(?:[.,]\d+)?)$/);
+  if (dashBand) {
+    const a = parseN(dashBand[1] ?? '');
+    const b = parseN(dashBand[2] ?? '');
+    if (a !== null && b !== null) {
+      return (a + b) / 2;
+    }
+  }
+
+  const ltOnly = s.match(/^<\s*(\d+(?:[.,]\d+)?)$/);
+  if (ltOnly) {
+    const u = parseN(ltOnly[1] ?? '');
+    if (u !== null) {
+      return u / 2;
+    }
+  }
+
+  const cleaned = s.replace(/^≥\s*/i, '').replace(/^≤\s*/i, '').replace(/^~\s*/, '');
+  const single = parseN(cleaned);
+  if (single !== null && single >= 0) {
+    return single;
+  }
+
+  return null;
+}
+
 /** Parses percentage from number or strings like "12,5" / "40%". */
 export function parseMaterialPercentageLike(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -254,4 +317,85 @@ export function tryMaterialCompositionToSankey(
 ): CompositionGraphPayload | null {
   const rows = normalizeFlatMaterialArray(coerceMaterialCompositionArray(value));
   return buildSankeyFromRows(rows, productLabel);
+}
+
+/**
+ * SDS-/REACH-Zeilen aus `chemicalComposition` → geschätzte Anteile (Mittelpunkt der Bänder) für Sankey-Gewichte.
+ */
+export function extractChemicalCompositionRowsForSankey(
+  value: unknown,
+): ReadonlyArray<{ readonly material: string; readonly percentage: number }> {
+  let inner: unknown = unwrapPassportValue(value);
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (t.startsWith('[')) {
+      try {
+        inner = JSON.parse(t) as unknown;
+      } catch {
+        return [];
+      }
+    } else {
+      return [];
+    }
+  }
+  if (!Array.isArray(inner) || inner.length === 0) {
+    return [];
+  }
+
+  const preliminary: { material: string; percentage: number }[] = [];
+  for (const item of inner) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const material = materialLabelFromRow(o);
+    if (!material) {
+      continue;
+    }
+
+    let concText = '';
+    if (typeof o.prozentAnteil === 'string') {
+      concText = o.prozentAnteil;
+    } else if (typeof o.prozentanteil === 'string') {
+      concText = o.prozentanteil;
+    } else if (typeof o.concentration === 'string') {
+      concText = o.concentration;
+    } else if (typeof o.concentrationPercent === 'number' && Number.isFinite(o.concentrationPercent)) {
+      concText = String(o.concentrationPercent);
+    } else if (typeof o.concentrationPercent === 'string') {
+      concText = o.concentrationPercent;
+    }
+
+    const mid = parseChemicalConcentrationBandMidpoint(concText.trim());
+    preliminary.push({
+      material,
+      percentage: mid !== null && mid > 0 ? mid : 0,
+    });
+  }
+
+  if (preliminary.length === 0) {
+    return [];
+  }
+
+  const sumPct = preliminary.reduce((a, r) => a + r.percentage, 0);
+  if (sumPct <= 0) {
+    const n = preliminary.length;
+    return preliminary.map((r) => ({ material: r.material, percentage: n > 0 ? 100 / n : 0 }));
+  }
+
+  return preliminary;
+}
+
+/**
+ * Fan-in Sankey: Inhaltsstoffe → Produkt, Gewichtung aus Konzentrationsbereichen (Mittelwert).
+ */
+export function tryChemicalCompositionToSankey(
+  value: unknown,
+  productLabel: string,
+): CompositionGraphPayload | null {
+  const rows = extractChemicalCompositionRowsForSankey(value);
+  if (rows.length === 0) {
+    return null;
+  }
+  return buildSankeyFromRows([...rows], productLabel);
 }

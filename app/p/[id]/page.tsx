@@ -2,9 +2,14 @@ import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import { ShieldCheck, Battery, AlertTriangle } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
-import { coerceMaterialCompositionArray } from '@/app/domain/dpp/materialCompositionToSankey';
+import {
+  coerceMaterialCompositionArray,
+  tryChemicalCompositionToSankey,
+} from '@/app/domain/dpp/materialCompositionToSankey';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
+import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
+import { IsccPlusSection } from './IsccPlusSection';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
 
@@ -799,6 +804,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const hasWarnings = p.extractionWarnings.length > 0;
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
   const displayProductName = readDisplayProductName(raw, p);
+  const chemicalCompositionSankey = tryChemicalCompositionToSankey(
+    raw.chemicalComposition,
+    displayProductName,
+  );
   const enrichmentReview = asRecord(raw.enrichmentReview);
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
@@ -907,7 +916,17 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
         </Section>
 
+        <IsccPlusSection
+          raw={raw as Record<string, unknown>}
+          productId={p.id}
+          displayProductName={displayProductName}
+        />
+
         <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
+
+        {chemicalCompositionSankey ? (
+          <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />
+        ) : null}
 
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="DPP-Kernfelder (ESPR)">

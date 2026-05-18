@@ -22,7 +22,7 @@ const TRACEABILITY_NODE_COLORS = [
   '#d97706',
 ];
 
-export type CompositionFlowchartVariant = 'default' | 'traceability';
+export type CompositionFlowchartVariant = 'default' | 'traceability' | 'chemical';
 
 export interface CompositionFlowchartProps {
   readonly nodes: readonly CompositionGraphNodePayload[];
@@ -54,17 +54,18 @@ export function CompositionFlowchart({
     return { nodes: [...nodes], links: safeLinks };
   }, [nodes, links]);
 
-  const isTrace = variant === 'traceability';
+  /** Gleiche Sankey-Optik wie Rückverfolgbarkeit (Referenz-UI); inkl. chemische Zusammensetzung. */
+  const isTraceStyle = variant === 'traceability' || variant === 'chemical';
 
   const nodeColor = useMemo(() => {
-    if (!isTrace) {
+    if (!isTraceStyle) {
       return (node: { id: string; category?: SankeyNode['category'] }) =>
         CATEGORY_COLORS[node.category ?? 'processing'] ?? '#64748b';
     }
     const idToIndex = new Map(data.nodes.map((n, i) => [n.id, i]));
     return (node: { id: string }) =>
       TRACEABILITY_NODE_COLORS[(idToIndex.get(node.id) ?? 0) % TRACEABILITY_NODE_COLORS.length] ?? '#64748b';
-  }, [data.nodes, isTrace]);
+  }, [data.nodes, isTraceStyle]);
 
   if (nodes.length < 2 || links.length === 0) {
     return (
@@ -84,7 +85,7 @@ export function CompositionFlowchart({
       <ResponsiveSankey<SankeyNode, SankeyLink>
         data={data}
         margin={
-          isTrace
+          isTraceStyle
             ? { top: 28, right: 200, bottom: 28, left: 64 }
             : { top: 24, right: 160, bottom: 24, left: 48 }
         }
@@ -93,21 +94,21 @@ export function CompositionFlowchart({
         layout="horizontal"
         nodeOpacity={1}
         nodeHoverOpacity={1}
-        nodeThickness={isTrace ? 24 : 18}
-        nodeInnerPadding={isTrace ? 4 : 3}
-        nodeSpacing={isTrace ? 28 : 24}
+        nodeThickness={isTraceStyle ? 24 : 18}
+        nodeInnerPadding={isTraceStyle ? 4 : 3}
+        nodeSpacing={isTraceStyle ? 28 : 24}
         nodeBorderWidth={0}
-        linkOpacity={isTrace ? 0.5 : 0.45}
-        linkHoverOpacity={isTrace ? 0.72 : 0.7}
-        linkContract={isTrace ? 2 : 3}
+        linkOpacity={isTraceStyle ? 0.5 : 0.45}
+        linkHoverOpacity={isTraceStyle ? 0.72 : 0.7}
+        linkContract={isTraceStyle ? 2 : 3}
         enableLinkGradient
         labelPosition="outside"
         labelOrientation="horizontal"
-        labelPadding={isTrace ? 14 : 12}
-        labelTextColor={{ from: 'color', modifiers: [['darker', isTrace ? 1.9 : 1.6]] }}
+        labelPadding={isTraceStyle ? 14 : 12}
+        labelTextColor={{ from: 'color', modifiers: [['darker', isTraceStyle ? 1.9 : 1.6]] }}
         colors={nodeColor}
         theme={{
-          labels: { text: { fontSize: isTrace ? 12 : 11, fontWeight: 600, fill: '#0f172a' } },
+          labels: { text: { fontSize: isTraceStyle ? 12 : 11, fontWeight: 600, fill: '#0f172a' } },
           tooltip: {
             container: {
               background: '#0f172a',
@@ -120,7 +121,7 @@ export function CompositionFlowchart({
         }}
         motionConfig="gentle"
         linkTooltip={
-          isTrace
+          variant === 'traceability'
             ? ({ link }) => (
                 <div
                   style={{
@@ -139,7 +140,26 @@ export function CompositionFlowchart({
                   </div>
                 </div>
               )
-            : undefined
+            : variant === 'chemical'
+              ? ({ link }) => (
+                  <div
+                    style={{
+                      background: '#0f172a',
+                      color: '#f8fafc',
+                      fontSize: 12,
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      maxWidth: 300,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
+                    <div>
+                      Gewichtung (Mittelwert des Konzentrationsbands, geschätzt):{' '}
+                      {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
+                    </div>
+                  </div>
+                )
+              : undefined
         }
       />
     </div>

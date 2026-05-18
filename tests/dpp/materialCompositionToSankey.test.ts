@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
 import {
   compositionGraphHasMeaningfulFlows,
+  parseChemicalConcentrationBandMidpoint,
+  tryChemicalCompositionToSankey,
   tryMaterialCompositionToSankey,
   tryMaterialCompositionToSankeyFromRaw,
 } from '@/app/domain/dpp/materialCompositionToSankey';
@@ -65,6 +67,53 @@ describe('tryMaterialCompositionToSankey', () => {
     expect(graph).not.toBeNull();
     expect(graph!.links[0]!.value).toBeCloseTo(60, 5);
     expect(graph!.links[1]!.value).toBeCloseTo(40, 5);
+  });
+});
+
+describe('parseChemicalConcentrationBandMidpoint', () => {
+  it('returns midpoint for SDS-style bands', () => {
+    expect(parseChemicalConcentrationBandMidpoint('40-60 %')).toBe(50);
+    expect(parseChemicalConcentrationBandMidpoint('20-40 %')).toBe(30);
+    expect(parseChemicalConcentrationBandMidpoint('5-<10 %')).toBeCloseTo(7.5, 5);
+    expect(parseChemicalConcentrationBandMidpoint('1-<5 %')).toBeCloseTo(3, 5);
+    expect(parseChemicalConcentrationBandMidpoint('<1 %')).toBeCloseTo(0.5, 5);
+    expect(parseChemicalConcentrationBandMidpoint('-')).toBeNull();
+    expect(parseChemicalConcentrationBandMidpoint('—')).toBeNull();
+  });
+});
+
+describe('tryChemicalCompositionToSankey', () => {
+  it('builds a fan-in graph from SDS chemicalComposition rows', () => {
+    const graph = tryChemicalCompositionToSankey(
+      [
+        {
+          stoffname: 'Quarz (SiO2)',
+          casNummer: '14808-60-7',
+          prozentAnteil: '40-60 %',
+        },
+        {
+          stoffname: 'Zement, Portland',
+          casNummer: '65997-15-1',
+          prozentAnteil: '20-40 %',
+        },
+        {
+          stoffname: 'Kalkhaltiges Sedimentgestein',
+          casNummer: '-',
+          prozentAnteil: '5-<10 %',
+        },
+        {
+          stoffname: 'Kaminstaub',
+          casNummer: '68475-76-3',
+          prozentAnteil: '1-<5 %',
+        },
+      ],
+      'Magnum ECO Spinner',
+    );
+    expect(graph).not.toBeNull();
+    expect(graph!.nodes.some((n) => n.category === 'final_product')).toBe(true);
+    expect(graph!.links).toHaveLength(4);
+    const parsed = compositionGraphSchema.safeParse(graph);
+    expect(parsed.success).toBe(true);
   });
 });
 

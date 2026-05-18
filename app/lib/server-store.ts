@@ -31,8 +31,36 @@ if (!globalThis.__dpp_store__) {
       chemischesSystem: "Lithium-Ionen (NMC)"
     },
     {
-      id: "tex-2027",
-      type: "TEXTILE",
+      id: 'iscc-bio',
+      type: 'TEXTILE',
+      createdAt: new Date('2026-03-19'),
+      language: 'de',
+      hersteller: 'PHILIPS Domestic Appliances',
+      modellname: 'Bio-circular Material Stream',
+      productName: 'Bio-circular',
+      isccPlus: {
+        headline: 'Bio-circular',
+        scheme: 'ISCC PLUS - Mass Balance',
+        quantityKg: 500,
+        brandLine: 'PHILIPS Domestic Appliances',
+        manufacturingSite: 'Drachten (NL)',
+        certificate: 'ISCC-PLUS-CERT-2024-DE-0842',
+        rawMaterialCategory: 'Bio-circular / recycled plastics',
+        feedstockType: 'Post-consumer mixed technical polymers',
+        ghgEmissions: '2,1 kg CO₂e / kg (Scope 3, attributiert)',
+        chainOfCustody: [
+          {
+            at: '2022-08-27T14:52:00.000Z',
+            summary: 'Credits created from',
+            referenceId: '65A3E…7A81C',
+            deltaKg: 500,
+          },
+        ],
+      },
+    },
+    {
+      id: 'tex-2027',
+      type: 'TEXTILE',
       createdAt: new Date("2026-03-19"),
       language: "de",
       hersteller: "EcoStyle Solutions",

@@ -20,6 +20,19 @@ import {
   coerceMaterialCompositionArray,
   tryChemicalCompositionToSankey,
 } from '@/app/domain/dpp/materialCompositionToSankey';
+import {
+  inferGhsPictogramsFromHStatements,
+  normalizeGhsPictogramCodeList,
+} from '@/app/domain/rag/ghsPictogramCodes';
+import {
+  extractHazardStatementCodesFromTexts,
+  extractPrecautionaryStatementCodesFromTexts,
+  normalizeHazardStatementCodeList,
+  normalizePrecautionaryStatementCodeList,
+} from '@/app/domain/rag/hazardStatementCodes';
+import { ComplianceDocumentsSection } from './ComplianceDocumentsSection';
+import { GhsPictogramBadges } from './GhsPictogramBadges';
+import { parseComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
@@ -144,6 +157,74 @@ function ReviewField({
         {sourceBadge ? (
           <span
             className="ml-2 inline-flex align-middle rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900 ring-1 ring-amber-200/80"
+            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
+          >
+            {sourceBadge}
+          </span>
+        ) : null}
+      </dd>
+    </div>
+  );
+}
+
+function HazardCodesField({
+  label,
+  codes,
+  sourceBadge,
+}: {
+  label: string;
+  codes: readonly string[];
+  sourceBadge?: string;
+}) {
+  if (codes.length === 0) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
+        <span className="font-mono tracking-tight">{codes.join(', ')}</span>
+        {sourceBadge ? (
+          <span
+            className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
+            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
+          >
+            {sourceBadge}
+          </span>
+        ) : null}
+      </dd>
+    </div>
+  );
+}
+
+function GhsSymbolsField({
+  label,
+  codes,
+  hStatements,
+  sourceBadge,
+}: {
+  label: string;
+  codes: readonly string[];
+  hStatements: readonly string[];
+  sourceBadge?: string;
+}) {
+  const resolved =
+    normalizeGhsPictogramCodeList(codes).length > 0
+      ? normalizeGhsPictogramCodeList(codes)
+      : inferGhsPictogramsFromHStatements(hStatements);
+  if (resolved.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="space-y-2 sm:max-w-[58%] sm:text-right">
+        <GhsPictogramBadges codes={resolved} />
+        <p className="text-[12px] font-medium text-slate-600">{resolved.join(', ')}</p>
+        {sourceBadge ? (
+          <span
+            className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
             title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
           >
             {sourceBadge}
@@ -498,28 +579,46 @@ function normalizeHazardCodeCandidate(v: unknown): unknown {
   return x;
 }
 
+function collectDistinctHStatements(...vals: unknown[]): string[] {
+  const chunks: unknown[] = [];
+  for (const val of vals) {
+    chunks.push(normalizeHazardCodeCandidate(val));
+  }
+  return normalizeHazardStatementCodeList(chunks);
+}
+
+function collectDistinctPStatements(...vals: unknown[]): string[] {
+  const chunks: unknown[] = [];
+  for (const val of vals) {
+    chunks.push(normalizeHazardCodeCandidate(val));
+  }
+  return normalizePrecautionaryStatementCodeList(chunks);
+}
+
 /** Sammelt H-/P-/GHS-Kennungen aus deutsch/englisch benannten JSON-Feldern. */
 function collectDistinctHazardCodes(...vals: unknown[]): string[] {
-  const out: string[] = [];
-  for (const raw of vals) {
-    const v = normalizeHazardCodeCandidate(raw);
+  return collectDistinctHStatements(...vals);
+}
+
+/** GHS-Piktogramme inkl. numerischer Codes (`05` → `GHS05`). */
+function collectDistinctGhsCodes(...vals: unknown[]): string[] {
+  const chunks: unknown[] = [];
+  for (const val of vals) {
+    const v = normalizeHazardCodeCandidate(val);
     if (v === undefined || v === null) {
       continue;
     }
     if (Array.isArray(v)) {
-      for (const x of v) {
-        if (typeof x === 'string' && x.trim()) {
-          out.push(x.trim());
-        }
-      }
+      chunks.push(...v);
     } else if (typeof v === 'string' && v.trim()) {
-      const t = v.trim();
-      out.push(
-        ...t.split(/[,;]|(?=\s+H\d)|(?=\s+P\d)|(?=\s+GHS\d{2}\b)/i).map((s) => s.trim()).filter(Boolean),
+      chunks.push(
+        ...v.split(/[,;]|(?=\s+GHS\s*0?[1-9]\b)/i).map((s) => s.trim()).filter(Boolean),
       );
+    } else if (typeof v === 'number' && Number.isFinite(v)) {
+      chunks.push(v);
     }
   }
-  return [...new Set(out)];
+  return normalizeGhsPictogramCodeList(chunks);
 }
 
 function readRagAuditTrailFieldValues(raw: Record<string, unknown>, keys: readonly string[]): unknown[] {
@@ -549,13 +648,58 @@ function readRagAuditTrailFieldValues(raw: Record<string, unknown>, keys: readon
   return vals;
 }
 
+function extractHpCodesFromComposition(
+  raw: Record<string, unknown>,
+  kind: 'h' | 'p',
+): string[] {
+  const comp =
+    parseHazardFieldToStructuredArray(raw.chemicalComposition)
+    ?? parseHazardFieldToStructuredArray(raw.materialComposition)
+    ?? parseHazardFieldToStructuredArray(raw.zusammensetzung);
+  if (!comp?.length) {
+    return [];
+  }
+  const texts: string[] = [];
+  for (const entry of comp) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      continue;
+    }
+    const o = entry as Record<string, unknown>;
+    for (const k of ['einstufung', 'hinweis', 'stoffname', 'substance', 'classification', 'hazardClass']) {
+      if (typeof o[k] === 'string' && o[k].trim()) {
+        texts.push(o[k]);
+      }
+    }
+  }
+  return kind === 'h'
+    ? extractHazardStatementCodesFromTexts(texts)
+    : extractPrecautionaryStatementCodesFromTexts(texts);
+}
+
+function resolveSubstancesOfConcernInner(raw: Record<string, unknown>): unknown[] | null {
+  const sources: unknown[] = [
+    raw.substancesOfConcern,
+    raw.gefahrenstoffe,
+    ...readRagAuditTrailFieldValues(raw, ['substancesOfConcern', 'gefahrenstoffe']),
+  ];
+  for (const src of sources) {
+    const inner = parseHazardFieldToStructuredArray(src);
+    if (inner?.length) {
+      return inner;
+    }
+    const unwrapped = unwrapProvenanceInner(src);
+    if (Array.isArray(unwrapped) && unwrapped.length > 0) {
+      return unwrapped;
+    }
+  }
+  return null;
+}
+
 function aggregateSubstanceRowHazardCodes(
   raw: Record<string, unknown>,
   kind: 'h' | 'p' | 'ghs',
 ): string[] {
-  const inner =
-    parseHazardFieldToStructuredArray(raw.substancesOfConcern)
-    ?? parseHazardFieldToStructuredArray(raw.gefahrenstoffe);
+  const inner = resolveSubstancesOfConcernInner(raw);
   if (!inner?.length || inner.every((x) => typeof x === 'string')) {
     return [];
   }
@@ -573,7 +717,13 @@ function aggregateSubstanceRowHazardCodes(
       vals.push(o[k]);
     }
   }
-  return collectDistinctHazardCodes(...vals);
+  if (kind === 'ghs') {
+    return collectDistinctGhsCodes(...vals);
+  }
+  if (kind === 'p') {
+    return collectDistinctPStatements(...vals);
+  }
+  return collectDistinctHStatements(...vals);
 }
 
 function resolveProductLevelHazardCodes(
@@ -584,11 +734,36 @@ function resolveProductLevelHazardCodes(
 ): string[] {
   const passportVals = synonymKeys.flatMap((k) => [unwrapProvenanceInner(raw[k]), raw[k]]);
   const trailVals = readRagAuditTrailFieldValues(raw, passportKeys);
-  const direct = collectDistinctHazardCodes(...passportVals, ...trailVals);
+  const collect =
+    substanceKind === 'ghs'
+      ? collectDistinctGhsCodes
+      : substanceKind === 'p'
+        ? collectDistinctPStatements
+        : collectDistinctHStatements;
+  const direct = collect(...passportVals, ...trailVals);
   if (direct.length > 0) {
     return direct;
   }
-  return aggregateSubstanceRowHazardCodes(raw, substanceKind);
+  const fromSubstances = aggregateSubstanceRowHazardCodes(raw, substanceKind);
+  if (fromSubstances.length > 0) {
+    return fromSubstances;
+  }
+  if (substanceKind === 'h' || substanceKind === 'p') {
+    const fromComposition = extractHpCodesFromComposition(raw, substanceKind);
+    if (fromComposition.length > 0) {
+      return fromComposition;
+    }
+  }
+  if (substanceKind === 'ghs') {
+    const hCodes = resolveProductLevelHazardCodes(
+      raw,
+      ['hStatements'],
+      ['hStatements', 'hazardStatements', 'hSaetze'],
+      'h',
+    );
+    return inferGhsPictogramsFromHStatements(hCodes);
+  }
+  return [];
 }
 
 function formatCodeCellDisplay(codes: readonly string[]): string {
@@ -606,6 +781,9 @@ function parseHazardFieldToStructuredArray(candidate: unknown): unknown[] | null
       } catch {
         return null;
       }
+    } else if (t.length > 0) {
+      const lines = t.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      return lines.length > 0 ? lines : null;
     }
   }
   if (!Array.isArray(inner) || inner.length === 0) {
@@ -617,6 +795,19 @@ function parseHazardFieldToStructuredArray(candidate: unknown): unknown[] | null
 function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfConcernDisplayRow[] {
   const rows: SubstanceOfConcernDisplayRow[] = [];
   for (const entry of inner) {
+    if (typeof entry === 'string' && entry.trim()) {
+      const label = entry.trim();
+      rows.push({
+        name: label,
+        casDisplay: '—',
+        hDisplay: formatCodeCellDisplay(extractHazardStatementCodesFromTexts([label])),
+        pDisplay: formatCodeCellDisplay(extractPrecautionaryStatementCodesFromTexts([label])),
+        ghsDisplay: formatCodeCellDisplay(collectDistinctGhsCodes(label)),
+        concentration: '—',
+        classification: '—',
+      });
+      continue;
+    }
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
       continue;
     }
@@ -643,9 +834,22 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
       concentration = o.concentrationPercent.trim();
     }
 
-    const hCodes = collectDistinctHazardCodes(o.hStatements, o.hazardStatements, o.hSaetze);
-    const pCodes = collectDistinctHazardCodes(o.pStatements, o.precautionaryStatements, o.pSaetze);
-    const gCodes = collectDistinctHazardCodes(o.ghsPictograms, o.ghsSymbols, o.gefahrenpiktogramme);
+    const hCodes = collectDistinctHStatements(
+      o.hStatements,
+      o.hazardStatements,
+      o.hSaetze,
+      o.einstufung,
+      o.hinweis,
+      o.hazardClass,
+    );
+    const pCodes = collectDistinctPStatements(
+      o.pStatements,
+      o.precautionaryStatements,
+      o.pSaetze,
+      o.einstufung,
+      o.hinweis,
+    );
+    const gCodes = collectDistinctGhsCodes(o.ghsPictograms, o.ghsSymbols, o.gefahrenpiktogramme);
 
     const classification =
       (typeof o.hazardClass === 'string' && o.hazardClass.trim() ? o.hazardClass.trim() : '')
@@ -673,7 +877,7 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
   return (
     <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
       <dt className="text-[13px] font-semibold leading-snug text-slate-800 sm:w-[38%] sm:shrink-0">
-        Gefährliche Inhaltsstoffe{' '}
+        Besorgniserregende / bedenkliche Stoffe{' '}
         <span className="block pt-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-400">
           Substances of concern · CAS · GHS · H/P
         </span>
@@ -715,23 +919,15 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
 /**
  * Kombiniert `substancesOfConcern` und Kernfeld `gefahrenstoffe` (Chemikalien-Slot) ohne doppeltes Rendering.
  */
-function renderUnifiedHazardousIngredients(substancesOfConcernRaw: unknown, gefahrenstoffeRaw: unknown) {
-  const primary = parseHazardFieldToStructuredArray(substancesOfConcernRaw);
-  const secondary = parseHazardFieldToStructuredArray(gefahrenstoffeRaw);
-  const inner = primary ?? secondary;
-
+function renderUnifiedHazardousIngredients(raw: Record<string, unknown>) {
+  const inner = resolveSubstancesOfConcernInner(raw);
   if (!inner?.length) {
     return null;
   }
-
-  if (inner.every((x) => typeof x === 'string')) {
-    return renderKeyValueList(
-      'Gefährliche Inhaltsstoffe · Substances of concern',
-      inner.map((s) => ({ title: typeof s === 'string' ? s : String(s) })),
-    );
-  }
-
   const rows = parseSubstancesOfConcernRows(inner);
+  if (rows.length === 0) {
+    return null;
+  }
   return renderHazardousIngredientsTable(rows);
 }
 
@@ -1355,12 +1551,15 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   );
   const productLevelGhsSymbols = resolveProductLevelHazardCodes(
     raw,
-    ['ghsSymbols'],
+    ['ghsSymbols', 'ghsPictograms'],
     ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme'],
     'ghs',
   );
   const hazardFromRagAudit = (key: string) =>
     readRagAuditTrailFieldValues(raw, [key]).length > 0 && !ragSuppliedFields.includes(key);
+  const complianceAttachments = parseComplianceSourceDocuments(
+    raw.attachments ?? raw.downloadableDocuments,
+  );
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 
@@ -1553,25 +1752,31 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
-          <Field
+          <HazardCodesField
             label="H-Sätze (Gefahrenhinweise)"
-            value={productLevelHStatements.length > 0 ? productLevelHStatements.join(', ') : undefined}
+            codes={productLevelHStatements}
             sourceBadge={
               ragSuppliedFields.includes('hStatements') || hazardFromRagAudit('hStatements') ? 'RAG' : undefined
             }
           />
-          <Field
+          <HazardCodesField
             label="P-Sätze (Sicherheitshinweise)"
-            value={productLevelPStatements.length > 0 ? productLevelPStatements.join(', ') : undefined}
+            codes={productLevelPStatements}
             sourceBadge={
               ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements') ? 'RAG' : undefined
             }
           />
-          <Field
+          <GhsSymbolsField
             label="GHS-Symbole"
-            value={productLevelGhsSymbols.length > 0 ? productLevelGhsSymbols.join(', ') : undefined}
+            codes={productLevelGhsSymbols}
+            hStatements={productLevelHStatements}
             sourceBadge={
-              ragSuppliedFields.includes('ghsSymbols') || hazardFromRagAudit('ghsSymbols') ? 'RAG' : undefined
+              ragSuppliedFields.includes('ghsSymbols')
+              || ragSuppliedFields.includes('ghsPictograms')
+              || hazardFromRagAudit('ghsSymbols')
+              || hazardFromRagAudit('ghsPictograms')
+                ? 'RAG'
+                : undefined
             }
           />
           <ReviewField
@@ -1585,7 +1790,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderRecycledContent(raw.recycledContent)}
           {renderCarbonFootprint(raw.carbonFootprint)}
           {renderEnvironmentalImpact(raw.environmentalImpact)}
-          {renderUnifiedHazardousIngredients(raw.substancesOfConcern, raw.gefahrenstoffe)}
+          {renderUnifiedHazardousIngredients(raw)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
           <Field
@@ -1642,6 +1847,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Rechtliche Hinweise"    value={p.legalNotes} />
           <Field label="Lieferkette"            value={p.supplyChainInfo} />
         </Section>
+
+        <ComplianceDocumentsSection attachments={complianceAttachments} />
 
       </main>
 

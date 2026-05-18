@@ -5,6 +5,10 @@ import { resolvePrimaryProductNameAnchor } from '@/app/domain/rag/dppRagGapAnaly
 import { resolveRequestPublicOrigin } from '@/app/lib/resolveRequestPublicOrigin';
 import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { saveProductToStore } from '@/app/lib/server-store';
+import {
+  dedupeComplianceSourceDocuments,
+  type ComplianceSourceDocument,
+} from '@/app/domain/rag/sourceDocuments';
 import { getProductEntityService, getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
 import { ProductPassport } from '@/app/types/dpp-types';
 
@@ -160,8 +164,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const productId = generateProductId();
+
+    // ===== KRITISCH: SPEICHERE ALLE DATEN IM STORE =====
     const hersteller = typeof extractedFields.hersteller === 'string' ? extractedFields.hersteller : '';
     const modellname = typeof extractedFields.modellname === 'string' ? extractedFields.modellname : '';
     const safeFileName = basename(file.name).slice(0, 255) || 'document.pdf';
@@ -180,20 +185,24 @@ export async function POST(request: NextRequest) {
       regulatoryExtraction: result.extractedData.regulatoryExtraction,
     } as ProductPassport;
 
+    const productName =
+      typeof extractedFields.productName === 'string' ? extractedFields.productName.trim() : '';
+
     const rag = getRagComplianceOrchestrator();
+    let ingestSourceDocuments: readonly ComplianceSourceDocument[] = [];
     try {
-      await rag.ingestPdf({
+      const ingestOutcome = await rag.ingestPdf({
         tenantId: safeTenantId,
         fileName: safeFileName,
         pdf: buffer,
+        productId,
         primaryProductNameHint: ragPrimaryNameHint,
+        documentTitleHint: productName || modellname || safeFileName,
       });
+      ingestSourceDocuments = ingestOutcome.sourceDocuments;
     } catch (ragIngestErr) {
       console.warn('[DPP] rag_ingest_failed', ragIngestErr);
     }
-
-    const productName =
-      typeof extractedFields.productName === 'string' ? extractedFields.productName.trim() : '';
     const productLabel =
       `${hersteller} ${modellname}`.trim() || productName || safeFileName;
 
@@ -242,6 +251,35 @@ export async function POST(request: NextRequest) {
         success: false,
         message: ragEnrichErr instanceof Error ? ragEnrichErr.message : String(ragEnrichErr),
       };
+    }
+
+    try {
+      const agentKnowledge = await rag.resolveAgentKnowledgeSnapshot({
+        tenantId: safeTenantId,
+        anchorProductName: anchorForEntity,
+        productEntityId,
+      });
+      const mergedAttachments = dedupeComplianceSourceDocuments([
+        ...ingestSourceDocuments,
+        ...agentKnowledge.sourceDocuments,
+      ]);
+      Object.assign(
+        productPassport,
+        rag.applyComplianceAttachmentsToDpp(
+          productPassport as Record<string, unknown>,
+          { ...agentKnowledge, sourceDocuments: mergedAttachments },
+        ),
+      );
+    } catch (attachErr) {
+      console.warn('[DPP] dpp_attachments_resolve_failed', attachErr);
+      if (ingestSourceDocuments.length > 0) {
+        Object.assign(
+          productPassport,
+          rag.applyComplianceAttachmentsToDpp(productPassport as Record<string, unknown>, {
+            sourceDocuments: ingestSourceDocuments,
+          }),
+        );
+      }
     }
 
     // Speichere das Produkt

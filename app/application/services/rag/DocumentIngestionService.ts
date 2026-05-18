@@ -1,5 +1,8 @@
 import { basename } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
+import type { ComplianceSourceDocument } from '@/app/domain/rag/sourceDocuments';
+import { dedupeComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
+import { uploadComplianceDocumentToStorage } from '@/app/infrastructure/rag/complianceDocumentStorage';
 import { buildSemanticChunks } from '@/app/domain/rag/semanticChunker';
 import { enrichChunkTextWithProductContext } from '@/app/domain/rag/documentContextEnrichment';
 import { tokenizeForRetrieval } from '@/app/domain/rag/textTokenize';
@@ -32,9 +35,22 @@ export interface IngestPdfInput {
   readonly fileName: string;
   readonly pdf: Buffer;
   /**
+   * DPP-Produkt-ID für Storage-Pfad `compliance-documents/{productId}/…`.
+   * Ohne Angabe wird nur die Entity-ID aus dem Produkt-Anker verwendet (Archiv-Dokumente).
+   */
+  readonly productId?: string;
+  /**
    * Skips document LLM when present (e.g. ESPR `productName` / `modellname` from primary extraction).
    */
   readonly primaryProductNameHint?: string;
+  /** Optionaler Anzeigetitel für `sourceDocuments` (sonst aus Dateiname). */
+  readonly documentTitleHint?: string;
+}
+
+export interface IngestPdfResult {
+  readonly chunkCount: number;
+  readonly productEntityId?: string;
+  readonly sourceDocuments: readonly ComplianceSourceDocument[];
 }
 
 function inferFallbackProductLabelFromFileName(fileName: string): string {
@@ -107,7 +123,42 @@ export class DocumentIngestionService {
     return { productId, extracted, anchorUsed };
   }
 
-  async ingestPdf(input: IngestPdfInput): Promise<{ readonly chunkCount: number }> {
+  /**
+   * Speichert PDF in Supabase Storage und hängt Metadaten an `extracted_attributes.sourceDocuments` an.
+   * Fehler beim Upload blockieren Text-Extraktion / Chunking nicht.
+   */
+  private async persistComplianceDocumentReference(params: {
+    readonly productEntityId: string;
+    readonly dppProductId?: string;
+    readonly fileName: string;
+    readonly pdf: Buffer;
+    readonly titleHint?: string;
+  }): Promise<ComplianceSourceDocument | null> {
+    const storageProductKey = params.dppProductId?.trim() || params.productEntityId;
+    const upload = await uploadComplianceDocumentToStorage({
+      productId: storageProductKey,
+      fileName: params.fileName,
+      pdf: params.pdf,
+      titleHint: params.titleHint,
+    });
+
+    if (!upload.ok) {
+      return null;
+    }
+
+    const { productEntityService } = this.dependencies;
+    if (productEntityService) {
+      try {
+        await productEntityService.appendSourceDocument(params.productEntityId, upload.document);
+      } catch (err) {
+        console.error('[DPP] append_source_document_failed', err);
+      }
+    }
+
+    return upload.document;
+  }
+
+  async ingestPdf(input: IngestPdfInput): Promise<IngestPdfResult> {
     const layoutBlocks = await this.dependencies.layoutParser.parsePdfLayout(input.pdf, input.fileName);
     const pages = layoutBlocks.map((block) => ({
       pageNumber: block.pageNumber,
@@ -116,8 +167,10 @@ export class DocumentIngestionService {
 
     const semanticChunks = buildSemanticChunks(pages);
 
+    const sourceDocumentsCollected: ComplianceSourceDocument[] = [];
+
     if (semanticChunks.length === 0) {
-      return { chunkCount: 0 };
+      return { chunkCount: 0, sourceDocuments: sourceDocumentsCollected };
     }
 
     const excerptFirstPage = layoutBlocks
@@ -168,6 +221,19 @@ export class DocumentIngestionService {
       productId = await this.resolveProductEntityIdOrUndefined(input.tenantId, productAnchorLabel);
     }
 
+    if (productId) {
+      const docRef = await this.persistComplianceDocumentReference({
+        productEntityId: productId,
+        dppProductId: input.productId,
+        fileName: input.fileName,
+        pdf: input.pdf,
+        titleHint: input.documentTitleHint ?? input.primaryProductNameHint,
+      });
+      if (docRef) {
+        sourceDocumentsCollected.push(docRef);
+      }
+    }
+
     // Phase 2 — Chunk-Index (Retrieval; Lückenfüllung beim DPP nutzt Structured Key Lookup, nicht diese Chunks)
     const enrichedChunkTexts = semanticChunks.map((c) =>
       enrichChunkTextWithProductContext(productAnchorLabel, c.text),
@@ -190,7 +256,21 @@ export class DocumentIngestionService {
 
     await this.dependencies.vectorStore.upsertChunks(records);
 
-    return { chunkCount: records.length };
+    let sourceDocuments = sourceDocumentsCollected;
+    if (productId && this.dependencies.productEntityService) {
+      try {
+        const fromDb = await this.dependencies.productEntityService.fetchSourceDocuments(productId);
+        sourceDocuments = dedupeComplianceSourceDocuments([...sourceDocuments, ...fromDb]);
+      } catch (err) {
+        console.warn('[DPP] fetch_source_documents_after_ingest_failed', err);
+      }
+    }
+
+    return {
+      chunkCount: records.length,
+      productEntityId: productId ?? undefined,
+      sourceDocuments,
+    };
   }
 
   private async resolveProductEntityIdOrUndefined(

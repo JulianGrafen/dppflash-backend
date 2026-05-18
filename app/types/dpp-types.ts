@@ -17,6 +17,7 @@
  */
 
 import type { AuditTrail } from '@/app/domain/rag/auditTrailSchema';
+import type { ComplianceSourceDocument } from '@/app/domain/rag/sourceDocuments';
 import type { DppExtractionPayload } from '@/app/domain/dpp/dppExtractionZodSchema';
 
 /**
@@ -51,6 +52,10 @@ export interface BaseDPP {
    * UI provenance only; not part of ESPR interchange.
    */
   ragSuppliedFieldKeys?: readonly string[];
+  /** Compliance-PDFs aus Supabase Storage (SDB, Merkblätter) — Download im DPP */
+  attachments?: readonly ComplianceSourceDocument[];
+  /** Alias für ältere Clients / Orchestrator-Mapping */
+  downloadableDocuments?: readonly ComplianceSourceDocument[];
   [key: string]: any; // Dynamische Felder
 }
 

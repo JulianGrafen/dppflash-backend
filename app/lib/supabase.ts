@@ -34,4 +34,6 @@ export const supabase = supabaseUrl && supabaseServiceKey
 export const STORAGE_BUCKETS = {
   PDF_UPLOADS: 'pdf-uploads',
   EXTRACTED_DATA: 'extracted-data',
+  /** Öffentliche Compliance-PDFs (SDB, Merkblätter) für DPP-Download-Links */
+  COMPLIANCE_DOCUMENTS: 'compliance-documents',
 } as const;

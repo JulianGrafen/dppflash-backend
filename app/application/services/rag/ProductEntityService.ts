@@ -5,6 +5,11 @@ import {
   parseExtractedAttributesJson,
   type ExtractedAttributeRow,
 } from '@/app/domain/rag/extractedAttributesJson';
+import {
+  appendSourceDocumentToExtractedAttributes,
+  parseComplianceSourceDocuments,
+  type ComplianceSourceDocument,
+} from '@/app/domain/rag/sourceDocuments';
 
 type SimilarityRpcRow = { id: string; sim?: number };
 
@@ -353,6 +358,74 @@ export class ProductEntityService {
         return;
       }
       throw new Error(`products extracted_attributes update failed: ${upd.error.message}`);
+    }
+  }
+
+  /**
+   * Liest `sourceDocuments` aus `products.extracted_attributes` (nicht Feld-Zeilen des Eager-Schemas).
+   */
+  async fetchSourceDocuments(productId: string): Promise<readonly ComplianceSourceDocument[]> {
+    const cur = await this.client
+      .from('products')
+      .select('extracted_attributes')
+      .eq('id', productId)
+      .single();
+
+    if (cur.error) {
+      if (isProductsEntitySchemaErrorMessage(cur.error.message)) {
+        return [];
+      }
+      throw new Error(`products read sourceDocuments failed: ${cur.error.message}`);
+    }
+
+    const attrs = cur.data?.extracted_attributes;
+    if (typeof attrs !== 'object' || attrs === null || Array.isArray(attrs)) {
+      return [];
+    }
+    return parseComplianceSourceDocuments((attrs as Record<string, unknown>).sourceDocuments);
+  }
+
+  /**
+   * Hängt ein Compliance-Dokument an `extracted_attributes.sourceDocuments` an (Safe-Merge, dedupe by URL).
+   */
+  async appendSourceDocument(
+    productId: string,
+    document: ComplianceSourceDocument,
+  ): Promise<void> {
+    const cur = await this.client
+      .from('products')
+      .select('extracted_attributes')
+      .eq('id', productId)
+      .single();
+
+    if (cur.error) {
+      if (
+        isProductsEntitySchemaErrorMessage(cur.error.message) ||
+        isExtractedAttributesSchemaErrorMessage(cur.error.message)
+      ) {
+        console.warn('[DPP] append_source_document skipped (schema):', cur.error.message);
+        return;
+      }
+      throw new Error(`products read for sourceDocuments failed: ${cur.error.message}`);
+    }
+
+    const existing = cur.data?.extracted_attributes;
+    const finalAttributes = appendSourceDocumentToExtractedAttributes(existing, document);
+
+    const upd = await this.client
+      .from('products')
+      .update({ extracted_attributes: finalAttributes })
+      .eq('id', productId);
+
+    if (upd.error) {
+      if (
+        isProductsEntitySchemaErrorMessage(upd.error.message) ||
+        isExtractedAttributesSchemaErrorMessage(upd.error.message)
+      ) {
+        console.warn('[DPP] append_source_document update skipped (schema):', upd.error.message);
+        return;
+      }
+      throw new Error(`products sourceDocuments update failed: ${upd.error.message}`);
     }
   }
 }

@@ -1,4 +1,9 @@
 import type { AuditTrail, AuditedValue } from '@/app/domain/rag/auditTrailSchema';
+import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
+import {
+  normalizeHazardStatementCodeList,
+  normalizePrecautionaryStatementCodeList,
+} from '@/app/domain/rag/hazardStatementCodes';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
 /** Strings, die wie „leer“ wirken und von echten RAG-Werten überschrieben werden sollen. */
@@ -140,17 +145,20 @@ function formatGefahrenstoffStringsFromStructured(rows: readonly unknown[]): str
   });
 }
 
-const REGULATORY_CODE_LIST_KEYS = new Set(['hStatements', 'pStatements', 'ghsSymbols']);
+const REGULATORY_CODE_LIST_KEYS = new Set(['hStatements', 'pStatements', 'ghsSymbols', 'substancesOfConcern']);
 
 function isRegulatoryCodeListAudited(key: string, audited: AuditedValue): boolean {
   if (!REGULATORY_CODE_LIST_KEYS.has(key) || audited.value === null) {
     return false;
   }
-  return (
-    Array.isArray(audited.value)
-    && audited.value.length > 0
-    && audited.value.every((x) => typeof x === 'string' && x.trim() !== '')
-  );
+  if (!Array.isArray(audited.value) || audited.value.length === 0) {
+    return false;
+  }
+  if (key === 'substancesOfConcern') {
+    return audited.value.every((x) => typeof x === 'string' && x.trim() !== '')
+      || audited.value.some((x) => typeof x === 'object' && x !== null && !Array.isArray(x));
+  }
+  return audited.value.every((x) => typeof x === 'string' && x.trim() !== '');
 }
 
 function normalizeScalar(key: string, audited: AuditedValue): unknown {
@@ -163,7 +171,27 @@ function normalizeScalar(key: string, audited: AuditedValue): unknown {
     if (key === 'gefahrenstoffe') {
       return formatGefahrenstoffStringsFromStructured(raw);
     }
-    if (raw.length > 0 && raw.every((x) => typeof x === 'string')) {
+    if (key === 'substancesOfConcern') {
+      if (raw.every((x) => typeof x === 'string' && x.trim() !== '')) {
+        return [...new Set(raw.map((x) => String(x).trim()))];
+      }
+      if (raw.some((x) => typeof x === 'object' && x !== null && !Array.isArray(x))) {
+        return raw;
+      }
+    }
+    if (raw.length > 0 && raw.every((x) => typeof x === 'string' || typeof x === 'number')) {
+      if (key === 'ghsSymbols') {
+        const ghs = normalizeGhsPictogramCodeList(raw);
+        return ghs.length > 0 ? ghs : null;
+      }
+      if (key === 'hStatements') {
+        const h = normalizeHazardStatementCodeList(raw);
+        return h.length > 0 ? h : null;
+      }
+      if (key === 'pStatements') {
+        const p = normalizePrecautionaryStatementCodeList(raw);
+        return p.length > 0 ? p : null;
+      }
       const codes = [...new Set(raw.map((x) => String(x).trim()).filter(Boolean))];
       return codes.length > 0 ? codes : null;
     }

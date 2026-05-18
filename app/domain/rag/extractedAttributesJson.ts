@@ -1,4 +1,9 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
+import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
+import {
+  normalizeHazardStatementCodeList,
+  normalizePrecautionaryStatementCodeList,
+} from '@/app/domain/rag/hazardStatementCodes';
 import type { SdsCompositionEntry } from '@/app/domain/rag/sdsCompositionSchema';
 import type { SubstanceConcernEntry } from '@/app/domain/rag/substanceConcernSchema';
 import { substanceConcernEntrySchema } from '@/app/domain/rag/substanceConcernSchema';
@@ -149,13 +154,28 @@ function isFlatStringCodesExtractedSlot(fieldKey: string): boolean {
   );
 }
 
-function parseStoredFlatStringCodesArray(rawValue: unknown): readonly string[] | null {
+function parseStoredFlatStringCodesArray(
+  rawValue: unknown,
+  fieldKey: string,
+): readonly string[] | null {
+  const normKey = normalizeExtractedFieldKey(fieldKey);
+  if (synonymLowerNamesForPassportField('ghsSymbols').has(normKey)) {
+    const ghs = normalizeGhsPictogramCodeList(rawValue);
+    return ghs.length > 0 ? ghs : null;
+  }
+  if (synonymLowerNamesForPassportField('hStatements').has(normKey)) {
+    const h = normalizeHazardStatementCodeList(rawValue);
+    return h.length > 0 ? h : null;
+  }
+  if (synonymLowerNamesForPassportField('pStatements').has(normKey)) {
+    const p = normalizePrecautionaryStatementCodeList(rawValue);
+    return p.length > 0 ? p : null;
+  }
   if (!Array.isArray(rawValue)) {
     return null;
   }
   const codes = rawValue
-    .filter((x): x is string => typeof x === 'string')
-    .map((x) => x.trim())
+    .map((x) => (typeof x === 'string' || typeof x === 'number' ? String(x).trim() : ''))
     .filter(Boolean);
   const uniq = [...new Set(codes)];
   return uniq.length > 0 ? uniq : null;
@@ -207,6 +227,17 @@ function parseStoredCompositionArray(rawValue: unknown): readonly SdsComposition
   return entries.length > 0 ? entries : null;
 }
 
+function parseStoredSubstancesStringList(rawValue: unknown): readonly string[] | null {
+  if (!Array.isArray(rawValue)) {
+    return null;
+  }
+  const names = rawValue
+    .filter((x): x is string => typeof x === 'string')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return names.length > 0 ? [...new Set(names)] : null;
+}
+
 function parseStoredSubstancesArray(rawValue: unknown): readonly SubstanceConcernEntry[] | null {
   if (!Array.isArray(rawValue)) {
     return null;
@@ -255,16 +286,21 @@ function coerceRow(raw: unknown, fieldKey: string): ExtractedAttributeRow | null
       value = String(rawVal);
     }
   } else if (isSubstancesConcernStorageKey(fieldKey)) {
-    const structured = parseStoredSubstancesArray(rawVal);
-    if (structured) {
-      value = structured;
-    } else if (typeof rawVal === 'string') {
-      value = rawVal;
+    const stringList = parseStoredSubstancesStringList(rawVal);
+    if (stringList) {
+      value = stringList;
     } else {
-      value = String(rawVal);
+      const structured = parseStoredSubstancesArray(rawVal);
+      if (structured) {
+        value = structured;
+      } else if (typeof rawVal === 'string') {
+        value = rawVal;
+      } else {
+        value = String(rawVal);
+      }
     }
   } else if (isFlatStringCodesExtractedSlot(fieldKey)) {
-    const codes = parseStoredFlatStringCodesArray(rawVal);
+    const codes = parseStoredFlatStringCodesArray(rawVal, fieldKey);
     value = codes ?? (typeof rawVal === 'string' ? rawVal : String(rawVal));
   } else if (typeof rawVal === 'string') {
     value = rawVal;
@@ -295,7 +331,7 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
   }
   const out: Record<string, ExtractedAttributeRow> = {};
   for (const [k, v] of Object.entries(raw)) {
-    if (!k || k.length > 96) {
+    if (!k || k.length > 96 || k === 'sourceDocuments') {
       continue;
     }
     const row = coerceRow(v, k);
@@ -382,21 +418,40 @@ function isFlatRegulatoryCodeList(value: ExtractedStructuredValue): boolean {
   return (
     Array.isArray(value)
     && value.length > 0
-    && value.every((x) => typeof x === 'string' && x.trim() !== '')
+    && value.every(
+      (x) =>
+        (typeof x === 'string' && x.trim() !== '')
+        || (typeof x === 'number' && Number.isFinite(x)),
+    )
   );
+}
+
+function isSubstancesOfConcernListValue(value: ExtractedStructuredValue): boolean {
+  if (!Array.isArray(value) || value.length === 0) {
+    return false;
+  }
+  if (value.every((x) => typeof x === 'string' && x.trim() !== '')) {
+    return true;
+  }
+  return value.some((x) => typeof x === 'object' && x !== null && !Array.isArray(x));
 }
 
 function rowToAuditedValue(row: ExtractedAttributeRow): AuditedValue {
   const snippetTooShort = row.contextSnippet.trim().length < 2;
-  /** H/P/GHS-Code-Listen aus Eager sollen ins Pass, auch wenn das Snippet kurz ist. */
+  /** H/P/GHS/Stofflisten aus Eager sollen ins Pass, auch wenn das Snippet kurz ist. */
   const requiresManualReview =
-    row.value !== null && snippetTooShort && !isFlatRegulatoryCodeList(row.value);
+    row.value !== null
+    && snippetTooShort
+    && !isFlatRegulatoryCodeList(row.value)
+    && !isSubstancesOfConcernListValue(row.value);
 
   let valueOut: AuditedValue['value'];
   if (row.value !== null && Array.isArray(row.value)) {
     const firstEl = row.value[0];
-    if (typeof firstEl === 'string') {
-      const codes = row.value.filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter(Boolean);
+    if (typeof firstEl === 'string' || typeof firstEl === 'number') {
+      const codes = row.value
+        .map((x) => (typeof x === 'string' || typeof x === 'number' ? String(x).trim() : ''))
+        .filter(Boolean);
       valueOut = [...new Set(codes)] as AuditedValue['value'];
     } else {
       valueOut = row.value.map((e) => ({ ...e })) as AuditedValue['value'];

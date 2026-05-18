@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
+import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
+import {
+  normalizeHazardStatementCodeList,
+  normalizePrecautionaryStatementCodeList,
+} from '@/app/domain/rag/hazardStatementCodes';
 import { sdsCompositionEntrySchema } from '@/app/domain/rag/sdsCompositionSchema';
 
 /** Ein Feld aus der Eager-LLM-Antwort — nur `value` / `sourcePdf` / `contextSnippet` (keine weiteren Keys). */
@@ -29,14 +34,39 @@ export const eagerSubstancesConcernFieldRowSchema = z
   })
   .strict();
 
-/** UPI/UFI, gemischtspezifische H-Satz- und GHS-Code-Arrays (Abschnitt 2 SDS / Kennzeichnung). */
-const eagerRegulatoryCodesArrayRowSchema = z
-  .object({
-    value: z.array(z.string()).nullable(),
-    sourcePdf: z.string(),
-    contextSnippet: z.string(),
-  })
-  .strict();
+function coerceEagerRegulatoryCodesValue(raw: unknown, field: 'h' | 'p' | 'ghs'): string[] | null {
+  if (raw === null || raw === undefined) {
+    return null;
+  }
+  const items: unknown[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
+      : [raw];
+  if (field === 'ghs') {
+    const ghs = normalizeGhsPictogramCodeList(items);
+    return ghs.length > 0 ? ghs : null;
+  }
+  if (field === 'h') {
+    const h = normalizeHazardStatementCodeList(items);
+    return h.length > 0 ? h : null;
+  }
+  const p = normalizePrecautionaryStatementCodeList(items);
+  return p.length > 0 ? p : null;
+}
+
+function eagerRegulatoryCodesArrayRowSchema(field: 'h' | 'p' | 'ghs') {
+  return z
+    .object({
+      value: z.preprocess(
+        (v) => coerceEagerRegulatoryCodesValue(v, field),
+        z.array(z.string()).nullable(),
+      ),
+      sourcePdf: z.string(),
+      contextSnippet: z.string(),
+    })
+    .strict();
+}
 
 /** Kanonische Top-Level-Keys (Reihenfolge für deterministische Alias-Kollisionen). */
 export const EAGER_CANONICAL_FIELD_KEYS = [
@@ -120,6 +150,7 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   psätze: 'pStatements',
   psaetze: 'pStatements',
   ghssymbols: 'ghsSymbols',
+  ghspictograms: 'ghsSymbols',
   gefahrensymbole: 'ghsSymbols',
   gefahrensymbolecodes: 'ghsSymbols',
   gefahrenpiktogramme: 'ghsSymbols',
@@ -255,9 +286,9 @@ export const eagerExtractionResponseSchema = z
     substancesOfConcern: eagerSubstancesConcernFieldRowSchema.optional(),
     gtin: eagerExtractionFieldRowSchema.optional(),
     upi: eagerExtractionFieldRowSchema.optional(),
-    hStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
-    pStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
-    ghsSymbols: eagerRegulatoryCodesArrayRowSchema.optional(),
+    hStatements: eagerRegulatoryCodesArrayRowSchema('h').optional(),
+    pStatements: eagerRegulatoryCodesArrayRowSchema('p').optional(),
+    ghsSymbols: eagerRegulatoryCodesArrayRowSchema('ghs').optional(),
     handlingAndApplicationInstructions: eagerExtractionFieldRowSchema.optional(),
   })
   .strict();

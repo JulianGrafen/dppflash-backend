@@ -140,6 +140,17 @@ describe('eagerExtractionResponseSchema', () => {
     }
   });
 
+  it('coerces numeric ghsSymbols and ghsPictograms alias', () => {
+    const normalized = normalizeEagerExtractionRawObject({
+      ghsPictograms: { value: [5, 7], sourcePdf: 's.pdf', contextSnippet: 'x' },
+    });
+    const r = eagerExtractionResponseSchema.safeParse(normalized);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.ghsSymbols?.value).toEqual(['GHS05', 'GHS07']);
+    }
+  });
+
   it('accepts Merkblatt-Feld handlingAndApplicationInstructions', () => {
     const r = eagerExtractionResponseSchema.safeParse({
       handlingAndApplicationInstructions: {

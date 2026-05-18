@@ -2,7 +2,12 @@ import { basename } from 'node:path';
 import { DocumentIngestionService } from '@/app/application/services/rag/DocumentIngestionService';
 import { HybridRetrievalService } from '@/app/application/services/rag/HybridRetrievalService';
 import { ComplianceEnrichmentAgent } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
-import type { IngestPdfInput } from '@/app/application/services/rag/DocumentIngestionService';
+import type { IngestPdfInput, IngestPdfResult } from '@/app/application/services/rag/DocumentIngestionService';
+import {
+  dedupeComplianceSourceDocuments,
+  parseComplianceSourceDocuments,
+  type ComplianceSourceDocument,
+} from '@/app/domain/rag/sourceDocuments';
 import type { HybridRetrievalInput } from '@/app/application/services/rag/HybridRetrievalService';
 import type { ComplianceEnrichmentInput, ComplianceEnrichmentResult } from '@/app/application/services/rag/ComplianceEnrichmentAgent';
 import type { ProductEntityService } from '@/app/application/services/rag/ProductEntityService';
@@ -43,6 +48,14 @@ export interface RagGapTargetedRunInput {
 export interface RagComplianceExtractionOutcome {
   readonly enrichment: ComplianceEnrichmentResult;
   readonly retrievalMatchConfidence: number;
+  /** Aus `products.extracted_attributes.sourceDocuments` (Compliance-PDFs im Storage). */
+  readonly sourceDocuments?: readonly ComplianceSourceDocument[];
+}
+
+/** Ergebnis der Eager-/Ingest-Pipeline inkl. Storage-Metadaten für den DPP. */
+export interface RagAgentKnowledgeSnapshot {
+  readonly sourceDocuments: readonly ComplianceSourceDocument[];
+  readonly productEntityId?: string;
 }
 
 /**
@@ -61,8 +74,57 @@ export class RagComplianceOrchestrator {
     private readonly productEntityService?: ProductEntityService | null,
   ) {}
 
-  ingestPdf(input: IngestPdfInput): Promise<{ readonly chunkCount: number }> {
+  ingestPdf(input: IngestPdfInput): Promise<IngestPdfResult> {
     return this.ingestion.ingestPdf(input);
+  }
+
+  /**
+   * Liest Compliance-Anhänge aus dem Produkt-„Gehirn“ (`extracted_attributes.sourceDocuments`).
+   * Mappt auf DPP-Felder `attachments` / `downloadableDocuments`.
+   */
+  async resolveAgentKnowledgeSnapshot(input: {
+    readonly tenantId: string;
+    readonly anchorProductName?: string;
+    readonly productEntityId?: string;
+  }): Promise<RagAgentKnowledgeSnapshot> {
+    if (!this.productEntityService) {
+      return { sourceDocuments: [] };
+    }
+
+    let entityId = input.productEntityId?.trim();
+    if (!entityId && input.anchorProductName?.trim()) {
+      entityId =
+        (await this.productEntityService.findProductEntityId(
+          input.tenantId,
+          input.anchorProductName.trim(),
+        )) ?? undefined;
+    }
+
+    if (!entityId) {
+      return { sourceDocuments: [] };
+    }
+
+    const sourceDocuments = await this.productEntityService.fetchSourceDocuments(entityId);
+    return { sourceDocuments, productEntityId: entityId };
+  }
+
+  /**
+   * Injiziert `sourceDocuments` als `attachments` und `downloadableDocuments` ins DPP-Objekt.
+   */
+  applyComplianceAttachmentsToDpp<T extends Record<string, unknown>>(
+    dpp: T,
+    agentResult: RagAgentKnowledgeSnapshot,
+    extraDocuments: readonly ComplianceSourceDocument[] = [],
+  ): T & { attachments: ComplianceSourceDocument[]; downloadableDocuments: ComplianceSourceDocument[] } {
+    const attachments = dedupeComplianceSourceDocuments([
+      ...extraDocuments,
+      ...agentResult.sourceDocuments,
+    ]);
+    return {
+      ...dpp,
+      attachments,
+      downloadableDocuments: attachments,
+    };
   }
 
   async runComplianceExtraction(input: RagComplianceRunInput): Promise<RagComplianceExtractionOutcome> {
@@ -201,6 +263,9 @@ export class RagComplianceOrchestrator {
     const confidences = Object.values(trail.data.fields ?? {}).map((v) => v.confidence);
     const retrievalMatchConfidence = confidences.length > 0 ? Math.max(...confidences) : 0;
 
+    const storedAttrs = resolved.attributes as Record<string, unknown>;
+    const sourceDocuments = parseComplianceSourceDocuments(storedAttrs.sourceDocuments);
+
     const enrichment: ComplianceEnrichmentResult = {
       auditTrail: trail.data,
       rawModelJson: JSON.stringify({
@@ -208,6 +273,7 @@ export class RagComplianceOrchestrator {
         productId: resolved.productId,
         appliedKeys: Object.keys(fields),
         keyResolution,
+        sourceDocuments,
       }),
       cryptoValidation: validateAuditTrailCryptographically(trail.data),
     };
@@ -217,6 +283,6 @@ export class RagComplianceOrchestrator {
       trail.data.fields?.chemicalComposition?.value ?? '(nicht gesetzt)',
     );
 
-    return { enrichment, retrievalMatchConfidence };
+    return { enrichment, retrievalMatchConfidence, sourceDocuments };
   }
 }

@@ -234,6 +234,20 @@ describe('extractedAttributesToAuditTrailFields', () => {
     expect(keyResolution[0]?.usedStoredKey).toBe('chemicalComposition');
   });
 
+  it('preserves substancesOfConcern string lists from DB JSON', () => {
+    const stored = {
+      substancesOfConcern: {
+        value: ['Lead compounds (SVHC)', 'Dibutyl phthalate'],
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'x',
+        confidence: 0.9,
+      },
+    };
+    const { fields } = extractedAttributesToAuditTrailFields(stored, ['substancesOfConcern']);
+    expect(fields.substancesOfConcern?.value).toEqual(['Lead compounds (SVHC)', 'Dibutyl phthalate']);
+    expect(fields.substancesOfConcern?.requiresManualReview).toBe(false);
+  });
+
   it('does not flag flat H-code lists for manual review when snippet is short', () => {
     const stored = {
       hStatements: {

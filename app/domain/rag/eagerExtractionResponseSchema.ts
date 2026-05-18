@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { ExtractedAttributeRow } from '@/app/domain/rag/extractedAttributesJson';
 import { sdsCompositionEntrySchema } from '@/app/domain/rag/sdsCompositionSchema';
-import { substanceConcernEntrySchema } from '@/app/domain/rag/substanceConcernSchema';
 
 /** Ein Feld aus der Eager-LLM-Antwort — nur `value` / `sourcePdf` / `contextSnippet` (keine weiteren Keys). */
 const eagerExtractionFieldRowSchema = z
@@ -21,10 +20,10 @@ export const eagerChemicalCompositionFieldRowSchema = z
   })
   .strict();
 
-/** Besorgniserregende / ausgewiesene Stoffe — separater Slot von der Gesamtzusammensetzung. */
+/** Besorgniserregende Stoffe (SVHC/REACH) als explizit gelistete Bezeichner aus dem Dokument. */
 export const eagerSubstancesConcernFieldRowSchema = z
   .object({
-    value: z.array(substanceConcernEntrySchema).nullable(),
+    value: z.array(z.string()).nullable(),
     sourcePdf: z.string(),
     contextSnippet: z.string(),
   })
@@ -54,9 +53,9 @@ export const EAGER_CANONICAL_FIELD_KEYS = [
   'substancesOfConcern',
   'gtin',
   'hStatements',
+  'pStatements',
   'ghsSymbols',
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ] as const;
 
 export type EagerCanonicalFieldKey = (typeof EAGER_CANONICAL_FIELD_KEYS)[number];
@@ -99,21 +98,27 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   uniqueproductidentifier: 'upi',
   uniqueformulaidentifier: 'upi',
   formulakennung: 'upi',
-  /** Technische Merkblätter: Verarbeitungs- und Pflege-Anweisungen (ESPR-/Produktdienstleistung). */
-  verarbeitungshinweise: 'applicationInstructions',
-  processinginstructions: 'applicationInstructions',
-  anwendungsanweisungen: 'applicationInstructions',
-  handhabungshinweise: 'applicationInstructions',
-  reinigung: 'cleaningAndMaintenance',
-  reinigungshinweise: 'cleaningAndMaintenance',
-  pflegehinweise: 'cleaningAndMaintenance',
-  wartungshinweise: 'cleaningAndMaintenance',
+  /** Technische Merkblätter: Handhabungs-/Verarbeitungs-/Reinigungshinweise in einem kombinierten Feld. */
+  verarbeitungshinweise: 'handlingAndApplicationInstructions',
+  processinginstructions: 'handlingAndApplicationInstructions',
+  anwendungsanweisungen: 'handlingAndApplicationInstructions',
+  handhabungshinweise: 'handlingAndApplicationInstructions',
+  hinweise: 'handlingAndApplicationInstructions',
+  wichtigehinweise: 'handlingAndApplicationInstructions',
+  reinigung: 'handlingAndApplicationInstructions',
+  reinigungshinweise: 'handlingAndApplicationInstructions',
+  pflegehinweise: 'handlingAndApplicationInstructions',
+  wartungshinweise: 'handlingAndApplicationInstructions',
   /** Gemischbezogene Kodierungen (unterhalb substancesOfConcern in Abschnitt 2 SDS). */
   hazardstatements: 'hStatements',
   gefahrenhinweise: 'hStatements',
   gehsaetze: 'hStatements',
   hsätze: 'hStatements',
   hsatze: 'hStatements',
+  precautionarystatements: 'pStatements',
+  sicherheitshinweise: 'pStatements',
+  psätze: 'pStatements',
+  psaetze: 'pStatements',
   ghssymbols: 'ghsSymbols',
   gefahrensymbole: 'ghsSymbols',
   gefahrensymbolecodes: 'ghsSymbols',
@@ -198,6 +203,7 @@ export function normalizeEagerExtractionRawObject(source: Record<string, unknown
       canonical === 'chemicalComposition'
       || canonical === 'substancesOfConcern'
       || canonical === 'hStatements'
+      || canonical === 'pStatements'
       || canonical === 'ghsSymbols'
     ) {
       return scoreArrayRow(row);
@@ -250,9 +256,9 @@ export const eagerExtractionResponseSchema = z
     gtin: eagerExtractionFieldRowSchema.optional(),
     upi: eagerExtractionFieldRowSchema.optional(),
     hStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
+    pStatements: eagerRegulatoryCodesArrayRowSchema.optional(),
     ghsSymbols: eagerRegulatoryCodesArrayRowSchema.optional(),
-    applicationInstructions: eagerExtractionFieldRowSchema.optional(),
-    cleaningAndMaintenance: eagerExtractionFieldRowSchema.optional(),
+    handlingAndApplicationInstructions: eagerExtractionFieldRowSchema.optional(),
   })
   .strict();
 
@@ -274,6 +280,7 @@ function eagerChunkHasExtractableValue(key: EagerCanonicalFieldKey, chunk: { val
     key === 'chemicalComposition'
     || key === 'substancesOfConcern'
     || key === 'hStatements'
+    || key === 'pStatements'
     || key === 'ghsSymbols'
   ) {
     return Array.isArray(chunk.value) && chunk.value.length > 0;

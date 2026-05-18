@@ -19,10 +19,10 @@ export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   ewcCode: 'Abfallschlüssel, EWC, EAK, AVV',
   upi: 'UPI, UFI, Unique Product Identifier, Unique Formula Identifier, Produktkennzeichnung, Formel-Identifier',
   hStatements: 'H-Sätze, Gefahrenhinweise, CLP Kennzeichnung, Hazard statements',
+  pStatements: 'P-Sätze, Sicherheitshinweise, CLP precautionary statements',
   ghsSymbols: 'GHS-Symbole, GHS Piktogramme, GHS05, GHS07, Symbol-Codes nach CLP',
-  applicationInstructions:
-    'Verarbeitung Verarbeitungsvorschriften Handhabung Normen Schutzmaßnahmen technisches Merkblatt',
-  cleaningAndMaintenance: 'Reinigung Pflege Werkzeugreinigung Flecken vermeiden Wartungsmerkblatt Hinweise Reinigungspflege',
+  handlingAndApplicationInstructions:
+    'Hinweise Verarbeitung Handhabung Reinigung Werkzeugreinigung Flecken vermeiden Normen Schutzmaßnahmen technisches Merkblatt',
   endOfLifeInstructions: 'Entsorgung, Abschnitt 13, End-of-Life, Recyclinghinweise',
   countryOfOrigin: 'Ursprungsland, Herkunftsland, country of origin',
   countryOfManufacturing: 'Herstellungsland, Produktionsland',
@@ -137,7 +137,7 @@ function isEmptyForRagGap(key: string, value: unknown): boolean {
     }
     return true;
   }
-  if (key === 'hStatements' || key === 'ghsSymbols') {
+  if (key === 'hStatements' || key === 'pStatements' || key === 'ghsSymbols' || key === 'substancesOfConcern') {
     if (Array.isArray(value) && value.some((x) => typeof x === 'string' && x.trim())) {
       return false;
     }

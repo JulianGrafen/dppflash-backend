@@ -104,22 +104,23 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],
   ['upi', 'ufi', 'uniqueProductIdentifier', 'uniqueFormulaIdentifier'],
   ['hStatements', 'hazardStatements', 'hSaetze', 'productHazardStatements'],
+  ['pStatements', 'precautionaryStatements', 'pSaetze', 'productPrecautionaryStatements'],
   ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme', 'gefahrenSymbole'],
   [
-    'applicationInstructions',
+    'handlingAndApplicationInstructions',
     'verarbeitungshinweise',
     'verarbeitung',
+    'hinweise',
+    'wichtigeHinweise',
     'processingInstructions',
     'anwendungsanweisungen',
-    /** Gemisch-Anwendungs-Hinweise (Chemie/Lacke → oft „Verwendung“ auf dem Passport). */
-    'verwendung',
-  ],
-  [
-    'cleaningAndMaintenance',
-    'pflegehinweise',
+    'reinigung',
     'reinigungsanweisungen',
     'reinigungsHinweise',
+    'pflegehinweise',
     'wartungshinweise',
+    /** Gemisch-Anwendungs-Hinweise (Chemie/Lacke → oft „Verwendung“ auf dem Passport). */
+    'verwendung',
   ],
 ];
 
@@ -143,7 +144,7 @@ function isSubstancesConcernStorageKey(fieldKey: string): boolean {
 }
 
 function isFlatStringCodesExtractedSlot(fieldKey: string): boolean {
-  return ['hStatements', 'ghsSymbols'].some((canonical) =>
+  return ['hStatements', 'pStatements', 'ghsSymbols', 'substancesOfConcern'].some((canonical) =>
     synonymLowerNamesForPassportField(canonical).has(normalizeExtractedFieldKey(fieldKey)),
   );
 }
@@ -310,8 +311,7 @@ export function parseExtractedAttributesJson(raw: unknown): Record<string, Extra
  * längere Archiv-/Vorgänger-Volltexte austauschen (informationsbewahrendes Überschreiben).
  */
 const MERGE_PREFER_KEEP_LONGER_SCALAR_KEYS = new Set<string>([
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ]);
 
 function trimmedScalarLength(row: ExtractedAttributeRow): number {
@@ -323,7 +323,7 @@ function trimmedScalarLength(row: ExtractedAttributeRow): number {
  * `finalAttributes = { ...existing }` plus neue Keys — Überschreiben nur bei nicht-leerem `value`,
  * damit Archiv-Daten (Doc B/C) beim Upload von Doc A erhalten bleiben inkl. `sourcePdf`.
  *
- * Bei \`applicationInstructions\` / \`cleaningAndMaintenance\` bleibt der **längere** bestehende Freitext
+ * Bei \`handlingAndApplicationInstructions\` bleibt der **längere** bestehende Freitext
  * erhalten, damit spätere Extrakte mit Kurzauszügen keine ausführlicheren älteren Merkblatt-Ausschnitte löschen.
  */
 export function mergeExtractedAttributesJsonForPersistence(

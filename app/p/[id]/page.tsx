@@ -1260,6 +1260,24 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
   const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
+  const productLevelHStatements = collectDistinctHazardCodes(
+    unwrapProvenanceInner(raw.hStatements),
+    raw.hStatements,
+    raw.hazardStatements,
+    raw.hSaetze,
+  );
+  const productLevelPStatements = collectDistinctHazardCodes(
+    unwrapProvenanceInner(raw.pStatements),
+    raw.pStatements,
+    raw.precautionaryStatements,
+    raw.pSaetze,
+  );
+  const productLevelGhsSymbols = collectDistinctHazardCodes(
+    unwrapProvenanceInner(raw.ghsSymbols),
+    raw.ghsSymbols,
+    raw.ghsPictograms,
+    raw.gefahrenpiktogramme,
+  );
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 
@@ -1452,6 +1470,21 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
+          <Field
+            label="H-Sätze (Gefahrenhinweise)"
+            value={productLevelHStatements.length > 0 ? productLevelHStatements.join(', ') : undefined}
+            sourceBadge={ragSuppliedFields.includes('hStatements') ? 'RAG' : undefined}
+          />
+          <Field
+            label="P-Sätze (Sicherheitshinweise)"
+            value={productLevelPStatements.length > 0 ? productLevelPStatements.join(', ') : undefined}
+            sourceBadge={ragSuppliedFields.includes('pStatements') ? 'RAG' : undefined}
+          />
+          <Field
+            label="GHS-Symbole"
+            value={productLevelGhsSymbols.length > 0 ? productLevelGhsSymbols.join(', ') : undefined}
+            sourceBadge={ragSuppliedFields.includes('ghsSymbols') ? 'RAG' : undefined}
+          />
           <ReviewField
             label="GTIN"
             value={typeof raw.gtin === 'string' ? raw.gtin : undefined}

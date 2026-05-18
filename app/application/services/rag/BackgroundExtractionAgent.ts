@@ -51,7 +51,7 @@ Pflicht / empfohlen pro Eintrag:
 - \`pStatements\`: **Array** der Sicherheitshinweis-Codes, z. B. \`["P102","P280"]\`; sonst weglassen.
 - \`ghsPictograms\`: **Array** der zugeordneten **GHS-Piktogramm-Codes** wie im Dokument (z. B. \`["GHS07","GHS09"]\` oder die im SDB verwendete Kennzeichnung); nur übernehmen, wenn dem Stoff/Gemisch **explizit** zugeordnet — nicht raten.
 
-Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: Key \`substancesOfConcern\` **weglassen**.
+Wenn der Abschnitt fehlt oder keine gesonderten Einträge vorliegen: \`substancesOfConcern.value\` als leeres Array \`[]\` ausgeben.
 
 ---
 
@@ -65,12 +65,20 @@ Leite die GHS-Symbole (z.B. GHS05, GHS07) zwingend ab. Wenn Symbole als Bild im 
 
 ---
 
+WICHTIGE REGEL FÜR COMPLIANCE UND GEFAHRSTOFFE:
+
+H-Sätze & P-Sätze: Extrahiere alle Gefahrenhinweise (H-Sätze, z.B. H315) und Sicherheitshinweise (P-Sätze, z.B. P102) aus Abschnitt 2 des Sicherheitsdatenblatts als strikte String-Arrays.
+
+GHS-Symbole: Da PDFs Bildsymbole oft verschlucken, MUSST du die GHS-Symbole (z.B. GHS05, GHS07) logisch aus den extrahierten H-Sätzen ableiten und als Array ausgeben.
+
+Bedenkliche Stoffe (SVHC): Extrahiere Stoffe für 'substancesOfConcern' AUSSCHLIESSLICH dann, wenn sie im Dokument (meist Abschnitt 3 oder 15) explizit als SVHC, 'Besonders besorgniserregende Stoffe' oder unter REACH-Kandidatenliste aufgeführt sind. Rate niemals! Wenn keine explizit genannt sind, gib ein leeres Array zurück.
+
+---
+
 WICHTIGE REGEL FÜR MERKBLÄTTER UND ANLEITUNGEN:
 Achte explizit auf Absätze mit Titeln wie 'HINWEISE', 'Verarbeitung' oder 'Reinigung'.
 
-Extrahiere Vorgaben zur Verarbeitung (z.B. Normen, Schutzmaßnahmen) und speichere sie zusammengefasst in 'applicationInstructions.value'. Lasse juristische Haftungsausschlüsse weg!
-
-Extrahiere Anweisungen zur Reinigung von Werkzeugen oder Vermeidung von Flecken und speichere sie in 'cleaningAndMaintenance.value'.
+- Handhabung & Hinweise: Scanne das Dokument nach Abschnitten wie 'HINWEISE', 'Verarbeitung', 'Wichtige Hinweise' oder 'Reinigung'. Extrahiere konkrete Praxisanweisungen (z.B. Reinigung von Werkzeugen mit Wasser, Vermeidung von Flecken auf Schienen, Einhaltung von Normen). Speichere diese strukturiert und präzise zusammengefasst im Feld 'handlingAndApplicationInstructions.value'. Juristische Standard-Haftungsausschlüsse sind zu ignorieren!
 
 ---
 
@@ -84,11 +92,11 @@ Extrahiere Anweisungen zur Reinigung von Werkzeugen oder Vermeidung von Flecken 
 - EWC / AVV → ewcCode
 - GTIN / EAN → gtin
 - Gemischbezogene **Gefahrenhinweis-Codes** (Summe/Zeilen aus Abschnitt 2 ohne einzelnen Stoffzuordnung) → \`hStatements.value\` als **Array von Strings**, z.B. ["H302","EUH208"]
+- Gemischbezogene **Sicherheitshinweis-Codes** → \`pStatements.value\` als **Array von Strings**, z.B. ["P102","P280"]
 - **GHS-Kennzeichnungscode** für das Produktgemisch → \`ghsSymbols.value\` als **Array**, z.B. ["GHS05"]
-- **Technische Merkblätter** — zusammengefasste Verarbeitungs-/Schutz-/Normbezugshinweise ohne Haftungsausschlüsse → \`applicationInstructions\`
-- **Reinigung, Werkzeug-Pflege, Vermeidung von Flecken** → \`cleaningAndMaintenance\`
+- **Technische Merkblätter/Anleitungen** — Handhabung, Verarbeitung, Reinigung, Schutz-/Normbezugshinweise (ohne Haftungsausschlüsse) → \`handlingAndApplicationInstructions\`
 
-**Andere Felder** außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`/\`applicationInstructions\`/\`cleaningAndMaintenance\`: wie gewohnt
+**Andere Felder** außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`pStatements\`/\`ghsSymbols\`/\`handlingAndApplicationInstructions\`: wie gewohnt
 
 {
   "value": string | null,
@@ -96,10 +104,10 @@ Extrahiere Anweisungen zur Reinigung von Werkzeugen oder Vermeidung von Flecken 
   "contextSnippet": string
 }
 
-Für \`hStatements\` und \`ghsSymbols\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\` und \`contextSnippet\` bleiben pro Zeile Pflichtfelder wie oben.
+Für \`hStatements\`, \`pStatements\`, \`ghsSymbols\` und \`substancesOfConcern\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\` und \`contextSnippet\` bleiben pro Zeile Pflichtfelder wie oben.
 
 Regeln:
-- Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`ghsSymbols\`/\`applicationInstructions\`/\`cleaningAndMaintenance\` als String in "value".
+- Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`pStatements\`/\`ghsSymbols\`/\`handlingAndApplicationInstructions\` als String in "value".
 - GTIN nur als Ziffernfolge aus dem Text.
 
 Wenn ein Feld nicht extrahierbar ist: Top-Level-Key weglassen — keine leeren Platzhalter.`;

@@ -18,13 +18,13 @@ export const RAG_SOURCES_AND_EVIDENCE_PASSPORT_KEYS = new Set<string>([
   /** CLP-/ESPR-Produktkennzeichnung aus Eager-Extraktion */
   'upi',
   'hStatements',
+  'pStatements',
   'ghsSymbols',
   /** CHEMICAL/PAINT — gleicher Speicher-Slot wie chemicalComposition (Synonym-Merge). */
   'zusammensetzung',
   'entsorgungshinweise',
   /** Technische Merkblätter → Eager-Extraktion */
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ]);
 
 const PENDING_GTIN = 'PENDING_EXTERNAL_MATCH';
@@ -105,9 +105,8 @@ const TEXTILE = [
   'herkunftsland',
   'verarbeitungsland',
   'pflegehinweise',
-  // Eager-Keys synonym zu Pflege/Handhabung über extracted_attributes
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  // Eager-Key für Pflege/Handhabung über extracted_attributes
+  'handlingAndApplicationInstructions',
   'nachhaltigkeit',
 ] as const;
 
@@ -129,8 +128,7 @@ const FURNITURE = [
   'gewicht',
   'zerlegbarkeit',
   'nachhaltigkeitszertifikat',
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ] as const;
 
 const CHEMICAL = [
@@ -142,9 +140,9 @@ const CHEMICAL = [
   'entsorgungshinweise',
   'sicherheitsdatenblatt',
   'hStatements',
+  'pStatements',
   'ghsSymbols',
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ] as const;
 
 const PAINT = [
@@ -156,9 +154,9 @@ const PAINT = [
   'entsorgungshinweise',
   'voc',
   'hStatements',
+  'pStatements',
   'ghsSymbols',
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ] as const;
 
 const LUBRICANT = [
@@ -170,9 +168,9 @@ const LUBRICANT = [
   'umweltfreundlichkeit',
   'verwendungsbereich',
   'hStatements',
+  'pStatements',
   'ghsSymbols',
-  'applicationInstructions',
-  'cleaningAndMaintenance',
+  'handlingAndApplicationInstructions',
 ] as const;
 
 /**

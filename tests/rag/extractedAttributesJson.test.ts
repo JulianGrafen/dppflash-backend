@@ -115,44 +115,33 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
     expect((merged.gtin as { value: string }).value).toBe('222');
   });
 
-  it('protects richer Merkblatt rows: keeps longer cleaningAndMaintenance/applicationInstructions text', () => {
+  it('protects richer Merkblatt row: keeps longer handlingAndApplicationInstructions text', () => {
     const existing = {
-      applicationInstructions: {
+      handlingAndApplicationInstructions: {
         value:
           'Detaillierte Verarbeitungsvorgaben über mehrere Absätze inklusive Normbezug DIN EN sowie Schutzmaßnahmen und Arbeitsabstand.',
         sourcePdf: 'merk.pdf',
         contextSnippet: 'Verarbeitungs-HINWEISE',
         confidence: 0.92,
       },
-      cleaningAndMaintenance: {
-        value: 'Sofort spülen; gründliche Nassreinigung der Werkzeuge zweimal mit klarem Leitungswasser.',
-        sourcePdf: 'merk.pdf',
-        contextSnippet: 'Reinigungshinweise — Werkzeuge und Flecken',
-        confidence: 0.92,
-      },
     };
     const incoming = {
-      applicationInstructions: {
-        value: 'Kurz merken: Handschuhe tragen.',
+      handlingAndApplicationInstructions: {
+        value: 'Kurz merken: Handschuhe tragen; Werkzeug nach Gebrauch reinigen.',
         sourcePdf: 'docB.pdf',
         contextSnippet: 'Hinweise',
         confidence: 0.88,
       },
-      cleaningAndMaintenance: {
-        value: 'Werkzeug nach Gebrauch reinigen.',
-        sourcePdf: 'docB.pdf',
-        contextSnippet: 'Reinigung',
-        confidence: 0.88,
-      },
     };
     const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
-    expect((merged.applicationInstructions as { value: string }).value).toBe(existing.applicationInstructions.value);
-    expect((merged.cleaningAndMaintenance as { value: string }).value).toBe(existing.cleaningAndMaintenance.value);
+    expect((merged.handlingAndApplicationInstructions as { value: string }).value).toBe(
+      existing.handlingAndApplicationInstructions.value,
+    );
   });
 
-  it('may upgrade shorter Merkblatt rows when incoming excerpt is materially longer', () => {
+  it('may upgrade shorter handling row when incoming excerpt is materially longer', () => {
     const existing = {
-      cleaningAndMaintenance: {
+      handlingAndApplicationInstructions: {
         value: 'Kurz',
         sourcePdf: 'alt.pdf',
         contextSnippet: 'x',
@@ -160,7 +149,7 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
       },
     };
     const incoming = {
-      cleaningAndMaintenance: {
+      handlingAndApplicationInstructions: {
         value: 'Nach Gebrauch Werkzeug sofort mehrfach unter fließendem Wasser abspülen und trocknen; Flecken sofort entsorgen.',
         sourcePdf: 'neu.pdf',
         contextSnippet: 'Ausführliche Reinigung',
@@ -168,7 +157,9 @@ describe('mergeExtractedAttributesJsonForPersistence', () => {
       },
     };
     const merged = mergeExtractedAttributesJsonForPersistence(existing, incoming);
-    expect((merged.cleaningAndMaintenance as { value: string }).value).toBe(incoming.cleaningAndMaintenance.value);
+    expect((merged.handlingAndApplicationInstructions as { value: string }).value).toBe(
+      incoming.handlingAndApplicationInstructions.value,
+    );
   });
 });
 
@@ -241,5 +232,32 @@ describe('extractedAttributesToAuditTrailFields', () => {
     const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, ['zusammensetzung']);
     expect(fields.zusammensetzung?.value).toBe('Quarz; Zement');
     expect(keyResolution[0]?.usedStoredKey).toBe('chemicalComposition');
+  });
+
+  it('maps pStatements/substancesOfConcern via synonyms from stored JSON arrays', () => {
+    const stored = {
+      precautionaryStatements: {
+        value: ['P102', 'P280'],
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'Abschnitt 2',
+        confidence: 0.81,
+      },
+      svhc: {
+        value: ['Lead compounds (SVHC)'],
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'Abschnitt 15',
+        confidence: 0.8,
+      },
+    };
+    const { fields, keyResolution } = extractedAttributesToAuditTrailFields(stored, [
+      'pStatements',
+      'substancesOfConcern',
+    ]);
+    expect(fields.pStatements?.value).toEqual(['P102', 'P280']);
+    expect(fields.substancesOfConcern?.value).toEqual(['Lead compounds (SVHC)']);
+    expect(keyResolution).toEqual([
+      { missingField: 'pStatements', usedStoredKey: 'precautionaryStatements' },
+      { missingField: 'substancesOfConcern', usedStoredKey: 'svhc' },
+    ]);
   });
 });

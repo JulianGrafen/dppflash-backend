@@ -20,6 +20,8 @@ const sampleConcernRow = {
   hinweis: 'SVHC-Kandidat (Beispiel)',
 };
 
+const sampleConcernString = 'Blei (CAS 7439-92-1) — SVHC-Kandidat';
+
 describe('coerceLegacyChemicalCompositionValue', () => {
   it('wraps non-empty strings as single SDS row', () => {
     expect(coerceLegacyChemicalCompositionValue('  X  ')).toEqual([
@@ -45,13 +47,13 @@ describe('normalizeEagerExtractionRawObject', () => {
   it('maps gefahrenstoffe alias to substancesOfConcern', () => {
     const n = normalizeEagerExtractionRawObject({
       gefahrenstoffe: {
-        value: [sampleConcernRow],
+        value: [sampleConcernString],
         sourcePdf: 's.pdf',
         contextSnippet: 'Abschnitt 3',
       },
     });
     expect(n.substancesOfConcern).toMatchObject({
-      value: [sampleConcernRow],
+      value: [sampleConcernString],
       sourcePdf: 's.pdf',
     });
   });
@@ -105,7 +107,7 @@ describe('eagerExtractionResponseSchema', () => {
         contextSnippet: '§3',
       },
       substancesOfConcern: {
-        value: [sampleConcernRow],
+        value: [sampleConcernString],
         sourcePdf: 'a.pdf',
         contextSnippet: 'SVHC',
       },
@@ -124,7 +126,13 @@ describe('eagerExtractionResponseSchema', () => {
     const r = eagerExtractionResponseSchema.safeParse({
       upi: { value: 'U123', sourcePdf: 's.pdf', contextSnippet: 'UFI/UPI' },
       hStatements: { value: ['H315', 'H317'], sourcePdf: 's.pdf', contextSnippet: 'Abschnitt 2.1' },
+      pStatements: { value: ['P102', 'P280'], sourcePdf: 's.pdf', contextSnippet: 'Abschnitt 2.2' },
       ghsSymbols: { value: ['GHS05', 'GHS07'], sourcePdf: 's.pdf', contextSnippet: 'Kennzeichnung' },
+      substancesOfConcern: {
+        value: ['Dibutyl phthalate (SVHC)', 'Lead compounds (REACH candidate list)'],
+        sourcePdf: 's.pdf',
+        contextSnippet: 'Abschnitt 15',
+      },
     });
     expect(r.success).toBe(true);
     if (!r.success) {
@@ -132,17 +140,12 @@ describe('eagerExtractionResponseSchema', () => {
     }
   });
 
-  it('accepts Merkblatt-Felder applicationInstructions und cleaningAndMaintenance', () => {
+  it('accepts Merkblatt-Feld handlingAndApplicationInstructions', () => {
     const r = eagerExtractionResponseSchema.safeParse({
-      applicationInstructions: {
-        value: 'Temperatur 5–35 °C, Schutzhandschuhe DIN EN.',
+      handlingAndApplicationInstructions: {
+        value: 'Temperatur 5–35 °C, Schutzhandschuhe DIN EN; Werkzeug sofort nach Gebrauch mit Wasser reinigen.',
         sourcePdf: 't.pdf',
-        contextSnippet: 'Verarbeitungs-Hinweise',
-      },
-      cleaningAndMaintenance: {
-        value: 'Werkzeug sofort nach Gebrauch mit Wasser reinigen.',
-        sourcePdf: 't.pdf',
-        contextSnippet: 'Reinigung',
+        contextSnippet: 'Verarbeitungs-Hinweise und Reinigung',
       },
     });
     expect(r.success).toBe(true);
@@ -152,50 +155,36 @@ describe('eagerExtractionResponseSchema', () => {
 describe('eagerExtractionResponseToRows', () => {
   it('persists substancesOfConcern rows', () => {
     const data = eagerExtractionResponseSchema.parse({
-      substancesOfConcern: { value: [sampleConcernRow], sourcePdf: 's.pdf', contextSnippet: 'x' },
+      substancesOfConcern: { value: [sampleConcernString], sourcePdf: 's.pdf', contextSnippet: 'x' },
     });
     const rows = eagerExtractionResponseToRows(data, 'f.pdf');
-    expect(rows.substancesOfConcern?.value).toEqual([sampleConcernRow]);
+    expect(rows.substancesOfConcern?.value).toEqual([sampleConcernString]);
   });
 
-  it('persistiert Produkt-Level hStatements/ghsSymbols in extracted_attributes', () => {
+  it('persistiert Produkt-Level h/p/ghs/svhc in extracted_attributes', () => {
     const data = eagerExtractionResponseSchema.parse({
       hStatements: { value: ['H302'], sourcePdf: 's.pdf', contextSnippet: 'CLP Abschnitt 2' },
+      pStatements: { value: ['P102'], sourcePdf: 's.pdf', contextSnippet: 'CLP Abschnitt 2' },
       ghsSymbols: { value: ['GHS06'], sourcePdf: 's.pdf', contextSnippet: 'Piktogramm' },
+      substancesOfConcern: { value: ['Lead compounds (SVHC)'], sourcePdf: 's.pdf', contextSnippet: 'Abschnitt 15' },
     });
     const rows = eagerExtractionResponseToRows(data, 'fallback.pdf');
     expect(rows.hStatements?.value).toEqual(['H302']);
+    expect(rows.pStatements?.value).toEqual(['P102']);
     expect(rows.ghsSymbols?.value).toEqual(['GHS06']);
+    expect(rows.substancesOfConcern?.value).toEqual(['Lead compounds (SVHC)']);
     expect(rows.hStatements?.sourcePdf).toBe('s.pdf');
   });
 
-  it('normalisiert hazardStatements / synonyme Felder zu H-, P-, GHS-Arrays', () => {
+  it('accepts substancesOfConcern as explicit string-array from SDS/REACH lists', () => {
     const data = eagerExtractionResponseSchema.parse({
       substancesOfConcern: {
-        value: [
-          {
-            name: 'Toluol',
-            hazardStatements: 'H315, H336',
-            precautionaryStatements: ['P261'],
-            ghsSymbols: ['GHS08'],
-            casNummer: '108-88-3',
-            anteilOderGrenzwert: '< 25 %',
-            hinweis: 'Beispiel',
-          },
-        ],
+        value: ['Toluol (SVHC candidate list)'],
         sourcePdf: 'x.pdf',
         contextSnippet: 'Abschnitt 3',
       },
     });
     const rows = eagerExtractionResponseToRows(data, 'f.pdf');
-    expect(rows.substancesOfConcern?.value).toMatchObject([
-      {
-        name: 'Toluol',
-        hStatements: expect.arrayContaining(['H315', 'H336']),
-        pStatements: ['P261'],
-        ghsPictograms: ['GHS08'],
-        casNummer: '108-88-3',
-      },
-    ]);
+    expect(rows.substancesOfConcern?.value).toEqual(['Toluol (SVHC candidate list)']);
   });
 });

@@ -12,8 +12,6 @@ import { formatPassportCoreMaterialSummary } from '@/app/domain/dpp/materialComp
 
 type IsccPlusSectionProps = {
   readonly raw: Record<string, unknown>;
-  readonly productId: string;
-  readonly displayProductName: string;
 };
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
@@ -38,13 +36,6 @@ function unwrapValue(v: unknown): unknown {
 function unwrapString(v: unknown): string | undefined {
   const u = unwrapValue(v);
   return typeof u === 'string' && u.trim() ? u.trim() : undefined;
-}
-
-function truncateProductId(id: string): string {
-  if (id.length <= 14) {
-    return id;
-  }
-  return `${id.slice(0, 5)}···${id.slice(-5)}`;
 }
 
 function deriveManufacturingSite(raw: Record<string, unknown>): string | undefined {
@@ -174,7 +165,7 @@ function parseCustody(rawList: unknown): CustodyEntry[] {
  * - Denselben **Kernfeldern** wie Material-Sankey / „Material‑Zusammensetzung“ (`formatPassportCoreMaterialSummary`, Gewicht,
  *   Standort, Zertifikatsstellen, CO₂-Kernfelder, Rezyklatanteile).
  */
-export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlusSectionProps) {
+export function IsccPlusSection({ raw }: IsccPlusSectionProps) {
   const block = asRecord(raw.isccPlus);
 
   const materialFromPassport = formatPassportCoreMaterialSummary(raw);
@@ -213,7 +204,6 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
   const ghgEmissions =
     (block ? asString(block.ghgEmissions) : undefined) ?? derivedGhg;
 
-  const headline = block ? asString(block.headline) ?? asString(block.title) : undefined;
   const brandText = brandCorner(raw, block);
   const custody = block ? parseCustody(block.chainOfCustody) : [];
 
@@ -270,53 +260,35 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
     ? 'ISCC PLUS — nachvollziehbare Datenpunkte'
     : 'Material & Herkunft (DPP-Kernfelder)';
 
-  const titleMain = headline ?? displayProductName;
-
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
-      <div className="bg-[#0c1929] px-5 py-6 text-white sm:px-6">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-                <Award className="h-5 w-5 text-amber-300" strokeWidth={1.75} aria-hidden />
-              </span>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-400/90">
-                  {scheme ? scheme.split('–')[0]?.trim() ?? 'Zertifizierung' : 'Nachweis'}
-                </p>
-                <h2 className="mt-0.5 text-xl font-bold tracking-tight sm:text-2xl">{titleMain}</h2>
+      {(hasHeroPills || brandText) ? (
+        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            {hasHeroPills ? (
+              <div className="flex flex-wrap gap-2">
+                {quantityKg !== undefined ? (
+                  <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-900 ring-1 ring-slate-200/80">
+                    <Scale className="h-4 w-4 shrink-0 text-sky-600" aria-hidden />
+                    {quantityKg.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg
+                  </span>
+                ) : null}
+                {scheme ? (
+                  <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-900 ring-1 ring-slate-200/80">
+                    <Award className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+                    {scheme}
+                  </span>
+                ) : null}
               </div>
-            </div>
-            <p className="mt-4 font-mono text-xs text-slate-400">
-              Produkt-ID:{' '}
-              <span className="text-slate-200">{truncateProductId(productId)}</span>
-            </p>
+            ) : null}
+            {brandText ? (
+              <p className="shrink-0 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:max-w-[42%]">
+                {brandText}
+              </p>
+            ) : null}
           </div>
-          {brandText ? (
-            <p className="shrink-0 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:max-w-[42%] sm:pt-1">
-              {brandText}
-            </p>
-          ) : null}
         </div>
-
-        {hasHeroPills ? (
-          <div className="mt-6 flex flex-wrap gap-2">
-            {quantityKg !== undefined ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.12] px-3 py-1.5 text-sm font-medium ring-1 ring-white/15">
-                <Scale className="h-4 w-4 shrink-0 text-sky-200" aria-hidden />
-                {quantityKg.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg
-              </span>
-            ) : null}
-            {scheme ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.12] px-3 py-1.5 text-sm font-medium ring-1 ring-white/15">
-                <Award className="h-4 w-4 shrink-0 text-amber-300" aria-hidden />
-                {scheme}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {hasTraced ? (
         <div className="border-t border-sky-300/25 bg-gradient-to-b from-sky-50/80 to-white px-5 py-5 sm:px-6">

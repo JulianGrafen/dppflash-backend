@@ -1715,11 +1715,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
         </Section>
 
-        <IsccPlusSection
-          raw={raw as Record<string, unknown>}
-          productId={p.id}
-          displayProductName={displayProductName}
-        />
+        <IsccPlusSection raw={raw as Record<string, unknown>} />
 
         <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
 

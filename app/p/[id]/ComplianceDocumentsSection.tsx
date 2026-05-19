@@ -31,6 +31,17 @@ export function ComplianceDocumentsSection({ attachments }: { readonly attachmen
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      <div className="flex items-center gap-3 bg-[#0c1929] px-5 py-4 text-white">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10">
+          <FileText className="h-5 w-5 text-sky-300" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">Zugehörige Compliance-Dokumente</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+            SDB · Merkblätter · PDF
+          </p>
+        </div>
+      </div>
       <ul className="divide-y divide-slate-100">
         {docs.map((doc) => (
           <li key={doc.url}>

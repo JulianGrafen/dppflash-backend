@@ -2,7 +2,6 @@ import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import {
   AlertTriangle,
-  Battery,
   Menu,
   ShieldCheck,
 } from 'lucide-react';
@@ -11,10 +10,7 @@ import {
   coerceMaterialCompositionArray,
   tryChemicalCompositionToSankey,
 } from '@/app/domain/dpp/materialCompositionToSankey';
-import {
-  inferGhsPictogramsFromHStatements,
-  normalizeGhsPictogramCodeList,
-} from '@/app/domain/rag/ghsPictogramCodes';
+import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
 import {
   extractHazardStatementCodesFromTexts,
   extractPrecautionaryStatementCodesFromTexts,
@@ -153,44 +149,6 @@ function HazardCodesField({
         {sourceBadge ? (
           <span
             className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
-            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
-          >
-            {sourceBadge}
-          </span>
-        ) : null}
-      </dd>
-    </div>
-  );
-}
-
-function GhsSymbolsField({
-  label,
-  codes,
-  hStatements,
-  sourceBadge,
-}: {
-  label: string;
-  codes: readonly string[];
-  hStatements: readonly string[];
-  sourceBadge?: string;
-}) {
-  const resolved =
-    normalizeGhsPictogramCodeList(codes).length > 0
-      ? normalizeGhsPictogramCodeList(codes)
-      : inferGhsPictogramsFromHStatements(hStatements);
-  if (resolved.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
-      <dd className="space-y-2 sm:max-w-[58%] sm:text-right">
-        <GhsPictogramBadges codes={resolved} />
-        <p className="text-[12px] font-medium text-slate-600">{resolved.join(', ')}</p>
-        {sourceBadge ? (
-          <span
-            className="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
             title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
           >
             {sourceBadge}
@@ -566,6 +524,7 @@ type SubstanceOfConcernDisplayRow = {
   readonly casDisplay: string;
   readonly hDisplay: string;
   readonly pDisplay: string;
+  readonly hCodes: readonly string[];
   readonly ghsCodes: readonly string[];
 };
 
@@ -731,43 +690,18 @@ function resolveProductLevelHazardCodes(
   raw: Record<string, unknown>,
   passportKeys: readonly string[],
   synonymKeys: readonly string[],
-  substanceKind: 'h' | 'p' | 'ghs',
 ): string[] {
   const passportVals = synonymKeys.flatMap((k) => [unwrapProvenanceInner(raw[k]), raw[k]]);
   const trailVals = readRagAuditTrailFieldValues(raw, passportKeys);
-  const collect =
-    substanceKind === 'ghs'
-      ? collectDistinctGhsCodes
-      : substanceKind === 'p'
-        ? collectDistinctPStatements
-        : collectDistinctHStatements;
-  const direct = collect(...passportVals, ...trailVals);
+  const direct = collectDistinctPStatements(...passportVals, ...trailVals);
   if (direct.length > 0) {
     return direct;
   }
-  const fromSubstances = aggregateSubstanceRowHazardCodes(raw, substanceKind);
+  const fromSubstances = aggregateSubstanceRowHazardCodes(raw, 'p');
   if (fromSubstances.length > 0) {
     return fromSubstances;
   }
-  if (substanceKind === 'h' || substanceKind === 'p') {
-    const fromComposition = extractHpCodesFromComposition(raw, substanceKind);
-    if (fromComposition.length > 0) {
-      return fromComposition;
-    }
-  }
-  if (substanceKind === 'ghs') {
-    return inferGhsPictogramsFromHStatements(resolveHStatementsForGhsInference(raw));
-  }
-  return [];
-}
-
-/** H-Codes nur aus Stoffzeilen/Komposition — nicht aus Produkt-Level `hStatements`. */
-function resolveHStatementsForGhsInference(raw: Record<string, unknown>): string[] {
-  const fromSubstances = aggregateSubstanceRowHazardCodes(raw, 'h');
-  if (fromSubstances.length > 0) {
-    return fromSubstances;
-  }
-  return extractHpCodesFromComposition(raw, 'h');
+  return extractHpCodesFromComposition(raw, 'p');
 }
 
 function formatCodeCellDisplay(codes: readonly string[]): string {
@@ -801,10 +735,12 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
   for (const entry of inner) {
     if (typeof entry === 'string' && entry.trim()) {
       const label = entry.trim();
+      const hCodes = extractHazardStatementCodesFromTexts([label]);
       rows.push({
         name: label,
         casDisplay: '—',
-        hDisplay: formatCodeCellDisplay(extractHazardStatementCodesFromTexts([label])),
+        hCodes,
+        hDisplay: formatCodeCellDisplay(hCodes),
         pDisplay: formatCodeCellDisplay(extractPrecautionaryStatementCodesFromTexts([label])),
         ghsCodes: collectDistinctGhsCodes(label),
       });
@@ -847,6 +783,7 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
     rows.push({
       name,
       casDisplay,
+      hCodes,
       hDisplay: formatCodeCellDisplay(hCodes),
       pDisplay: formatCodeCellDisplay(pCodes),
       ghsCodes: gCodes,
@@ -886,8 +823,8 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
                   <td className="px-3 py-2 font-semibold text-slate-900 break-words">{r.name}</td>
                   <td className="px-3 py-2 whitespace-nowrap font-mono text-[12px] text-slate-800">{r.casDisplay}</td>
                   <td className="px-3 py-2">
-                    {r.ghsCodes.length > 0 ? (
-                      <GhsPictogramBadges codes={r.ghsCodes} />
+                    {r.ghsCodes.length > 0 || r.hCodes.length > 0 ? (
+                      <GhsPictogramBadges codes={r.ghsCodes} hStatementsForInference={r.hCodes} />
                     ) : (
                       <span className="font-mono text-[12px] text-slate-500">—</span>
                     )}
@@ -1522,18 +1459,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
   const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
-  const substanceHForGhsInference = resolveHStatementsForGhsInference(raw);
   const productLevelPStatements = resolveProductLevelHazardCodes(
     raw,
     ['pStatements'],
     ['pStatements', 'precautionaryStatements', 'pSaetze'],
-    'p',
-  );
-  const productLevelGhsSymbols = resolveProductLevelHazardCodes(
-    raw,
-    ['ghsSymbols', 'ghsPictograms'],
-    ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme'],
-    'ghs',
   );
   const hazardFromRagAudit = (key: string) =>
     readRagAuditTrailFieldValues(raw, [key]).length > 0 && !ragSuppliedFields.includes(key);
@@ -1599,12 +1528,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               {p.id}
             </code>
           </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-[#0c1929] ring-1 ring-slate-200/80">
-              <Battery className="h-4 w-4 text-sky-600" strokeWidth={2} aria-hidden />
-              {p.modellname || '—'}
-            </span>
-          </div>
           <div className="mt-4 flex justify-center">
             <ConfidenceBadge score={p.extractionConfidence} />
           </div>
@@ -1715,7 +1638,11 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
         </Section>
 
-        <IsccPlusSection raw={raw as Record<string, unknown>} />
+        <IsccPlusSection
+          raw={raw as Record<string, unknown>}
+          productId={p.id}
+          displayProductName={displayProductName}
+        />
 
         <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
 
@@ -1733,19 +1660,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             codes={productLevelPStatements}
             sourceBadge={
               ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements') ? 'RAG' : undefined
-            }
-          />
-          <GhsSymbolsField
-            label="GHS-Symbole"
-            codes={productLevelGhsSymbols}
-            hStatements={substanceHForGhsInference}
-            sourceBadge={
-              ragSuppliedFields.includes('ghsSymbols')
-              || ragSuppliedFields.includes('ghsPictograms')
-              || hazardFromRagAudit('ghsSymbols')
-              || hazardFromRagAudit('ghsPictograms')
-                ? 'RAG'
-                : undefined
             }
           />
           <ReviewField

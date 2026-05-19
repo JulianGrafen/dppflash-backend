@@ -1,5 +1,5 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, FileSearch } from 'lucide-react';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -35,6 +35,15 @@ export function RagProvenanceSection({ ragEnrichment }: { readonly ragEnrichment
     const msg = typeof ragEnrichment.message === 'string' ? ragEnrichment.message : 'RAG-Anreicherung fehlgeschlagen.';
     return (
       <section className="overflow-hidden rounded-2xl border border-amber-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-amber-900/[0.06]">
+        <div className="flex items-center gap-3 bg-[#0c1929] px-5 py-4 text-white">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10">
+            <FileSearch className="h-5 w-5 text-amber-300" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-tight">RAG / Forensik</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Fehler</p>
+          </div>
+        </div>
         <div className="px-5 py-4 text-sm text-amber-950">{msg}</div>
       </section>
     );
@@ -72,13 +81,24 @@ export function RagProvenanceSection({ ragEnrichment }: { readonly ragEnrichment
 
   return (
     <details className="group overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5 text-[13px] font-semibold text-slate-900 marker:hidden">
-        <span>RAG — Quellen & Belege</span>
-        <ChevronDown
-          className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180"
-          strokeWidth={2}
-          aria-hidden
-        />
+      <summary className="flex cursor-pointer list-none items-center gap-3 bg-[#0c1929] px-5 py-4 text-white marker:hidden">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10">
+          <FileSearch className="h-5 w-5 text-sky-300" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[15px] font-semibold tracking-tight">RAG — Quellen & Belege</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+            Indizierter Dokumentabgleich
+          </p>
+        </div>
+        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          <span className="hidden sm:inline">Details</span>
+          <ChevronDown
+            className="h-4 w-4 transition-transform group-open:rotate-180"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </span>
       </summary>
       <div className="space-y-3 border-b border-slate-100 bg-slate-50/50 px-5 py-4 text-[13px]">
         <p className="text-slate-700">

@@ -1,19 +1,10 @@
 import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
   Battery,
-  Building2,
-  ClipboardList,
-  Cpu,
-  FileStack,
-  Gauge,
-  Globe2,
   Menu,
-  Recycle,
   ShieldCheck,
-  Trash2,
 } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
 import {
@@ -48,34 +39,9 @@ interface PageProps {
 
 // ─── Presentational helpers ───────────────────────────────────────────────────
 
-function Section({
-  title,
-  subtitle,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  icon?: LucideIcon;
-  children: React.ReactNode;
-}) {
+function Section({ children }: { children: React.ReactNode }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
-      <div className="flex items-center gap-3 bg-[#0c1929] px-5 py-4 text-white">
-        {Icon ? (
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.12] backdrop-blur-sm">
-            <Icon className="h-5 w-5 text-sky-300" strokeWidth={1.75} aria-hidden />
-          </span>
-        ) : null}
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold leading-snug tracking-tight">{title}</h2>
-          {subtitle ? (
-            <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-              {subtitle}
-            </p>
-          ) : null}
-        </div>
-      </div>
       <dl className="divide-y divide-slate-100">{children}</dl>
     </section>
   );
@@ -1711,7 +1677,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         )}
 
         {/* ── Identity ── */}
-        <Section icon={Building2} title="Allgemeine Informationen" subtitle="Identität & Kennzeichnung">
+        <Section>
           {manufacturerDisplayBlock ? (
             <Field
               label="Hersteller / Verantwortlicher"
@@ -1741,7 +1707,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Technical spec ── */}
-        <Section icon={Cpu} title="Technische Spezifikation" subtitle="Technische Daten">
+        <Section>
           <Field label="Kapazität"       value={p.capacityKwh !== undefined ? `${p.capacityKwh} kWh` : undefined} />
           <Field label="Chemisches System" value={p.chemistry} />
           <Field label="Batterietyp"     value={p.batteryType} />
@@ -1762,7 +1728,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         ) : null}
 
         {/* ── DPP Core fields (new extraction schema) ── */}
-        <Section icon={FileStack} title="DPP-Kernfelder (ESPR)" subtitle="Regulatorische Datenblätter">
+        <Section>
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
@@ -1815,7 +1781,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <RagProvenanceSection ragEnrichment={raw.ragEnrichment} />
 
         {/* ── Carbon footprint (Art. 7) ── */}
-        <Section icon={Globe2} title="CO₂-Fußabdruck" subtitle="Art. 7 EU 2023/1542">
+        <Section>
           <Field label="Gesamt (kg CO₂e)"   value={p.carbonFootprint.totalKg} />
           <Field label="Pro kWh (kg CO₂e)"  value={p.carbonFootprint.perKwhKg} />
           <Field label="Methodik"            value={p.carbonFootprint.methodology} />
@@ -1823,7 +1789,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Recycled content (Art. 8) ── */}
-        <Section icon={Recycle} title="Recyclinganteile" subtitle="Art. 8 EU 2023/1542">
+        <Section>
           <Pct label="Kobalt"   value={p.recycledContent.cobaltPct} />
           <Pct label="Lithium"  value={p.recycledContent.lithiumPct} />
           <Pct label="Nickel"   value={p.recycledContent.nickelPct} />
@@ -1831,7 +1797,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Lifecycle (Art. 10) ── */}
-        <Section icon={Gauge} title="Lebensdauer & Reparierbarkeit" subtitle="Art. 10 EU 2023/1542">
+        <Section>
           <Field label="Erwartete Ladezyklen"  value={p.lifecycle.expectedCycles} />
           <Field label="Reparierbarkeitsindex" value={p.lifecycle.repairabilityScore !== undefined ? `${p.lifecycle.repairabilityScore} / 10` : undefined} />
           <Field label="Ersatzteil-Verfügbarkeit" value={p.lifecycle.sparePartsAvailableYears !== undefined ? `${p.lifecycle.sparePartsAvailableYears} Jahre` : undefined} />
@@ -1839,7 +1805,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── End-of-life (Art. 11) ── */}
-        <Section icon={Trash2} title="Entsorgung & Recycling" subtitle="Art. 11 EU 2023/1542">
+        <Section>
           <Field label="Recyclinganweisungen"  value={p.endOfLife.recyclingInstructions} />
           <Field label="Entsorgungshinweise"   value={p.endOfLife.disposalInstructions} />
           {p.endOfLife.hazardousSubstances?.length ? (
@@ -1848,7 +1814,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         </Section>
 
         {/* ── Regulatory ── */}
-        <Section icon={ClipboardList} title="Zertifizierung & Compliance" subtitle="Referenzen & Hinweise">
+        <Section>
           <Field label="Zertifizierungsstelle" value={p.certificationBody} />
           <Field label="Rechtsgrundlage"        value={p.regulatoryReference} />
           <Field label="Rechtliche Hinweise"    value={p.legalNotes} />

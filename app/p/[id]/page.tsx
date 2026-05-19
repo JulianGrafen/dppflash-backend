@@ -790,15 +790,18 @@ function resolveProductLevelHazardCodes(
     }
   }
   if (substanceKind === 'ghs') {
-    const hCodes = resolveProductLevelHazardCodes(
-      raw,
-      ['hStatements'],
-      ['hStatements', 'hazardStatements', 'hSaetze'],
-      'h',
-    );
-    return inferGhsPictogramsFromHStatements(hCodes);
+    return inferGhsPictogramsFromHStatements(resolveHStatementsForGhsInference(raw));
   }
   return [];
+}
+
+/** H-Codes nur aus Stoffzeilen/Komposition — nicht aus Produkt-Level `hStatements`. */
+function resolveHStatementsForGhsInference(raw: Record<string, unknown>): string[] {
+  const fromSubstances = aggregateSubstanceRowHazardCodes(raw, 'h');
+  if (fromSubstances.length > 0) {
+    return fromSubstances;
+  }
+  return extractHpCodesFromComposition(raw, 'h');
 }
 
 function formatCodeCellDisplay(codes: readonly string[]): string {
@@ -1553,12 +1556,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
   const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
-  const productLevelHStatements = resolveProductLevelHazardCodes(
-    raw,
-    ['hStatements'],
-    ['hStatements', 'hazardStatements', 'hSaetze'],
-    'h',
-  );
+  const substanceHForGhsInference = resolveHStatementsForGhsInference(raw);
   const productLevelPStatements = resolveProductLevelHazardCodes(
     raw,
     ['pStatements'],
@@ -1769,13 +1767,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
           <HazardCodesField
-            label="H-Sätze (Gefahrenhinweise)"
-            codes={productLevelHStatements}
-            sourceBadge={
-              ragSuppliedFields.includes('hStatements') || hazardFromRagAudit('hStatements') ? 'RAG' : undefined
-            }
-          />
-          <HazardCodesField
             label="P-Sätze (Sicherheitshinweise)"
             codes={productLevelPStatements}
             sourceBadge={
@@ -1785,7 +1776,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <GhsSymbolsField
             label="GHS-Symbole"
             codes={productLevelGhsSymbols}
-            hStatements={productLevelHStatements}
+            hStatements={substanceHForGhsInference}
             sourceBadge={
               ragSuppliedFields.includes('ghsSymbols')
               || ragSuppliedFields.includes('ghsPictograms')

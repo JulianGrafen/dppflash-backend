@@ -321,6 +321,11 @@ type SdsCompositionDisplayRow = {
   readonly einstufung: string;
 };
 
+type ChemicalCompositionDisplayRow = {
+  readonly material: string;
+  readonly percentage: string;
+};
+
 /** SDS-/REACH-Zeilendarstellung (stoffname, casNummer, prozentAnteil, einstufung). */
 function parseSdsCompositionDisplayRow(entry: Record<string, unknown>): SdsCompositionDisplayRow | null {
   const stoff =
@@ -451,6 +456,38 @@ function renderSdsCompositionTable(label: string, rows: readonly SdsCompositionD
   );
 }
 
+function renderChemicalCompositionTable(label: string, rows: readonly ChemicalCompositionDisplayRow[]) {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-2 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[58%]">
+        <div className="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-sm">
+          <table className="min-w-full text-left text-[13px]">
+            <thead className="bg-sky-50/90 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              <tr>
+                <th className="px-3 py-2.5">Material</th>
+                <th className="px-3 py-2.5 whitespace-nowrap">%</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r, i) => (
+                <tr key={`${label}-${r.material}-${i}`} className="bg-white">
+                  <td className="px-3 py-2 font-semibold text-slate-900">{r.material}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600">{r.percentage}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </dd>
+    </div>
+  );
+}
+
 /** ESPR Kernfeld materialComposition + legacy Textfeld materialZusammensetzung (z. B. Textilien). */
 function renderMaterialZusammensetzungKernfelder(
   materialComposition: unknown,
@@ -563,9 +600,7 @@ type SubstanceOfConcernDisplayRow = {
   readonly casDisplay: string;
   readonly hDisplay: string;
   readonly pDisplay: string;
-  readonly ghsDisplay: string;
-  readonly concentration: string;
-  readonly classification: string;
+  readonly ghsCodes: readonly string[];
 };
 
 function normalizeHazardCodeCandidate(v: unknown): unknown {
@@ -802,9 +837,7 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
         casDisplay: '—',
         hDisplay: formatCodeCellDisplay(extractHazardStatementCodesFromTexts([label])),
         pDisplay: formatCodeCellDisplay(extractPrecautionaryStatementCodesFromTexts([label])),
-        ghsDisplay: formatCodeCellDisplay(collectDistinctGhsCodes(label)),
-        concentration: '—',
-        classification: '—',
+        ghsCodes: collectDistinctGhsCodes(label),
       });
       continue;
     }
@@ -825,15 +858,6 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
         ? String(casRaw).trim()
         : '—';
 
-    let concentration = '—';
-    if (typeof o.anteilOderGrenzwert === 'string' && o.anteilOderGrenzwert.trim()) {
-      concentration = o.anteilOderGrenzwert.trim();
-    } else if (typeof o.concentrationPercent === 'number' && Number.isFinite(o.concentrationPercent)) {
-      concentration = formatPercentage(o.concentrationPercent) ?? '—';
-    } else if (typeof o.concentrationPercent === 'string' && o.concentrationPercent.trim()) {
-      concentration = o.concentrationPercent.trim();
-    }
-
     const hCodes = collectDistinctHStatements(
       o.hStatements,
       o.hazardStatements,
@@ -851,19 +875,12 @@ function parseSubstancesOfConcernRows(inner: readonly unknown[]): SubstanceOfCon
     );
     const gCodes = collectDistinctGhsCodes(o.ghsPictograms, o.ghsSymbols, o.gefahrenpiktogramme);
 
-    const classification =
-      (typeof o.hazardClass === 'string' && o.hazardClass.trim() ? o.hazardClass.trim() : '')
-      || (typeof o.hinweis === 'string' && o.hinweis.trim() ? o.hinweis.trim() : '')
-      || '—';
-
     rows.push({
       name,
       casDisplay,
       hDisplay: formatCodeCellDisplay(hCodes),
       pDisplay: formatCodeCellDisplay(pCodes),
-      ghsDisplay: formatCodeCellDisplay(gCodes),
-      concentration,
-      classification,
+      ghsCodes: gCodes,
     });
   }
   return rows;
@@ -887,13 +904,11 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
           <table className="min-w-full table-fixed text-left text-[13px]">
             <thead className="bg-amber-50/90 text-[11px] font-bold uppercase tracking-wider text-slate-700">
               <tr>
-                <th className="px-3 py-2.5 w-[18%]">Stoff</th>
-                <th className="px-3 py-2.5 whitespace-nowrap w-[11%]">CAS</th>
-                <th className="px-3 py-2.5 w-[14%]">H</th>
-                <th className="px-3 py-2.5 w-[14%]">P</th>
-                <th className="px-3 py-2.5 w-[13%]">GHS</th>
-                <th className="px-3 py-2.5 w-[14%] whitespace-nowrap">Anteil&nbsp;/ Grenze</th>
-                <th className="px-3 py-2.5 w-[16%]">Hinweis</th>
+                <th className="px-3 py-2.5 w-[25%]">Material</th>
+                <th className="px-3 py-2.5 whitespace-nowrap w-[16%]">CAS-Nummer</th>
+                <th className="px-3 py-2.5 w-[19%]">GHS-Symbole</th>
+                <th className="px-3 py-2.5 w-[20%]">H-Sätze</th>
+                <th className="px-3 py-2.5 w-[20%]">P-Sätze</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -901,11 +916,15 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
                 <tr key={`${r.name}-${r.casDisplay}-${i}`} className="bg-white align-top">
                   <td className="px-3 py-2 font-semibold text-slate-900 break-words">{r.name}</td>
                   <td className="px-3 py-2 whitespace-nowrap font-mono text-[12px] text-slate-800">{r.casDisplay}</td>
+                  <td className="px-3 py-2">
+                    {r.ghsCodes.length > 0 ? (
+                      <GhsPictogramBadges codes={r.ghsCodes} />
+                    ) : (
+                      <span className="font-mono text-[12px] text-slate-500">—</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-slate-700 break-words text-[12px] leading-snug">{r.hDisplay}</td>
                   <td className="px-3 py-2 text-slate-700 break-words text-[12px] leading-snug">{r.pDisplay}</td>
-                  <td className="px-3 py-2 font-mono text-[12px] text-slate-800 break-words">{r.ghsDisplay}</td>
-                  <td className="px-3 py-2 text-slate-700 break-words text-[12px]">{r.concentration}</td>
-                  <td className="px-3 py-2 text-slate-600 break-words text-[12px] leading-snug">{r.classification}</td>
                 </tr>
               ))}
             </tbody>
@@ -1001,44 +1020,41 @@ function renderChemicalComposition(value: unknown) {
 
   const tableRows = extractSdsCompositionRows(inner);
   if (tableRows.length > 0) {
-    return renderSdsCompositionTable('Chemische Zusammensetzung', tableRows);
+    return renderChemicalCompositionTable(
+      'Chemische Zusammensetzung',
+      tableRows.map((row) => ({
+        material: row.stoffname,
+        percentage: row.konzentration,
+      })),
+    );
   }
 
   const entries = inner.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
 
-    const substance =
-      ('substance' in entry && typeof entry.substance === 'string' ? entry.substance.trim() : '')
-      || ('stoffname' in entry && typeof entry.stoffname === 'string' ? entry.stoffname.trim() : '')
+    const row = entry as Record<string, unknown>;
+    const material =
+      materialNameFromCompositionEntry(row)
+      || ('substance' in row && typeof row.substance === 'string' ? row.substance.trim() : '')
+      || ('stoffname' in row && typeof row.stoffname === 'string' ? row.stoffname.trim() : '')
       || undefined;
 
-    const casNumber =
-      ('casNumber' in entry && typeof entry.casNumber === 'string' ? entry.casNumber : undefined)
-      ?? ('casNummer' in entry && entry.casNummer !== null && typeof entry.casNummer === 'string'
-        ? entry.casNummer
-        : undefined);
-
     const pctFromStructured =
-      'prozentAnteil' in entry && typeof entry.prozentAnteil === 'string' && entry.prozentAnteil.trim()
-        ? entry.prozentAnteil.trim()
+      'prozentAnteil' in row && typeof row.prozentAnteil === 'string' && row.prozentAnteil.trim()
+        ? row.prozentAnteil.trim()
         : undefined;
-    const concentration = 'concentrationPercent' in entry ? formatPercentage(entry.concentrationPercent) : undefined;
+    const concentration =
+      'concentrationPercent' in row
+        ? formatPercentage(row.concentrationPercent)
+        : undefined;
+    const pct = pickMaterialCompositionPercent(row);
+    const percentage = pctFromStructured ?? concentration ?? (pct !== undefined ? formatPercentage(pct) : undefined);
 
-    const substanceFunction =
-      ('function' in entry && typeof entry.function === 'string' && entry.function.trim()
-        ? entry.function.trim()
-        : undefined)
-      ?? ('einstufung' in entry && entry.einstufung !== null && typeof entry.einstufung === 'string'
-        ? entry.einstufung.trim()
-        : undefined);
-
-    if (!substance) return [];
-
-    const details = [casNumber, pctFromStructured ?? concentration, substanceFunction].filter(Boolean).join(' · ');
+    if (!material) return [];
 
     return [{
-      title: substance,
-      details: details || undefined,
+      title: material,
+      details: percentage,
     }];
   });
 

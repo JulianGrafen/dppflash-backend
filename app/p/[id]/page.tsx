@@ -24,6 +24,7 @@ import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
 import { IsccPlusSection } from './IsccPlusSection';
+import { HumanReviewStatusBar } from './HumanReviewStatusBar';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
@@ -162,6 +163,24 @@ function HazardCodesField({
 function Pct({ label, value }: { label: string; value?: number }) {
   if (value === undefined) return null;
   return <Field label={label} value={`${value} %`} />;
+}
+
+function CarbonFootprintField({ label, value }: { readonly label: string; readonly value?: number }) {
+  const hasMeasuredValue = typeof value === 'number' && Number.isFinite(value) && value > 0;
+  return (
+    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
+      <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
+        {hasMeasuredValue ? (
+          <span>{value} kg CO₂e</span>
+        ) : (
+          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+            In Berechnung / Daten werden evaluiert
+          </span>
+        )}
+      </dd>
+    </div>
+  );
 }
 
 function formatPercentage(value: unknown): string | undefined {
@@ -504,10 +523,14 @@ function renderRecycledContent(value: unknown) {
 function renderCarbonFootprint(value: unknown) {
   if (!value || typeof value !== 'object') return null;
 
-  const entries = compactEntries([
+  const valueKgCo2e =
     'valueKgCo2e' in value && typeof value.valueKgCo2e === 'number'
-      ? { title: `${value.valueKgCo2e} kg CO₂e` }
-      : null,
+      ? value.valueKgCo2e
+      : undefined;
+  const entries = compactEntries([
+    valueKgCo2e !== undefined && valueKgCo2e > 0
+      ? { title: `${valueKgCo2e} kg CO₂e` }
+      : { title: 'In Berechnung / Daten werden evaluiert' },
     'lifecycleStage' in value && typeof value.lifecycleStage === 'string' && value.lifecycleStage
       ? { title: 'Lebenszyklusphase', details: value.lifecycleStage }
       : null,
@@ -553,11 +576,6 @@ function collectDistinctPStatements(...vals: unknown[]): string[] {
     chunks.push(normalizeHazardCodeCandidate(val));
   }
   return normalizePrecautionaryStatementCodeList(chunks);
-}
-
-/** Sammelt H-/P-/GHS-Kennungen aus deutsch/englisch benannten JSON-Feldern. */
-function collectDistinctHazardCodes(...vals: unknown[]): string[] {
-  return collectDistinctHStatements(...vals);
 }
 
 /** GHS-Piktogramme inkl. numerischer Codes (`05` → `GHS05`). */
@@ -802,7 +820,7 @@ function renderHazardousIngredientsTable(rows: readonly SubstanceOfConcernDispla
       <dt className="text-[13px] font-semibold leading-snug text-slate-800 sm:w-[38%] sm:shrink-0">
         Besorgniserregende / bedenkliche Stoffe{' '}
         <span className="block pt-0.5 text-[11px] font-normal uppercase tracking-wide text-slate-400">
-          Substances of concern · CAS · GHS · H/P
+          Bedenkliche Stoffe · CAS · GHS · H/P
         </span>
       </dt>
       <dd className="min-w-0 flex-1 text-[13px] text-slate-900 sm:max-w-[62%]">
@@ -1269,6 +1287,89 @@ function formatHumanVerificationLine(raw: Record<string, unknown>): string {
   return 'Abnahme erfasst — Zeitstempel fehlt in den Daten';
 }
 
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isManufacturerPresent(
+  raw: Record<string, unknown>,
+  p: EsprProductData,
+  manufacturerDisplayBlock: string,
+): boolean {
+  return Boolean(
+    manufacturerDisplayBlock.trim()
+    || p.hersteller.trim()
+    || p.manufacturer.name.trim()
+    || hasText(raw.hersteller)
+    || hasText(raw.Hersteller),
+  );
+}
+
+function isWarningStillRelevant(
+  warning: string,
+  raw: Record<string, unknown>,
+  p: EsprProductData,
+  manufacturerDisplayBlock: string,
+): boolean {
+  if (/(manufacturer|hersteller)/i.test(warning)) {
+    return !isManufacturerPresent(raw, p, manufacturerDisplayBlock);
+  }
+  if (/(model|modell)/i.test(warning)) {
+    return !p.modellname.trim() && !p.model.trim();
+  }
+  if (/(capacity|kapazit)/i.test(warning)) {
+    return p.capacityKwh === undefined;
+  }
+  if (/(chemistry|chemisches system)/i.test(warning)) {
+    return !p.chemistry?.trim();
+  }
+  if (/(carbon footprint|co2|co₂|fußabdruck)/i.test(warning)) {
+    return !(typeof p.carbonFootprint.totalKg === 'number' && p.carbonFootprint.totalKg > 0)
+      && !(typeof p.carbonFootprint.perKwhKg === 'number' && p.carbonFootprint.perKwhKg > 0);
+  }
+  return true;
+}
+
+function localizeDataQualityWarning(warning: string): string {
+  const trimmed = warning.trim();
+  const lower = trimmed.toLowerCase();
+  if (/manufacturer.*missing|manufacturer details are missing/.test(lower)) {
+    return 'Herstellerangaben fehlen oder konnten nicht eindeutig aus dem Dokument übernommen werden.';
+  }
+  if (/mandatory espr field "([^"]+)" is missing/.test(lower)) {
+    const field = trimmed.match(/"([^"]+)"/)?.[1] ?? 'ein Pflichtfeld';
+    return `Pflichtfeld fehlt und muss manuell geprüft werden: ${field}.`;
+  }
+  if (/carbon footprint is missing/.test(lower)) {
+    return 'CO₂-Fußabdruck fehlt; eine manuelle ESPR-Prüfung wird empfohlen.';
+  }
+  if (/carbon footprint must/.test(lower)) {
+    return 'CO₂-Fußabdruck muss als plausibler, nicht negativer kg-CO₂e-Wert vorliegen.';
+  }
+  if (/added synthetic filler entry/.test(lower)) {
+    return 'Materialbilanz wurde mit einem rechnerischen Restanteil ergänzt; bitte Zusammensetzung prüfen.';
+  }
+  if (lower.includes('missing')) {
+    return trimmed
+      .replace(/missing/gi, 'fehlt')
+      .replace(/manual review is recommended/gi, 'manuelle Prüfung empfohlen')
+      .replace(/requires manual completion/gi, 'muss manuell ergänzt werden');
+  }
+  return trimmed;
+}
+
+function buildDataQualityWarnings(
+  raw: Record<string, unknown>,
+  p: EsprProductData,
+  manufacturerDisplayBlock: string,
+): string[] {
+  const warnings = p.extractionWarnings
+    .filter((warning) => isWarningStillRelevant(warning, raw, p, manufacturerDisplayBlock))
+    .map(localizeDataQualityWarning)
+    .filter((warning) => warning.length > 0);
+  return [...new Set(warnings)];
+}
+
 function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData): string {
   const candidateValues = [
     raw.productName,
@@ -1444,12 +1545,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     extractionWarnings:   asStringArray(raw.extractionWarnings),
   };
 
-  const hasWarnings = p.extractionWarnings.length > 0;
   const expiryYear = new Date(p.createdAt).getFullYear() + 15;
   const displayProductName = readDisplayProductName(raw, p);
 
   const manufacturerPublication = resolveManufacturerPublication(raw, p);
   const manufacturerDisplayBlock = manufacturerPublication.displayText;
+  const dataQualityWarnings = buildDataQualityWarnings(raw, p, manufacturerDisplayBlock);
+  const hasWarnings = dataQualityWarnings.length > 0;
 
   const chemicalCompositionSankey = tryChemicalCompositionToSankey(
     raw.chemicalComposition,
@@ -1544,7 +1646,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               <div>
                 <p className="text-sm font-semibold mb-1">Hinweise zur Datenqualität</p>
                 <ul className="text-sm space-y-0.5">
-                  {p.extractionWarnings.map((w, i) => (
+                  {dataQualityWarnings.map((w, i) => (
                     <li key={i}>• {w}</li>
                   ))}
                 </ul>
@@ -1615,6 +1717,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               }
             />
           ) : null}
+          <HumanReviewStatusBar />
           <Field label="Verifiziert durch · Human Review" value={formatHumanVerificationLine(raw)} />
           <ReviewField
             label="Ursprungsland"
@@ -1629,7 +1732,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Erstellt am"       value={new Date(p.createdAt).toLocaleDateString('de-DE')} />
         </Section>
 
-        {/* ── Technical spec ── */}
+        {/* ── Technische Spezifikation ── */}
         <Section>
           <Field label="Kapazität"       value={p.capacityKwh !== undefined ? `${p.capacityKwh} kWh` : undefined} />
           <Field label="Chemisches System" value={p.chemistry} />
@@ -1688,12 +1791,15 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           />
         </Section>
 
-        <RagProvenanceSection ragEnrichment={raw.ragEnrichment} />
+        <RagProvenanceSection
+          ragEnrichment={raw.ragEnrichment}
+          attachments={raw.attachments ?? raw.downloadableDocuments ?? raw.sourceDocuments}
+        />
 
         {/* ── Carbon footprint (Art. 7) ── */}
         <Section>
-          <Field label="Gesamt (kg CO₂e)"   value={p.carbonFootprint.totalKg} />
-          <Field label="Pro kWh (kg CO₂e)"  value={p.carbonFootprint.perKwhKg} />
+          <CarbonFootprintField label="Gesamt" value={p.carbonFootprint.totalKg} />
+          <CarbonFootprintField label="Pro kWh" value={p.carbonFootprint.perKwhKg} />
           <Field label="Methodik"            value={p.carbonFootprint.methodology} />
           <Field label="Zertifizierer"       value={p.carbonFootprint.certificationBody} />
         </Section>
@@ -1736,7 +1842,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
       </main>
 
       <footer className="mt-4 border-t border-slate-200/90 bg-[#0c1929] px-6 py-12 text-center text-sm text-slate-400">
-        <p className="font-semibold tracking-wide text-slate-300">Digital Product Pass</p>
+        <p className="font-semibold tracking-wide text-slate-300">Digitaler Produktpass</p>
         <p className="mt-2 text-xs leading-relaxed text-slate-500">
           Datenverfügbarkeit garantiert bis {expiryYear} gemäß EU-Verordnung.
           <span className="mx-2 text-slate-600">·</span>

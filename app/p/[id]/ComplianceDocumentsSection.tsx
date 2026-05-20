@@ -11,7 +11,7 @@ function documentTypeLabel(type: string): string {
     case 'technical_brief':
       return 'Technisches Merkblatt';
     case 'rohs_confirmation':
-      return 'RoHS Confirmation';
+      return 'RoHS-Bestätigung';
     case 'regulatory_data_sheet':
       return 'Regulatorisches Datenblatt';
     case 'compliance_pdf':

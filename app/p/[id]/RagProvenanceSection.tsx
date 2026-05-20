@@ -1,4 +1,5 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
+import { parseComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
 import { ChevronDown, FileSearch } from 'lucide-react';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -19,14 +20,76 @@ function isAuditedValue(v: unknown): v is AuditedValue {
   );
 }
 
-function formatAuditedValue(entry: AuditedValue): string {
-  if (entry.value === null) {
-    return '— (null)';
+function pickDisplayName(value: Record<string, unknown>): string | undefined {
+  for (const key of ['stoffname', 'name', 'material', 'substance', 'component', 'title'] as const) {
+    const candidate = value[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
   }
-  return String(entry.value);
+  return undefined;
 }
 
-export function RagProvenanceSection({ ragEnrichment }: { readonly ragEnrichment: unknown }) {
+function formatStructuredValue(value: unknown): string {
+  if (value === null) {
+    return '— (null)';
+  }
+  if (Array.isArray(value)) {
+    const items = value.flatMap((item) => {
+      if (item === null || item === undefined) {
+        return [];
+      }
+      if (typeof item === 'string' || typeof item === 'number') {
+        return [String(item)];
+      }
+      if (isRecord(item)) {
+        return [pickDisplayName(item) ?? JSON.stringify(item)];
+      }
+      return [String(item)];
+    });
+    return items.length > 0 ? items.join(', ') : '—';
+  }
+  if (isRecord(value)) {
+    return pickDisplayName(value) ?? JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function resolveSourceUrl(entry: AuditedValue, attachments: unknown): string | undefined {
+  const source = entry.source as Record<string, unknown>;
+  const directUrl =
+    typeof source.url === 'string' && source.url.trim()
+      ? source.url.trim()
+      : typeof source.publicUrl === 'string' && source.publicUrl.trim()
+        ? source.publicUrl.trim()
+        : undefined;
+  if (directUrl) {
+    return directUrl;
+  }
+
+  const docs = parseComplianceSourceDocuments(attachments);
+  const fileName = entry.source.fileName.toLowerCase();
+  const normalizedFileName = fileName.replace(/[^a-z0-9]/g, '');
+  return docs.find((doc) => {
+    const title = doc.title.toLowerCase();
+    const url = doc.url.toLowerCase();
+    const normalizedTitle = title.replace(/[^a-z0-9]/g, '');
+    const normalizedUrl = url.replace(/[^a-z0-9]/g, '');
+    return fileName.includes(title)
+      || title.includes(fileName)
+      || url.includes(fileName)
+      || (normalizedFileName.length > 0 && normalizedUrl.includes(normalizedFileName))
+      || (normalizedTitle.length > 0 && normalizedFileName.includes(normalizedTitle));
+  })?.url;
+}
+
+export function RagProvenanceSection({
+  ragEnrichment,
+  attachments,
+}: {
+  readonly ragEnrichment: unknown;
+  readonly attachments?: unknown;
+}) {
   if (!isRecord(ragEnrichment)) {
     return null;
   }
@@ -142,11 +205,26 @@ export function RagProvenanceSection({ ragEnrichment }: { readonly ragEnrichment
                   {entry.requiresManualReview ? ' · manuelle Prüfung' : ''}
                 </span>
               </div>
-              <p className="break-words text-[13px] font-semibold text-slate-900">{formatAuditedValue(entry)}</p>
+              <p className="break-words text-[13px] font-semibold text-slate-900">
+                {formatStructuredValue(entry.value)}
+              </p>
               <dl className="grid gap-1 text-xs text-slate-600">
                 <div>
                   <dt className="inline text-slate-500">Quelle:</dt>{' '}
-                  <dd className="inline font-medium text-slate-800">{entry.source.fileName}</dd>
+                  <dd className="inline font-medium text-slate-800">
+                    {resolveSourceUrl(entry, attachments) ? (
+                      <a
+                        href={resolveSourceUrl(entry, attachments)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline decoration-slate-300 underline-offset-2 hover:text-sky-700"
+                      >
+                        {entry.source.fileName}
+                      </a>
+                    ) : (
+                      entry.source.fileName
+                    )}
+                  </dd>
                   <span className="text-slate-400"> · </span>
                   <dd className="inline">Seite {entry.source.pageNumber}</dd>
                 </div>

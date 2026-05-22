@@ -281,6 +281,11 @@ function dedupeManufacturerPhoneLines(displayText: string): string {
   return result.join('\n');
 }
 
+function stripAllPhoneContactLines(displayText: string): string {
+  const lines = displayText.split('\n').map((line) => line.trim()).filter(Boolean);
+  return lines.filter((line) => !isPhoneContactLine(line)).join('\n');
+}
+
 function normalizeManufacturerLineBreaks(lines: readonly string[]): string[] {
   const normalized: string[] = [];
 
@@ -504,22 +509,6 @@ function appendStructuredManufacturerContacts(
   const rec = asRecord(raw.manufacturer);
   const contactLines: string[] = [];
 
-  const tel = formatTelDisplay(
-    manufacturerView.phone
-    ?? pickFirstStringFromRecord(rec, [
-      'phone',
-      'telephone',
-      'tel',
-      'Telefon',
-      'telefon',
-      'phoneNumber',
-    ])
-    ?? pickFirstStringFromRecord(raw, ['telefon', 'Telefon', 'phone', 'manufacturerPhone']),
-  );
-  if (tel && !manufacturerTextIncludesPhone(displayText)) {
-    contactLines.push(tel);
-  }
-
   const fax = pickFirstStringFromRecord(rec, ['fax', 'Fax', 'Telefax']);
   if (fax && !/^(?:fax|telefax):/i.test(fax)) {
     contactLines.push(`Fax: ${fax}`);
@@ -653,11 +642,6 @@ function formatManufacturerRichText(
     lines.push(manufacturerView.country.trim());
   }
 
-  const tel = formatTelDisplay(manufacturerView.phone ?? phoneFromRec);
-  if (tel) {
-    lines.push(tel);
-  }
-
   const email = manufacturerView.email?.trim() ?? emailFromRec;
   if (email) {
     lines.push(email);
@@ -716,9 +700,11 @@ export function resolveManufacturerPublication(
 
   const withoutDefault = dedupeManufacturerLines(
     dedupeManufacturerPhoneLines(
-      coalesceManufacturerPhoneLines(
-        polishManufacturerDisplayText(
-          appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+      stripAllPhoneContactLines(
+        coalesceManufacturerPhoneLines(
+          polishManufacturerDisplayText(
+            appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+          ),
         ),
       ),
     ),

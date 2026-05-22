@@ -1975,6 +1975,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderCareRepairDurability(raw.careRepairDurability)}
         </Section>
 
+        <ComplianceDocumentsSection attachments={complianceAttachments} />
+
         <RagProvenanceSection
           ragEnrichment={raw.ragEnrichment}
           attachments={raw.attachments ?? raw.downloadableDocuments ?? raw.sourceDocuments}
@@ -2029,8 +2031,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <Field label="Rechtliche Hinweise"    value={p.legalNotes} />
           <Field label="Lieferkette"            value={p.supplyChainInfo} />
         </Section>
-
-        <ComplianceDocumentsSection attachments={complianceAttachments} />
 
       </main>
 

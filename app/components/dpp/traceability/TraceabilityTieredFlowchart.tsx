@@ -20,10 +20,10 @@ type HoverState =
   | { readonly kind: 'flow'; readonly flow: LayoutFlow }
   | null;
 
-const HEADER_HEIGHT = 72;
-const LINE_HEIGHT = 13;
-const PERCENT_LINE_HEIGHT = 12;
-const MIN_BAND_VISUAL = 32;
+const HEADER_HEIGHT = 56;
+const LINE_HEIGHT = 12;
+const PERCENT_LINE_HEIGHT = 11;
+const MIN_BAND_VISUAL = 12;
 
 const GRADIENT_COLUMNS = {
   tier1BarEnd: 288 + 32,
@@ -182,7 +182,7 @@ export function TraceabilityTieredFlowchart({ model, className = '' }: Traceabil
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label="Rückverfolgbarkeits-Materialfluss mit Herkunftsstufe"
-          className="h-auto w-full min-w-[920px]"
+          className="h-auto max-h-[360px] w-full min-w-[880px]"
         >
           <defs>
             {layout.flows.map((flow) => (
@@ -207,9 +207,9 @@ export function TraceabilityTieredFlowchart({ model, className = '' }: Traceabil
             <text
               key={column.label}
               x={column.x}
-              y={46}
+              y={38}
               fill="#475569"
-              fontSize={10}
+              fontSize={9}
               fontWeight={700}
               letterSpacing="0.14em"
               style={{ textTransform: 'uppercase' }}

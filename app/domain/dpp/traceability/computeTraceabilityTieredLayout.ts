@@ -41,11 +41,13 @@ export type TraceabilityTieredLayout = {
 };
 
 const VIEWBOX_WIDTH = 1180;
-const HEADER_HEIGHT = 72;
-const CHART_TOP = 96;
-const MIN_BAND_HEIGHT = 32;
-const BAND_GAP = 8;
-const BASE_STACK_HEIGHT = 400;
+const HEADER_HEIGHT = 56;
+const CHART_TOP = 68;
+const MIN_BAND_HEIGHT = 12;
+const MIN_BAND_HEIGHT_STRICT = 28;
+const BAND_GAP = 5;
+const BASE_STACK_HEIGHT = 280;
+const MAX_STACK_HEIGHT = 320;
 
 const COLUMNS = {
   tier1Label: { x: 12, width: 268 },
@@ -122,51 +124,85 @@ function stackHeightFromBandMap(
   return body + Math.max(0, nodes.length - 1) * BAND_GAP;
 }
 
+function fitHeightsToStack(
+  nodes: readonly { readonly id: string }[],
+  heightsById: Map<string, number>,
+  stackHeight: number,
+): Map<string, number> {
+  const gaps = Math.max(0, nodes.length - 1) * BAND_GAP;
+  const targetBody = stackHeight - gaps;
+  const currentBody = nodes.reduce((sum, node) => sum + (heightsById.get(node.id) ?? MIN_BAND_HEIGHT), 0);
+  if (currentBody <= 0 || Math.abs(currentBody - targetBody) < 0.01) {
+    return heightsById;
+  }
+
+  const scale = targetBody / currentBody;
+  const fitted = new Map<string, number>();
+  for (const node of nodes) {
+    fitted.set(node.id, (heightsById.get(node.id) ?? MIN_BAND_HEIGHT) * scale);
+  }
+  return fitted;
+}
+
 function resolveSharedStackHeight(
   tier1: readonly { readonly id: string; readonly sharePercent: number }[],
   tier2: readonly { readonly id: string; readonly sharePercent: number }[],
   totalPercent: number,
 ): { readonly stackHeight: number; readonly tier1Heights: Map<string, number>; readonly tier2Heights: Map<string, number> } {
   let stackHeight = BASE_STACK_HEIGHT;
-  let tier1Heights = computeTierBandHeights(tier1, totalPercent, stackHeight);
-  let tier2Heights = computeTierBandHeights(tier2, totalPercent, stackHeight);
 
   for (let iteration = 0; iteration < 64; iteration += 1) {
-    tier1Heights = computeTierBandHeights(tier1, totalPercent, stackHeight);
-    tier2Heights = computeTierBandHeights(tier2, totalPercent, stackHeight);
+    const tier1Heights = computeTierBandHeights(tier1, totalPercent, stackHeight);
+    const tier2Heights = computeTierBandHeights(tier2, totalPercent, stackHeight);
     const nextHeight = Math.max(
       stackHeightFromBandMap(tier1, tier1Heights),
       stackHeightFromBandMap(tier2, tier2Heights),
     );
 
     if (nextHeight <= stackHeight + 0.001) {
-      return {
-        stackHeight: nextHeight,
-        tier1Heights: computeTierBandHeights(tier1, totalPercent, nextHeight),
-        tier2Heights: computeTierBandHeights(tier2, totalPercent, nextHeight),
-      };
+      stackHeight = nextHeight;
+      break;
     }
 
     stackHeight = nextHeight;
   }
 
-  tier1Heights = computeTierBandHeights(tier1, totalPercent, stackHeight);
-  tier2Heights = computeTierBandHeights(tier2, totalPercent, stackHeight);
-  return {
-    stackHeight: Math.max(
+  if (stackHeight > MAX_STACK_HEIGHT) {
+    stackHeight = MAX_STACK_HEIGHT;
+    return {
       stackHeight,
-      stackHeightFromBandMap(tier1, tier1Heights),
-      stackHeightFromBandMap(tier2, tier2Heights),
-    ),
-    tier1Heights,
-    tier2Heights,
-  };
+      tier1Heights: fitHeightsToStack(
+        tier1,
+        computeTierBandHeights(tier1, totalPercent, stackHeight, MIN_BAND_HEIGHT),
+        stackHeight,
+      ),
+      tier2Heights: fitHeightsToStack(
+        tier2,
+        computeTierBandHeights(tier2, totalPercent, stackHeight, MIN_BAND_HEIGHT),
+        stackHeight,
+      ),
+    };
+  }
+
+  const tier1Heights = fitHeightsToStack(
+    tier1,
+    computeTierBandHeights(tier1, totalPercent, stackHeight),
+    stackHeight,
+  );
+  const tier2Heights = fitHeightsToStack(
+    tier2,
+    computeTierBandHeights(tier2, totalPercent, stackHeight),
+    stackHeight,
+  );
+
+  return { stackHeight, tier1Heights, tier2Heights };
 }
 
 function computeTierBandHeights(
   nodes: readonly { readonly id: string; readonly sharePercent: number }[],
   totalPercent: number,
   columnHeight: number,
+  minBandHeight = MIN_BAND_HEIGHT_STRICT,
 ): Map<string, number> {
   const gaps = Math.max(0, nodes.length - 1) * BAND_GAP;
   const available = columnHeight - gaps;
@@ -175,7 +211,7 @@ function computeTierBandHeights(
   for (const node of nodes) {
     heightsById.set(
       node.id,
-      Math.max(MIN_BAND_HEIGHT, (node.sharePercent / totalPercent) * available),
+      Math.max(minBandHeight, (node.sharePercent / totalPercent) * available),
     );
   }
 
@@ -389,7 +425,7 @@ export function computeTraceabilityTieredLayout(
     }];
   });
 
-  const viewBoxHeight = CHART_TOP + stackHeight + 32;
+  const viewBoxHeight = CHART_TOP + stackHeight + 16;
 
   return {
     viewBoxWidth: VIEWBOX_WIDTH,

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { DPPFactory } from '../../services/dppFormService';
 import { ProductPassport } from '../../types/dpp-types';
 import QRCodeDisplay from '../../components/QRCodeDisplay';
-import { AlertCircle, ChevronLeft, Clock, Upload, File } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronLeft, Clock, ExternalLink, File, FileUp, Loader2, Upload } from 'lucide-react';
+import Link from 'next/link';
 
 function captureProcessingDuration(
   startedAt: number | null,
@@ -26,6 +27,120 @@ function formatProcessingDuration(seconds: number): string {
     return `${minutes} Minute${minutes === 1 ? '' : 'n'}`;
   }
   return `${minutes} Min. ${rest} Sek.`;
+}
+
+type CreateStep = 'select' | 'pdf-upload' | 'form' | 'result';
+
+const INPUT_CLASS =
+  'w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100';
+
+const CARD_CLASS =
+  'overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]';
+
+function CreateDashboardShell({
+  children,
+  title,
+  subtitle,
+  onBack,
+}: {
+  readonly children: React.ReactNode;
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly onBack?: () => void;
+}) {
+  return (
+    <div className="min-h-screen bg-[#eef1f8] pb-10">
+      <nav className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/90 shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0c1929] text-[11px] font-bold leading-none text-white">
+              DPP
+            </span>
+            <span className="text-sm font-bold tracking-tight text-[#0c1929]">
+              flash <span className="font-normal text-slate-400">· Dashboard</span>
+            </span>
+          </div>
+          <Link
+            href="/dashboard/rag-ingest"
+            className="text-xs font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
+          >
+            RAG-Wissensbasis
+          </Link>
+        </div>
+      </nav>
+
+      <div className="mx-auto max-w-3xl px-4 pt-8 sm:px-6">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-5 inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 transition hover:text-[#0c1929]"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden />
+            Zurück
+          </button>
+        ) : null}
+
+        <header className="mb-6">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Digitaler Produktpass</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#0c1929] sm:text-3xl">{title}</h1>
+          {subtitle ? <p className="mt-2 text-sm text-slate-600">{subtitle}</p> : null}
+        </header>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CreateStepIndicator({ step }: { readonly step: CreateStep }) {
+  const activeIndex = step === 'select' || step === 'pdf-upload' ? 0 : step === 'form' ? 1 : 2;
+  const steps = ['PDF hochladen', 'Daten prüfen', 'Fertig'] as const;
+
+  return (
+    <ol className="mb-6 flex items-center gap-2">
+      {steps.map((label, index) => {
+        const isActive = index === activeIndex;
+        const isDone = index < activeIndex;
+        return (
+          <li key={label} className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className={[
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                isDone
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : isActive
+                    ? 'bg-[#0c1929] text-white'
+                    : 'bg-slate-100 text-slate-500',
+              ].join(' ')}
+            >
+              {isDone ? '✓' : index + 1}
+            </span>
+            <span
+              className={[
+                'truncate text-xs font-semibold',
+                isActive ? 'text-[#0c1929]' : 'text-slate-500',
+              ].join(' ')}
+            >
+              {label}
+            </span>
+            {index < steps.length - 1 ? (
+              <span className="mx-1 hidden h-px flex-1 bg-slate-200 sm:block" aria-hidden />
+            ) : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function ErrorBanner({ message }: { readonly message: string }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />
+      <p>{message}</p>
+    </div>
+  );
 }
 
 export default function CreateDashboard() {
@@ -268,325 +383,242 @@ export default function CreateDashboard() {
 
   // ============= RENDER LOGIC =============
 
-  // STEP 1: SELECT CATEGORY
+  // STEP 1: SELECT
   if (step === 'select') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Neuen Produktpass erstellen
-            </h1>
-            <p className="text-gray-600">
-              PDF hochladen und Produktpass erstellen
-            </p>
-            <p className="text-sm mt-3">
-              <a
-                href="/dashboard/rag-ingest"
-                className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
-              >
-                RAG-Wissensbasis mit PDFs befüllen
-              </a>
-              <span className="text-gray-500"> — mehrere Zulieferer-Dokumente für Compliance-RAG indexieren</span>
-            </p>
+      <CreateDashboardShell
+        title="Neuen Produktpass erstellen"
+        subtitle="PDF hochladen — die KI extrahiert Produktdaten und startet den Compliance-Scan automatisch."
+      >
+        <CreateStepIndicator step={step} />
+
+        <div className={CARD_CLASS}>
+          <div className="border-b border-slate-100 bg-[#0c1929] px-5 py-4 text-white">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+                <FileUp className="h-5 w-5 text-sky-300" strokeWidth={1.75} aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-[15px] font-semibold tracking-tight">PDF hochladen</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  Schritt 1 von 3
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div
-            className="border-2 border-dashed border-purple-300 rounded-xl p-10 text-center bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer"
-            onClick={() => {
-              const input = document.getElementById('pdf-upload');
-              if (input instanceof HTMLInputElement) input.click();
-            }}
-          >
-            <Upload className="w-12 h-12 text-purple-500 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-900 mb-2">
-              PDF hochladen und Produktpass erstellen
-            </h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Laden Sie ein PDF hoch — die KI extrahiert die Produktdaten automatisch.
-            </p>
-            <div className="inline-block px-4 py-2 bg-purple-500 text-white rounded-lg font-medium text-sm">
-              PDF-Datei auswählen
-            </div>
-            <input
-              id="pdf-upload"
-              type="file"
-              accept=".pdf"
-              onChange={(e) => {
-                if (e.target.files?.[0]) {
-                  handlePdfUpload(e.target.files[0]);
-                }
-              }}
-              className="hidden"
-            />
-            <p className="text-xs text-gray-500 mt-4">
-              Max. 10 MB | Nur PDF
-            </p>
+          <div className="p-6">
+            <label
+              htmlFor="pdf-upload"
+              className="flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/80 px-6 py-10 text-center transition hover:border-sky-300 hover:bg-sky-50/40"
+            >
+              <Upload className="mb-3 h-10 w-10 text-sky-600" strokeWidth={1.75} aria-hidden />
+              <span className="text-sm font-semibold text-[#0c1929]">PDF-Datei auswählen</span>
+              <span className="mt-1 text-xs text-slate-500">Max. 10 MB · nur PDF</span>
+              <input
+                id="pdf-upload"
+                type="file"
+                accept=".pdf"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handlePdfUpload(e.target.files[0]);
+                  }
+                }}
+                className="hidden"
+              />
+            </label>
           </div>
-
-          {errorMessage && (
-            <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-800">{errorMessage}</p>
-            </div>
-          )}
         </div>
-      </div>
+
+        {errorMessage ? <div className="mt-4"><ErrorBanner message={errorMessage} /></div> : null}
+      </CreateDashboardShell>
     );
   }
 
   // STEP 1b: PDF UPLOAD WITH LOADING
   if (step === 'pdf-upload') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 p-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              PDF wird verarbeitet
-            </h1>
-            <p className="text-gray-600">
-              Bitte warten Sie, während die KI die Daten extrahiert…
-            </p>
-          </div>
+      <CreateDashboardShell
+        title="PDF wird verarbeitet"
+        subtitle="Bitte warten Sie, während die KI die Daten extrahiert."
+        onBack={handleGoBack}
+      >
+        <CreateStepIndicator step={step} />
 
-          <div className="mt-8 rounded-2xl border-2 border-purple-200 bg-white px-8 py-6 text-center shadow-lg">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-600">
-              Verstrichene Zeit
-            </p>
-            <p
-              className="text-7xl font-bold leading-none text-purple-700 tabular-nums"
-              aria-live="polite"
-              aria-atomic="true"
-            >
+        <div className={`${CARD_CLASS} p-6`}>
+          <div className="flex flex-col items-center text-center">
+            <Loader2 className="mb-4 h-10 w-10 animate-spin text-sky-600" aria-hidden />
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Verstrichene Zeit</p>
+            <p className="mt-1 text-5xl font-bold tabular-nums text-[#0c1929]" aria-live="polite" aria-atomic="true">
               {processingElapsedSeconds}
-              <span className="ml-2 text-3xl font-semibold text-purple-500">s</span>
+              <span className="ml-1 text-2xl font-semibold text-slate-500">s</span>
             </p>
-          </div>
 
-          <div className="mt-6 bg-white rounded-xl shadow-lg p-8">
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-6"></div>
-              
-              {uploadedFile && (
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <File className="w-5 h-5 text-gray-600" />
-                    <p className="text-gray-700 font-medium">{uploadedFile.name}</p>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+            {uploadedFile ? (
+              <div className="mt-6 w-full rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-left">
+                <div className="flex items-center gap-2">
+                  <File className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                  <p className="truncate text-sm font-medium text-slate-800">{uploadedFile.name}</p>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {errorMessage && (
-            <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-red-800 font-medium">Fehler beim Upload</p>
-                <p className="text-red-700 text-sm mt-1">{errorMessage}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('select');
-                  setErrorMessage(null);
-                  setUploadedFile(null);
-                }}
-                className="ml-auto px-3 py-1 bg-red-200 hover:bg-red-300 rounded text-red-800 text-sm font-medium cursor-pointer"
-              >
-                Zurück
-              </button>
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
-      </div>
+
+        {errorMessage ? (
+          <div className="mt-4 space-y-3">
+            <ErrorBanner message={errorMessage} />
+            <button
+              type="button"
+              onClick={() => {
+                setStep('select');
+                setErrorMessage(null);
+                setUploadedFile(null);
+              }}
+              className="text-sm font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
+            >
+              Erneut versuchen
+            </button>
+          </div>
+        ) : null}
+      </CreateDashboardShell>
     );
   }
 
   // STEP 2: FORM EDITING
   if (step === 'form' && dpp) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
-        <div className="max-w-2xl mx-auto">
-          {/* Header with back button */}
-          <div className="flex items-center gap-4 mb-8">
-            <button
-              type="button"
-              onClick={handleGoBack}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/50 transition-colors cursor-pointer font-medium"
-            >
-              <ChevronLeft className="w-5 h-5" />
-              Zurück
-            </button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {dpp.type === 'BATTERY' ? '🔋 Batterie' : '👕 Textil'} bearbeiten
-              </h1>
-              <p className="text-gray-600">Schritt 2 von 3: Daten eingeben</p>
-            </div>
-          </div>
+      <CreateDashboardShell
+        title="Daten ergänzen"
+        subtitle="Einige Pflichtfelder konnten nicht vollständig erkannt werden."
+        onBack={handleGoBack}
+      >
+        <CreateStepIndicator step={step} />
 
-          <div className="bg-white rounded-xl shadow-lg p-8 space-y-6">
-            {/* Product Type Badge */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Produkttyp
-              </label>
-              <div className="inline-block px-4 py-2 bg-blue-100 text-blue-800 rounded-lg font-medium">
-                {dpp.type}
-              </div>
+        <div className={CARD_CLASS}>
+          <div className="space-y-5 p-6">
+            <div className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+              Produkttyp: {dpp.type}
             </div>
 
-            {/* Extracted Data Info */}
-            {extractedData && Number(extractedData.confidence) > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-blue-900 mb-1">
-                      📄 Daten aus PDF extrahiert
-                    </p>
-                    <div className="flex items-center gap-2 text-sm text-blue-800">
-                      <div className="flex-1 bg-blue-200 rounded-full h-2 max-w-xs">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${Math.min(extractedData.confidence * 100, 100)}%` }}
-                        ></div>
-                      </div>
-                      <span className="font-semibold">
-                        {Math.round(extractedData.confidence * 100)}% Genauigkeit
-                      </span>
-                    </div>
+            {extractedData && Number(extractedData.confidence) > 0 ? (
+              <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-4 py-3">
+                <p className="text-sm font-semibold text-sky-950">Daten aus PDF extrahiert</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-2 flex-1 max-w-xs rounded-full bg-sky-200">
+                    <div
+                      className="h-2 rounded-full bg-sky-600"
+                      style={{ width: `${Math.min(extractedData.confidence * 100, 100)}%` }}
+                    />
                   </div>
+                  <span className="text-xs font-semibold text-sky-900">
+                    {Math.round(extractedData.confidence * 100)} %
+                  </span>
                 </div>
-                {extractedData.warnings && extractedData.warnings.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-blue-200">
-                    <p className="text-xs font-medium text-blue-800 mb-1">⚠️ Hinweise:</p>
-                    <ul className="space-y-1">
-                      {extractedData.warnings.map((warning: string, i: number) => (
-                        <li key={i} className="text-xs text-blue-700">
-                          • {warning}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
-            )}
+            ) : null}
 
-            {/* Hersteller */}
             <div>
-              <label htmlFor="hersteller" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="hersteller" className="mb-1.5 block text-sm font-medium text-slate-700">
                 Hersteller *
               </label>
               <input
                 id="hersteller"
                 type="text"
-                placeholder="z.B. Tesla Inc."
+                placeholder="z. B. Henkel AG & Co. KGaA"
                 value={dpp.hersteller || ''}
                 onChange={(e) => handleFieldChange('hersteller', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                className={INPUT_CLASS}
               />
             </div>
 
-            {/* Modellname */}
             <div>
-              <label htmlFor="modellname" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label htmlFor="modellname" className="mb-1.5 block text-sm font-medium text-slate-700">
                 Modellname *
               </label>
               <input
                 id="modellname"
                 type="text"
-                placeholder="z.B. Model 3 LFP 75"
+                placeholder="z. B. Modell XY"
                 value={dpp.modellname || ''}
                 onChange={(e) => handleFieldChange('modellname', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                className={INPUT_CLASS}
               />
             </div>
 
-            {/* BATTERY Form Fields */}
-            {dpp.type === 'BATTERY' && (
+            {dpp.type === 'BATTERY' ? (
               <>
                 <div>
-                  <label htmlFor="kapazitaetKWh" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="kapazitaetKWh" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Kapazität (kWh) *
                   </label>
                   <input
                     id="kapazitaetKWh"
                     type="number"
-                    placeholder="z.B. 75"
+                    placeholder="z. B. 75"
                     value={(dpp as any).kapazitaetKWh || ''}
                     onChange={(e) => handleFieldChange('kapazitaetKWh', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    className={INPUT_CLASS}
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="chemischesSystem" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="chemischesSystem" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Chemisches System *
                   </label>
                   <input
                     id="chemischesSystem"
                     type="text"
-                    placeholder="z.B. Lithium-Ionen (NMC)"
+                    placeholder="z. B. Lithium-Ionen (NMC)"
                     value={(dpp as any).chemischesSystem || ''}
                     onChange={(e) => handleFieldChange('chemischesSystem', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </>
-            )}
+            ) : null}
 
-            {/* TEXTILE Form Fields */}
-            {dpp.type === 'TEXTILE' && (
+            {dpp.type === 'TEXTILE' ? (
               <>
                 <div>
-                  <label htmlFor="materialZusammensetzung" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="materialZusammensetzung" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Materialzusammensetzung *
                   </label>
                   <input
                     id="materialZusammensetzung"
                     type="text"
-                    placeholder="z.B. 100% Baumwolle"
+                    placeholder="z. B. 100 % Baumwolle"
                     value={(dpp as any).materialZusammensetzung || ''}
                     onChange={(e) => handleFieldChange('materialZusammensetzung', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                    className={INPUT_CLASS}
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="herkunftsland" className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label htmlFor="herkunftsland" className="mb-1.5 block text-sm font-medium text-slate-700">
                     Herkunftsland *
                   </label>
                   <input
                     id="herkunftsland"
                     type="text"
-                    placeholder="z.B. Deutschland"
+                    placeholder="z. B. Deutschland"
                     value={(dpp as any).herkunftsland || ''}
                     onChange={(e) => handleFieldChange('herkunftsland', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </>
-            )}
+            ) : null}
 
-            {/* Error Message */}
-            {errorMessage && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-red-800">{errorMessage}</p>
-              </div>
-            )}
+            {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
 
-            {/* Action Buttons */}
-            <div className="flex gap-4 pt-4 border-t">
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row">
               <button
                 type="button"
                 onClick={handleGoBack}
                 disabled={isLoading}
-                className="px-6 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-50"
+                className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
               >
                 Abbrechen
               </button>
@@ -594,156 +626,120 @@ export default function CreateDashboard() {
                 type="button"
                 onClick={handleSave}
                 disabled={isLoading}
-                className="flex-1 px-6 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0c1929] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
-                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                    Speichern...
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Speichern…
                   </>
                 ) : (
-                  'Weiter zum QR-Code'
+                  'Produktpass erstellen'
                 )}
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </CreateDashboardShell>
     );
   }
 
   // STEP 3: RESULT with QR CODE
   if (step === 'result' && dpp) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 p-8">
-        <div className="max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="text-6xl mb-4">✅</div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Erfolgreich erstellt!
-            </h1>
-            {pdfProcessingDurationSeconds !== null ? (
-              <div className="mx-auto mt-4 flex flex-col items-center gap-2">
-                <p className="text-sm font-semibold text-emerald-800">
-                  Compliance Scan durchgeführt
-                </p>
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm text-emerald-900 shadow-sm">
-                  <Clock className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>
-                    Benötigte Zeit:{' '}
-                    <span className="font-bold tabular-nums">
-                      {formatProcessingDuration(pdfProcessingDurationSeconds)}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm font-semibold text-emerald-800">
-                Compliance Scan durchgeführt
-              </p>
-            )}
-          </div>
+      <CreateDashboardShell
+        title="Produktpass erstellt"
+        subtitle="Der digitale Produktpass ist bereit — teilen Sie den QR-Code oder öffnen Sie die Live-Ansicht."
+      >
+        <CreateStepIndicator step={step} />
 
-          {/* QR Code Section */}
-          <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600 mb-4">
-                Scanne diesen QR-Code, um das Produkt anzuzeigen
-              </p>
-              {dpp.id && (
-                <QRCodeDisplay 
-                  productId={dpp.id}
-                  productName={dpp.modellname || dpp.type}
-                  productData={dpp as any}
-                />
-              )}
+        <div className={`${CARD_CLASS} mb-5 p-6 text-center`}>
+          <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-600" strokeWidth={1.5} aria-hidden />
+          <p className="text-sm font-semibold text-emerald-800">Compliance Scan durchgeführt</p>
+          {pdfProcessingDurationSeconds !== null ? (
+            <div className="mx-auto mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900">
+              <Clock className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              <span>
+                Benötigte Zeit:{' '}
+                <span className="font-bold tabular-nums">
+                  {formatProcessingDuration(pdfProcessingDurationSeconds)}
+                </span>
+              </span>
             </div>
-          </div>
-
-          {/* Product Info */}
-          <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Produktdetails</h2>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">ID:</span>
-                <span className="font-mono text-gray-900">{dpp.id}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Typ:</span>
-                <span className="font-medium text-gray-900">{dpp.type}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Hersteller:</span>
-                <span className="text-gray-900">{dpp.hersteller || '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Modell:</span>
-                <span className="text-gray-900">{dpp.modellname || '—'}</span>
-              </div>
-              {dpp.type === 'BATTERY' && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Kapazität:</span>
-                    <span className="text-gray-900">{(dpp as any).kapazitaetKWh || '—'} kWh</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Chemisches System:</span>
-                    <span className="text-gray-900">{(dpp as any).chemischesSystem || '—'}</span>
-                  </div>
-                </>
-              )}
-              {dpp.type === 'TEXTILE' && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Material:</span>
-                    <span className="text-gray-900">{(dpp as any).materialZusammensetzung || '—'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Herkunft:</span>
-                    <span className="text-gray-900">{(dpp as any).herkunftsland || '—'}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => {
-                log('New product button clicked');
-                setDpp(null);
-                setExtractedData(null);
-                setUploadedFile(null);
-                setPdfProcessingDurationSeconds(null);
-                setStep('select');
-                setErrorMessage(null);
-              }}
-              className="flex-1 px-6 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition-colors cursor-pointer"
-            >
-              + Neues Produkt
-            </button>
-            <button
-              type="button"
-              onClick={handleGoBack}
-              className="flex-1 px-6 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-              Zurück bearbeiten
-            </button>
-          </div>
+          ) : null}
         </div>
-      </div>
+
+        <div className={`${CARD_CLASS} mb-5 p-6`}>
+          <p className="mb-4 text-center text-sm text-slate-600">
+            QR-Code scannen, um den Produktpass zu öffnen
+          </p>
+          {dpp.id ? (
+            <QRCodeDisplay
+              productId={dpp.id}
+              productName={dpp.modellname || dpp.type}
+              productData={dpp as any}
+            />
+          ) : null}
+        </div>
+
+        <div className={`${CARD_CLASS} mb-5 p-6`}>
+          <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.12em] text-slate-700">Produktdetails</h2>
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">ID</dt>
+              <dd className="font-mono text-slate-900">{dpp.id}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Typ</dt>
+              <dd className="font-medium text-slate-900">{dpp.type}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Hersteller</dt>
+              <dd className="text-right text-slate-900">{dpp.hersteller || '—'}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-500">Modell</dt>
+              <dd className="text-right text-slate-900">{dpp.modellname || '—'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {dpp.id ? (
+            <Link
+              href={`/p/${dpp.id}`}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0c1929] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Produktpass ansehen
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              log('New product button clicked');
+              setDpp(null);
+              setExtractedData(null);
+              setUploadedFile(null);
+              setPdfProcessingDurationSeconds(null);
+              setStep('select');
+              setErrorMessage(null);
+            }}
+            className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-white"
+          >
+            Neues Produkt
+          </button>
+        </div>
+      </CreateDashboardShell>
     );
   }
 
   // Fallback (should not happen)
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <p className="text-gray-600">Lädt...</p>
+    <CreateDashboardShell title="Lädt…">
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-sky-600" aria-hidden />
       </div>
-    </div>
+    </CreateDashboardShell>
   );
 }

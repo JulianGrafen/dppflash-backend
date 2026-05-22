@@ -11,7 +11,7 @@ export function HumanReviewStatusBar() {
       {isVerified ? (
         <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[12px] font-bold text-emerald-800 ring-1 ring-inset ring-emerald-200">
           <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden />
-          Verifiziert durch Human Review
+          Verifiziert durch Auditor
         </span>
       ) : (
         <>

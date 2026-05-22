@@ -100,6 +100,43 @@ function formatSankeyNodeLabel(label: string, maxChars = 44): string {
   return `${slice.trimEnd()} …`;
 }
 
+function formatFlowPercent(value: number): string {
+  if (Number.isInteger(value)) {
+    return `${value} %`;
+  }
+  return `${value.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
+}
+
+function resolveLinkEndpointLabel(
+  endpoint: { readonly id: string },
+  labelById: ReadonlyMap<string, string>,
+): string {
+  return labelById.get(endpoint.id) ?? endpoint.id;
+}
+
+function renderSankeyLinkTooltip({
+  link,
+  labelById,
+  percentCaption,
+}: {
+  readonly link: { readonly source: { readonly id: string }; readonly target: { readonly id: string }; readonly value: number };
+  readonly labelById: ReadonlyMap<string, string>;
+  readonly percentCaption: string;
+}) {
+  const sourceLabel = resolveLinkEndpointLabel(link.source, labelById);
+  const targetLabel = resolveLinkEndpointLabel(link.target, labelById);
+  return (
+    <div style={TOOLTIP_STYLE}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>{sourceLabel}</div>
+      <div style={{ opacity: 0.9 }}>→ {targetLabel}</div>
+      <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>
+        {formatFlowPercent(link.value)}
+      </div>
+      <div style={{ marginTop: 2, fontSize: 11, opacity: 0.75 }}>{percentCaption}</div>
+    </div>
+  );
+}
+
 /**
  * Responsive Sankey for material / process composition (ESPR-style compositionGraph).
  */
@@ -131,6 +168,14 @@ export function CompositionFlowchart({
     [data.nodes],
   );
 
+  const outboundPercentByNodeId = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const link of data.links) {
+      totals.set(link.source, (totals.get(link.source) ?? 0) + link.value);
+    }
+    return totals;
+  }, [data.links]);
+
   const nodeColor = useMemo(() => {
     if (!isTraceStyle) {
       return (node: { id: string; category?: SankeyNode['category'] }) =>
@@ -159,6 +204,7 @@ export function CompositionFlowchart({
       >
         <ResponsiveSankey<SankeyNode, SankeyLink>
           data={data}
+          isInteractive
           label={(node) => formatSankeyNodeLabel(labelById.get(node.id) ?? node.id)}
           margin={layout.margin}
           align="justify"
@@ -195,43 +241,42 @@ export function CompositionFlowchart({
           nodeTooltip={({ node }) => {
             const fullLabel = labelById.get(node.id) ?? node.id;
             const category = data.nodes.find((n) => n.id === node.id)?.category;
+            const outbound = outboundPercentByNodeId.get(node.id);
             return (
               <div style={TOOLTIP_STYLE}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{fullLabel}</div>
                 {category ? (
                   <div style={{ opacity: 0.85 }}>{CATEGORY_LABELS[category] ?? category}</div>
                 ) : null}
+                {outbound !== undefined && (variant === 'chemical' || variant === 'traceability') ? (
+                  <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>
+                    {formatFlowPercent(outbound)}
+                  </div>
+                ) : null}
               </div>
             );
           }}
           linkTooltip={
             variant === 'traceability'
-              ? ({ link }) => (
-                  <div style={TOOLTIP_STYLE}>
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
-                    <div>
-                      → {link.target.label}
-                    </div>
-                    <div style={{ marginTop: 4 }}>
-                      Anteil laut Produktpass:{' '}
-                      {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
-                    </div>
-                  </div>
-                )
+              ? ({ link }) =>
+                  renderSankeyLinkTooltip({
+                    link,
+                    labelById,
+                    percentCaption: 'Anteil laut Produktpass',
+                  })
               : variant === 'chemical'
-                ? ({ link }) => (
-                    <div style={TOOLTIP_STYLE}>
-                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
-                      <div>
-                        → {link.target.label}
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        Gewichtung (Mittelwert des Konzentrationsbands):{' '}
-                        {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
-                      </div>
-                    </div>
-                  )
-                : undefined
+                ? ({ link }) =>
+                    renderSankeyLinkTooltip({
+                      link,
+                      labelById,
+                      percentCaption: 'Mittelwert des Konzentrationsbands (geschätzt)',
+                    })
+                : ({ link }) =>
+                    renderSankeyLinkTooltip({
+                      link,
+                      labelById,
+                      percentCaption: 'Anteil',
+                    })
           }
         />
       </div>

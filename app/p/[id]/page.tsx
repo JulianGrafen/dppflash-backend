@@ -1089,27 +1089,62 @@ function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | u
   return undefined;
 }
 
-/** Priorisiert dokumentnahen Chunk, sonst strukturierten Freitext. */
+/** Wandelt einzeilige SDB-Herstellerblöcke in lesbare Zeilen (Firma · Straße · PLZ Ort · Land). */
+function formatFlatManufacturerBlock(text: string): string {
+  const t = text.trim();
+  if (!t || t.includes('\n')) {
+    return t;
+  }
+
+  const plzTail = t.match(/^(.+?)\s+(\d{5})\s+(.+)$/);
+  if (!plzTail?.[1] || !plzTail[2] || !plzTail[3]) {
+    return t;
+  }
+
+  const beforePlz = plzTail[1].trim();
+  const plz = plzTail[2];
+  const afterPlz = plzTail[3].trim();
+
+  const streetMatch = beforePlz.match(/^(.+?)\s+([A-Za-zäöüÄÖÜß.\-/]+\s+\d+[a-zA-Z0-9/-]*)$/);
+  const countryMatch = afterPlz.match(
+    /^(.+?)\s+(Deutschland|Germany|Österreich|Austria|Schweiz|Switzerland|France|Frankreich|Italy|Italien|Spain|Spanien|Nederland|Netherlands|België|Belgium|Polska|Poland)$/i,
+  );
+
+  if (streetMatch?.[1] && streetMatch[2]) {
+    const lines = [streetMatch[1].trim(), streetMatch[2].trim()];
+    if (countryMatch?.[1] && countryMatch[2]) {
+      lines.push(`${plz} ${countryMatch[1].trim()}`, countryMatch[2]);
+    } else {
+      lines.push(`${plz} ${afterPlz}`);
+    }
+    return lines.join('\n');
+  }
+
+  if (countryMatch?.[1] && countryMatch[2]) {
+    return [beforePlz, `${plz} ${countryMatch[1].trim()}`, countryMatch[2]].join('\n');
+  }
+
+  return [beforePlz, `${plz} ${afterPlz}`].join('\n');
+}
+
+/** Priorisiert strukturierten mehrzeiligen Freitext; Chunk nur als Fallback. */
 function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprProductData): {
   readonly displayText: string;
-  readonly showedDocumentChunk: boolean;
 } {
   const chunk = pickManufacturerDocumentChunk(raw)?.trim();
   const synthesized =
     formatManufacturerRichText(raw, p.manufacturer).trim()
     || p.manufacturer.name.trim()
-    || p.hersteller.trim();
+    || (typeof raw.hersteller === 'string' ? raw.hersteller.trim() : '');
 
-  if (chunk?.length) {
-    return {
-      displayText: chunk,
-      showedDocumentChunk: true,
-    };
-  }
-  if (synthesized.length > 0) {
-    return { displayText: synthesized, showedDocumentChunk: false };
-  }
-  return { displayText: '', showedDocumentChunk: false };
+  const candidate =
+    synthesized.length > 0
+      ? synthesized
+      : chunk ?? '';
+
+  return {
+    displayText: formatFlatManufacturerBlock(candidate),
+  };
 }
 
 function formatTelDisplay(phone: string | undefined): string | undefined {
@@ -1139,7 +1174,7 @@ function formatManufacturerRichText(
     'kontakt',
   ]);
   if (preformatted) {
-    return preformatted;
+    return formatFlatManufacturerBlock(preformatted);
   }
 
   const phoneFromRec = pickFirstStringFromRecord(rec, [
@@ -1223,14 +1258,14 @@ function formatManufacturerRichText(
       && (flatHersteller.length > structured.length + 14 || structPackedLen < 16)
       && (!structSignalsContact || flatHersteller.length > structured.length + 28)
     ) {
-      return flatHersteller;
+      return formatFlatManufacturerBlock(flatHersteller);
     }
   }
 
   if (structured) {
-    return structured;
+    return formatFlatManufacturerBlock(structured);
   }
-  return flatHersteller;
+  return formatFlatManufacturerBlock(flatHersteller);
 }
 
 
@@ -1757,17 +1792,11 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               label="Hersteller / Verantwortlicher"
               value={manufacturerDisplayBlock}
               multiline
-              sourceBadge={
-                manufacturerPublication.showedDocumentChunk
-                  ? 'Dokumentbeleg'
-                  : ragSuppliedFields.includes('hersteller')
-                    ? 'RAG'
-                    : undefined
-              }
+              sourceBadge={ragSuppliedFields.includes('hersteller') ? 'RAG' : undefined}
             />
           ) : null}
           <HumanReviewStatusBar />
-          <Field label="Verifiziert durch · Human Review" value={formatHumanVerificationLine(raw)} />
+          <Field label="Verifiziert durch · Auditor" value={formatHumanVerificationLine(raw)} />
           <ReviewField
             label="Ursprungsland"
             value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}

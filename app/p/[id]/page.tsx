@@ -2,7 +2,9 @@ import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import {
   Menu,
+  Recycle,
   ShieldCheck,
+  type LucideIcon,
 } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
 import {
@@ -39,9 +41,37 @@ interface PageProps {
 
 // ─── Presentational helpers ───────────────────────────────────────────────────
 
-function Section({ children }: { children: React.ReactNode }) {
+function Section({
+  children,
+  title,
+  subtitle,
+  icon: Icon = Recycle,
+}: {
+  children: React.ReactNode;
+  title?: string;
+  subtitle?: string;
+  icon?: LucideIcon;
+}) {
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      {title ? (
+        <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
+          <div
+            className="flex shrink-0 items-center justify-center rounded-xl bg-white/[0.12] p-2.5"
+            aria-hidden
+          >
+            <Icon size={22} strokeWidth={1.75} className="text-amber-300" />
+          </div>
+          <div className="min-w-0 pt-0.5">
+            <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+            {subtitle ? (
+              <p className="mt-1 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-slate-400">
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
       <dl className="divide-y divide-slate-100">{children}</dl>
     </section>
   );
@@ -1920,7 +1950,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <EnvironmentalFootprintSection raw={raw as Record<string, unknown>} carbonFootprint={p.carbonFootprint} />
 
         {/* ── DPP Core fields (new extraction schema) ── */}
-        <Section>
+        <Section title="Entsorgung" subtitle="ESPR · Abfall & Rückbau">
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <ReviewField
             label="GTIN"

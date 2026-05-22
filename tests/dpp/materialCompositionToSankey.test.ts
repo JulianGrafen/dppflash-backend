@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
 import {
+  collectChemicalCompositionIngredientRows,
   compositionGraphHasMeaningfulFlows,
   formatPassportCoreMaterialSummary,
+  normalizeSankeySharesTo100Percent,
   parseChemicalConcentrationBandMidpoint,
   tryChemicalCompositionToSankey,
   tryMaterialCompositionToSankey,
@@ -134,8 +136,39 @@ describe('tryChemicalCompositionToSankey', () => {
     expect(graph).not.toBeNull();
     expect(graph!.nodes.some((n) => n.category === 'final_product')).toBe(true);
     expect(graph!.links).toHaveLength(4);
+    const linkSum = graph!.links.reduce((s, l) => s + l.value, 0);
+    expect(linkSum).toBeCloseTo(100, 5);
     const parsed = compositionGraphSchema.safeParse(graph);
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe('normalizeSankeySharesTo100Percent', () => {
+  it('scales SDS band midpoints to exactly 100%', () => {
+    const normalized = normalizeSankeySharesTo100Percent([50, 30, 7.5, 3]);
+    expect(normalized.reduce((a, v) => a + v, 0)).toBeCloseTo(100, 8);
+    expect(normalized[0]).toBeCloseTo(55.248618784, 3);
+  });
+});
+
+describe('collectChemicalCompositionIngredientRows', () => {
+  it('lists SDS ingredients with original concentration bands', () => {
+    const rows = collectChemicalCompositionIngredientRows([
+      {
+        stoffname: 'Quarz (SiO2)',
+        casNummer: '14808-60-7',
+        prozentAnteil: '40-60 %',
+        einstufung: 'STOT RE 1',
+      },
+      {
+        stoffname: 'Nicht deklarationspflichtige Stoffe / Füllstoffe',
+        prozentAnteil: '12 %',
+      },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe('Quarz (SiO2)');
+    expect(rows[0]?.concentration).toBe('40-60 %');
+    expect(rows[0]?.cas).toBe('14808-60-7');
   });
 });
 

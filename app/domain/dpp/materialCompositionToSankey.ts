@@ -283,6 +283,24 @@ export function compositionGraphHasMeaningfulFlows(graph: CompositionGraphPayloa
   return total > 0.05;
 }
 
+/**
+ * Skaliert Rohanteile (z. B. SDS-Band-Mittelwerte) proportional auf exakt 100 % für den Materialfluss.
+ */
+export function normalizeSankeySharesTo100Percent(
+  rawShares: readonly number[],
+): readonly number[] {
+  if (rawShares.length === 0) {
+    return [];
+  }
+  const clamped = rawShares.map((v) => Math.max(0, v));
+  const sum = clamped.reduce((a, v) => a + v, 0);
+  if (sum <= 0) {
+    const equal = 100 / rawShares.length;
+    return rawShares.map(() => equal);
+  }
+  return clamped.map((v) => (v / sum) * 100);
+}
+
 function buildSankeyFromRows(
   rows: readonly { readonly material: string; readonly percentage: number }[],
   productLabel: string,
@@ -291,12 +309,7 @@ function buildSankeyFromRows(
     return null;
   }
 
-  const sumPct = rows.reduce((a, r) => a + r.percentage, 0);
-  /** Declared product percentages when available; else equal split (placeholder). */
-  const linkValues =
-    sumPct > 0
-      ? rows.map((r) => Math.max(0.01, r.percentage))
-      : rows.map(() => Math.max(0.01, 100 / rows.length));
+  const linkValues = normalizeSankeySharesTo100Percent(rows.map((r) => r.percentage));
 
   const productId = 'end_product';
   const endLabel = productLabel.trim().length > 0 ? productLabel.trim() : 'Produkt';
@@ -425,4 +438,92 @@ export function tryChemicalCompositionToSankey(
     return null;
   }
   return buildSankeyFromRows([...rows], productLabel);
+}
+
+export type ChemicalIngredientListRow = {
+  readonly name: string;
+  readonly cas: string;
+  readonly concentration: string;
+  readonly classification: string;
+};
+
+function coerceChemicalCompositionArray(value: unknown): unknown[] {
+  let inner: unknown = unwrapPassportValue(value);
+  if (typeof inner === 'string') {
+    const t = inner.trim();
+    if (!t.startsWith('[')) {
+      return [];
+    }
+    try {
+      inner = JSON.parse(t) as unknown;
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(inner) ? inner : [];
+}
+
+function readConcentrationDisplayFromRow(o: Record<string, unknown>): string {
+  if (typeof o.prozentAnteil === 'string' && o.prozentAnteil.trim()) {
+    return o.prozentAnteil.trim();
+  }
+  if (typeof o.prozentanteil === 'string' && o.prozentanteil.trim()) {
+    return o.prozentanteil.trim();
+  }
+  if (typeof o.concentration === 'string' && o.concentration.trim()) {
+    return o.concentration.trim();
+  }
+  if (typeof o.concentrationPercent === 'number' && Number.isFinite(o.concentrationPercent)) {
+    return `${o.concentrationPercent} %`;
+  }
+  if (typeof o.concentrationPercent === 'string' && o.concentrationPercent.trim()) {
+    return o.concentrationPercent.trim();
+  }
+  return '–';
+}
+
+function isSyntheticFillerIngredientName(name: string): boolean {
+  const lower = name.trim().toLowerCase();
+  return /nicht\s+deklarationspflichtig/.test(lower)
+    || /^sonstige\s+bestandteile\b/.test(lower)
+    || /^restanteil\b/.test(lower)
+    || (/\bf(ü|ue)llstoffe?\b/.test(lower) && /\b100\s*%/.test(name));
+}
+
+/** SDS Abschnitt 3 — Inhaltsstoffe für Tabellen in Herkunft / Traceability. */
+export function collectChemicalCompositionIngredientRows(
+  value: unknown,
+): ReadonlyArray<ChemicalIngredientListRow> {
+  const rows: ChemicalIngredientListRow[] = [];
+  for (const item of coerceChemicalCompositionArray(value)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const name = materialLabelFromRow(o);
+    if (!name || isSyntheticFillerIngredientName(name)) {
+      continue;
+    }
+
+    const casRaw = o.casNummer ?? o.casNumber;
+    const cas =
+      casRaw !== null && casRaw !== undefined && String(casRaw).trim().length > 0
+        ? String(casRaw).trim()
+        : '–';
+
+    let classification = '–';
+    if (typeof o.einstufung === 'string' && o.einstufung.trim()) {
+      classification = o.einstufung.trim();
+    } else if (typeof o.function === 'string' && o.function.trim()) {
+      classification = o.function.trim();
+    }
+
+    rows.push({
+      name,
+      cas,
+      concentration: readConcentrationDisplayFromRow(o),
+      classification,
+    });
+  }
+  return rows;
 }

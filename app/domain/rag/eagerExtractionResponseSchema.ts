@@ -129,6 +129,7 @@ const EAGER_ALIAS_TO_CANONICAL: Readonly<Record<string, EagerCanonicalFieldKey>>
   uniqueformulaidentifier: 'upi',
   formulakennung: 'upi',
   /** Technische Merkblätter: Handhabungs-/Verarbeitungs-/Reinigungshinweise in einem kombinierten Feld. */
+  handlinginstructions: 'handlingAndApplicationInstructions',
   verarbeitungshinweise: 'handlingAndApplicationInstructions',
   processinginstructions: 'handlingAndApplicationInstructions',
   anwendungsanweisungen: 'handlingAndApplicationInstructions',

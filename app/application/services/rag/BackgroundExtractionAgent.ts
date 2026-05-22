@@ -78,7 +78,7 @@ Bedenkliche Stoffe (SVHC): Extrahiere Stoffe für 'substancesOfConcern' AUSSCHLI
 WICHTIGE REGEL FÜR MERKBLÄTTER UND ANLEITUNGEN:
 Achte explizit auf Absätze mit Titeln wie 'HINWEISE', 'Verarbeitung' oder 'Reinigung'.
 
-- Handhabung & Hinweise: Scanne das Dokument nach Abschnitten wie 'HINWEISE', 'Verarbeitung', 'Wichtige Hinweise' oder 'Reinigung'. Extrahiere konkrete Praxisanweisungen (z.B. Reinigung von Werkzeugen mit Wasser, Vermeidung von Flecken auf Schienen, Einhaltung von Normen). Speichere diese strukturiert und präzise zusammengefasst im Feld 'handlingAndApplicationInstructions.value'. Juristische Standard-Haftungsausschlüsse sind zu ignorieren!
+- **Handhabung & Praxis-Hinweise:** Scanne das Dokument intensiv nach Abschnitten wie 'HINWEISE', 'Verarbeitung', 'Wichtige Hinweise', 'Anwendung' oder 'Reinigung'. Extrahiere konkrete Anweisungen für den Anwender (z. B. sofortige Reinigung von Werkzeugen mit Wasser, Entfernung von Mörtelresten zur Vermeidung von Flecken, Einhaltung relevanter Normen). Speichere diese präzise zusammengefasst im Feld \`handlingAndApplicationInstructions.value\` (gleichbedeutend mit dem Alias \`handlingInstructions\`). Juristische Standard-Haftungsausschlüsse ignorieren!
 
 ---
 

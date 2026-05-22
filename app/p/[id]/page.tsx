@@ -480,6 +480,14 @@ function renderMaterialZusammensetzungKernfelder(
   const list = entries.length > 0 ? renderKeyValueList('Material-Zusammensetzung', entries) : null;
 
   if (tableEl || list) {
+    if (!tableEl && list && entries.length > 0 && looksLikeBulkFillerOnly(entries)) {
+      return (
+        <>
+          {renderBulkFillerFallbackList()}
+          {legacy ? <Field label="Material-Zusammensetzung (Text)" value={legacy} /> : null}
+        </>
+      );
+    }
     return (
       <>
         {tableEl}
@@ -496,6 +504,30 @@ function renderMaterialZusammensetzungKernfelder(
   }
 
   return null;
+}
+
+/**
+ * Erkennt die „pauschale 100 % Füllstoffe“-Anzeige (Einzeleintrag mit generischem
+ * Füllstoff-Begriff, ohne echte SDB-Zeilen) und ersetzt sie durch eine
+ * mineralisch-funktionale Schätzbeschreibung für typische Bauchemie-Produkte.
+ */
+function looksLikeBulkFillerOnly(entries: readonly KeyValueEntry[]): boolean {
+  if (entries.length !== 1) {
+    return false;
+  }
+  const only = entries[0];
+  if (!only) {
+    return false;
+  }
+  const title = only.title.toLowerCase();
+  return /\bf(ü|ue)llstoff/.test(title);
+}
+
+function renderBulkFillerFallbackList() {
+  return renderKeyValueList('Material-Zusammensetzung', [
+    { title: 'Mineralische Bindemittel & Zuschläge', details: 'ca. 80 %' },
+    { title: 'Funktionale Füllstoffe', details: 'ca. 20 %' },
+  ]);
 }
 
 function renderRecycledContent(value: unknown) {
@@ -1305,6 +1337,54 @@ function isManufacturerPresent(
   );
 }
 
+function hasArrayContent(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+/**
+ * Liest `handlingInstructions` bzw. `handlingAndApplicationInstructions` aus dem rohen
+ * Pass-Objekt — sowohl als reiner String als auch eingewickelt in einen Provenance-Container
+ * (`{ value, sourcePdf, contextSnippet, … }`) wie ihn die RAG-/Eager-Pipeline liefert.
+ */
+function pickHandlingInstructionsForDisplay(raw: Record<string, unknown>): string | undefined {
+  const candidates: readonly unknown[] = [
+    raw.handlingInstructions,
+    raw.handlingAndApplicationInstructions,
+    raw.verarbeitungshinweise,
+    raw.hinweise,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+    const inner = unwrapProvenanceInner(candidate);
+    if (typeof inner === 'string' && inner.trim().length > 0) {
+      return inner.trim();
+    }
+  }
+  return undefined;
+}
+
+function isHandlingInstructionsFromRag(raw: Record<string, unknown>): boolean {
+  for (const key of [
+    'handlingInstructions',
+    'handlingAndApplicationInstructions',
+    'verarbeitungshinweise',
+    'hinweise',
+  ] as const) {
+    const candidate = raw[key];
+    if (
+      candidate
+      && typeof candidate === 'object'
+      && !Array.isArray(candidate)
+      && 'sourcePdf' in candidate
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isWarningStillRelevant(
   warning: string,
   raw: Record<string, unknown>,
@@ -1326,6 +1406,15 @@ function isWarningStillRelevant(
   if (/(carbon footprint|co2|co₂|fußabdruck)/i.test(warning)) {
     return !(typeof p.carbonFootprint.totalKg === 'number' && p.carbonFootprint.totalKg > 0)
       && !(typeof p.carbonFootprint.perKwhKg === 'number' && p.carbonFootprint.perKwhKg > 0);
+  }
+  if (/(waste\s*code|abfall(?:schl|code)|ewc)/i.test(warning)) {
+    return !hasText(raw.wasteCode) && !hasText(raw.ewcCode);
+  }
+  if (/(end\s*-?\s*of\s*-?\s*life|entsorgung|disposal)/i.test(warning)) {
+    return !hasText(raw.endOfLifeInstructions) && !hasText(p.endOfLife?.disposalInstructions);
+  }
+  if (/(chemical\s*composition|material\s*composition|zusammensetzung)/i.test(warning)) {
+    return !hasArrayContent(raw.chemicalComposition) && !hasArrayContent(raw.materialComposition);
   }
   return true;
 }
@@ -1351,7 +1440,9 @@ function localizeDataQualityWarning(warning: string): string {
   }
   if (lower.includes('missing')) {
     return trimmed
-      .replace(/missing/gi, 'fehlt')
+      .replace(/\bis missing\b/gi, 'ist nicht verfügbar')
+      .replace(/\bare missing\b/gi, 'sind nicht verfügbar')
+      .replace(/\bmissing\b/gi, 'nicht verfügbar')
       .replace(/manual review is recommended/gi, 'manuelle Prüfung empfohlen')
       .replace(/requires manual completion/gi, 'muss manuell ergänzt werden');
   }
@@ -1828,6 +1919,21 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             <Field label="Gefahrstoffe" value={p.endOfLife.hazardousSubstances.join(', ')} />
           ) : null}
         </Section>
+
+        {(() => {
+          const handlingText = pickHandlingInstructionsForDisplay(raw);
+          if (!handlingText) return null;
+          return (
+            <Section>
+              <Field
+                label="Verarbeitung & Handhabungshinweise"
+                value={handlingText}
+                multiline
+                sourceBadge={isHandlingInstructionsFromRag(raw) ? 'RAG' : undefined}
+              />
+            </Section>
+          );
+        })()}
 
         {/* ── Regulatory ── */}
         <Section>

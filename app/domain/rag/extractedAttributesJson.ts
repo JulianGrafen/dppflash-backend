@@ -113,6 +113,7 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['ghsSymbols', 'ghsPictograms', 'gefahrenpiktogramme', 'gefahrenSymbole'],
   [
     'handlingAndApplicationInstructions',
+    'handlingInstructions',
     'verarbeitungshinweise',
     'verarbeitung',
     'hinweise',

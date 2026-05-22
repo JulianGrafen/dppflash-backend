@@ -1,6 +1,6 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import { parseComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
-import { ChevronDown, FileSearch } from 'lucide-react';
+import { ChevronDown, ExternalLink, FileSearch, FileText } from 'lucide-react';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -53,6 +53,18 @@ function formatStructuredValue(value: unknown): string {
     return pickDisplayName(value) ?? JSON.stringify(value);
   }
   return String(value);
+}
+
+/**
+ * Hängt den Seiten-Anker an die PDF-URL (`#page=N`), damit moderne PDF-Viewer direkt
+ * zur belegenden Seite springen — ohne den eigentlichen Storage-Link zu manipulieren.
+ */
+function buildPdfPageUrl(url: string, pageNumber: number): string {
+  if (!url) {
+    return url;
+  }
+  const cleanPage = Number.isFinite(pageNumber) && pageNumber >= 1 ? Math.floor(pageNumber) : 1;
+  return url.includes('#') ? url : `${url}#page=${cleanPage}`;
 }
 
 function resolveSourceUrl(entry: AuditedValue, attachments: unknown): string | undefined {
@@ -194,7 +206,12 @@ export function RagProvenanceSection({
         </div>
       ) : (
         <ul className="divide-y divide-slate-100">
-          {rows.map(({ key, entry }) => (
+          {rows.map(({ key, entry }) => {
+            const sourceUrl = resolveSourceUrl(entry, attachments);
+            const pdfPageUrl = sourceUrl
+              ? buildPdfPageUrl(sourceUrl, entry.source.pageNumber)
+              : undefined;
+            return (
             <li key={key} className="space-y-2 px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="rounded-md bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-900 ring-1 ring-sky-200/80">
@@ -212,9 +229,9 @@ export function RagProvenanceSection({
                 <div>
                   <dt className="inline text-slate-500">Quelle:</dt>{' '}
                   <dd className="inline font-medium text-slate-800">
-                    {resolveSourceUrl(entry, attachments) ? (
+                    {pdfPageUrl ? (
                       <a
-                        href={resolveSourceUrl(entry, attachments)}
+                        href={pdfPageUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline decoration-slate-300 underline-offset-2 hover:text-sky-700"
@@ -234,11 +251,65 @@ export function RagProvenanceSection({
                     {entry.source.contextSnippet}
                   </dd>
                 </div>
-              </dl>
-            </li>
-          ))}
+                </dl>
+                {pdfPageUrl ? (
+                  <PdfMiniPreview
+                    url={pdfPageUrl}
+                    fileName={entry.source.fileName}
+                    pageNumber={entry.source.pageNumber}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </details>
+  );
+}
+
+/**
+ * Mini-Vorschau für die belegende PDF-Seite: kompakte Karte mit rotem PDF-Icon und
+ * primärem Action-Button („Original-PDF auf Seite X öffnen“), darunter ein eingebettetes
+ * Iframe mit Seiten-Anker für sofortiges visuelles Auditing.
+ */
+function PdfMiniPreview({
+  url,
+  fileName,
+  pageNumber,
+}: {
+  readonly url: string;
+  readonly fileName: string;
+  readonly pageNumber: number;
+}) {
+  return (
+    <div className="mt-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700 ring-1 ring-red-100">
+          <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-semibold text-slate-900" title={fileName}>
+            {fileName}
+          </p>
+          <p className="text-[11px] text-slate-500">PDF · Seite {pageNumber}</p>
+        </div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md bg-[#0c1929] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+        >
+          Original-PDF auf Seite {pageNumber} öffnen
+          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+        </a>
+      </div>
+      <iframe
+        src={url}
+        title={`PDF-Vorschau: ${fileName}, Seite ${pageNumber}`}
+        className="block h-48 w-full bg-slate-100"
+        loading="lazy"
+      />
+    </div>
   );
 }

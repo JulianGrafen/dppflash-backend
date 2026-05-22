@@ -16,6 +16,21 @@ import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrail
 import { extractedAttributesToAuditTrailFields } from '@/app/domain/rag/extractedAttributesJson';
 import { computeRetrievalMatchConfidence } from '@/app/domain/rag/productBrainMatch';
 
+function pickHandlingInstructionsValue(raw: unknown): string | undefined {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const innerValue = (raw as Record<string, unknown>).value;
+    if (typeof innerValue === 'string') {
+      const trimmed = innerValue.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    }
+  }
+  return undefined;
+}
+
 export interface RagComplianceRunInput {
   readonly tenantId: string;
   readonly productLabel: string;
@@ -124,6 +139,32 @@ export class RagComplianceOrchestrator {
       ...dpp,
       attachments,
       downloadableDocuments: attachments,
+    };
+  }
+
+  /**
+   * Übernimmt Praxis-Hinweise aus dem Eager-Extraktor (`handlingInstructions` oder
+   * `handlingAndApplicationInstructions`) als skalaren Anzeigewert ins finale DPP.
+   */
+  applyHandlingInstructionsToDpp<T extends Record<string, unknown>>(
+    dpp: T,
+    agentResult: Record<string, unknown> | null | undefined,
+  ): T & { handlingInstructions?: string } {
+    if (!agentResult || typeof agentResult !== 'object') {
+      return dpp;
+    }
+
+    const candidate =
+      pickHandlingInstructionsValue(agentResult.handlingInstructions)
+      ?? pickHandlingInstructionsValue(agentResult.handlingAndApplicationInstructions);
+
+    if (!candidate) {
+      return dpp;
+    }
+
+    return {
+      ...dpp,
+      handlingInstructions: candidate,
     };
   }
 

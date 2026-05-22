@@ -490,16 +490,6 @@ function isSyntheticFillerIngredientName(name: string): boolean {
     || (/\bf(ü|ue)llstoffe?\b/.test(lower) && /\b100\s*%/.test(name));
 }
 
-function sdsSubstanceNameFromRow(row: Record<string, unknown>): string {
-  for (const key of ['stoffname', 'substance', 'name', 'material', 'bezeichnung'] as const) {
-    const v = row[key];
-    if (typeof v === 'string' && v.trim()) {
-      return v.trim();
-    }
-  }
-  return '';
-}
-
 /** SDS Abschnitt 3 — Inhaltsstoffe für Tabellen in Herkunft / Traceability. */
 export function collectChemicalCompositionIngredientRows(
   value: unknown,
@@ -510,7 +500,7 @@ export function collectChemicalCompositionIngredientRows(
       continue;
     }
     const o = item as Record<string, unknown>;
-    const name = sdsSubstanceNameFromRow(o);
+    const name = materialLabelFromRow(o);
     if (!name || isSyntheticFillerIngredientName(name)) {
       continue;
     }

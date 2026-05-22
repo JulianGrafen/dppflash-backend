@@ -11,8 +11,20 @@ export default function CreateDashboard() {
   const [step, setStep] = useState<'select' | 'pdf-upload' | 'form' | 'result'>('select');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [processingElapsedSeconds, setProcessingElapsedSeconds] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
+
+  useEffect(() => {
+    if (step !== 'pdf-upload' || !isLoading) return;
+
+    setProcessingElapsedSeconds(0);
+    const interval = setInterval(() => {
+      setProcessingElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [step, isLoading]);
 
   // Logger function for debugging
   const log = (msg: string, data?: unknown) => {
@@ -288,6 +300,11 @@ export default function CreateDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               PDF wird verarbeitet
             </h1>
+            {isLoading && (
+              <p className="text-2xl font-semibold text-purple-600 tabular-nums mb-2">
+                {processingElapsedSeconds} s
+              </p>
+            )}
             <p className="text-gray-600">
               Bitte warten Sie, während die KI die Daten extrahiert...
             </p>

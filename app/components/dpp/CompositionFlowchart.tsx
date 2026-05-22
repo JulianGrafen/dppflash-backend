@@ -107,32 +107,19 @@ function formatFlowPercent(value: number): string {
   return `${value.toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 }
 
-function resolveLinkEndpointLabel(
-  endpoint: { readonly id: string },
-  labelById: ReadonlyMap<string, string>,
-): string {
-  return labelById.get(endpoint.id) ?? endpoint.id;
-}
-
-function renderSankeyLinkTooltip({
-  link,
-  labelById,
-  percentCaption,
-}: {
-  readonly link: { readonly source: { readonly id: string }; readonly target: { readonly id: string }; readonly value: number };
-  readonly labelById: ReadonlyMap<string, string>;
-  readonly percentCaption: string;
-}) {
-  const sourceLabel = resolveLinkEndpointLabel(link.source, labelById);
-  const targetLabel = resolveLinkEndpointLabel(link.target, labelById);
+function renderPercentOnlyTooltip(value: number) {
   return (
-    <div style={TOOLTIP_STYLE}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>{sourceLabel}</div>
-      <div style={{ opacity: 0.9 }}>→ {targetLabel}</div>
-      <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>
-        {formatFlowPercent(link.value)}
+    <div
+      style={{
+        ...TOOLTIP_STYLE,
+        padding: '6px 12px',
+        textAlign: 'center',
+        minWidth: 56,
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.02em' }}>
+        {formatFlowPercent(value)}
       </div>
-      <div style={{ marginTop: 2, fontSize: 11, opacity: 0.75 }}>{percentCaption}</div>
     </div>
   );
 }
@@ -239,45 +226,22 @@ export function CompositionFlowchart({
           }}
           motionConfig="gentle"
           nodeTooltip={({ node }) => {
+            if (variant === 'chemical' || variant === 'traceability') {
+              const outbound = outboundPercentByNodeId.get(node.id);
+              return outbound !== undefined ? renderPercentOnlyTooltip(outbound) : null;
+            }
             const fullLabel = labelById.get(node.id) ?? node.id;
             const category = data.nodes.find((n) => n.id === node.id)?.category;
-            const outbound = outboundPercentByNodeId.get(node.id);
             return (
               <div style={TOOLTIP_STYLE}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{fullLabel}</div>
                 {category ? (
                   <div style={{ opacity: 0.85 }}>{CATEGORY_LABELS[category] ?? category}</div>
                 ) : null}
-                {outbound !== undefined && (variant === 'chemical' || variant === 'traceability') ? (
-                  <div style={{ marginTop: 6, fontSize: 14, fontWeight: 700, color: '#e2e8f0' }}>
-                    {formatFlowPercent(outbound)}
-                  </div>
-                ) : null}
               </div>
             );
           }}
-          linkTooltip={
-            variant === 'traceability'
-              ? ({ link }) =>
-                  renderSankeyLinkTooltip({
-                    link,
-                    labelById,
-                    percentCaption: 'Anteil laut Produktpass',
-                  })
-              : variant === 'chemical'
-                ? ({ link }) =>
-                    renderSankeyLinkTooltip({
-                      link,
-                      labelById,
-                      percentCaption: 'Mittelwert des Konzentrationsbands (geschätzt)',
-                    })
-                : ({ link }) =>
-                    renderSankeyLinkTooltip({
-                      link,
-                      labelById,
-                      percentCaption: 'Anteil',
-                    })
-          }
+          linkTooltip={({ link }) => renderPercentOnlyTooltip(link.value)}
         />
       </div>
     </div>

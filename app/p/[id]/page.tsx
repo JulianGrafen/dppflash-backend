@@ -427,7 +427,9 @@ function renderMaterialZusammensetzungKernfelder(
       ? extractSdsCompositionRows(compositionItems)
       : [];
 
-  const sdsRows = sdsFromMz.length > 0 ? sdsFromMz : sdsFromMc;
+  const sdsRows = (sdsFromMz.length > 0 ? sdsFromMz : sdsFromMc).filter(
+    (row) => !isSyntheticFillerMaterialName(row.stoffname),
+  );
   const tableEl = renderSdsCompositionTable('Material-Zusammensetzung', sdsRows);
 
   const entries: KeyValueEntry[] = [];
@@ -452,12 +454,14 @@ function renderMaterialZusammensetzungKernfelder(
   }
 
   const mzInner = unwrapProvenanceInner(materialZusammensetzung);
-  const legacy =
+  const legacyRaw =
     typeof materialZusammensetzung === 'string' && materialZusammensetzung.trim().length > 0
       ? materialZusammensetzung.trim()
       : typeof mzInner === 'string' && mzInner.trim().length > 0 && !mzInner.trim().startsWith('[')
         ? mzInner.trim()
         : undefined;
+  const legacy =
+    legacyRaw && !isSyntheticFillerCompositionText(legacyRaw) ? legacyRaw : undefined;
 
   const list = entries.length > 0 ? renderKeyValueList('Material-Zusammensetzung', entries) : null;
 
@@ -485,7 +489,13 @@ function isSyntheticFillerMaterialName(name: string): boolean {
   const lower = name.trim().toLowerCase();
   return /nicht\s+deklarationspflichtig/.test(lower)
     || /^sonstige\s+bestandteile\b/.test(lower)
-    || /^restanteil\b/.test(lower);
+    || /^restanteil\b/.test(lower)
+    || (/\bf(ü|ue)llstoffe?\b/.test(lower) && /\b100\s*%/.test(name));
+}
+
+function isSyntheticFillerCompositionText(text: string): boolean {
+  const stripped = text.replace(/\(\s*\d+(?:[.,]\d+)?\s*%\s*\)/g, ' ').trim();
+  return isSyntheticFillerMaterialName(stripped) || isSyntheticFillerMaterialName(text);
 }
 
 function renderRecycledContent(value: unknown) {
@@ -1835,7 +1845,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <Section>
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
-          <Field label="UPI" value={typeof raw.upi === 'string' ? raw.upi : undefined} />
           <HazardCodesField
             label="P-Sätze (Sicherheitshinweise)"
             codes={productLevelPStatements}

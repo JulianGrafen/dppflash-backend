@@ -174,8 +174,7 @@ export default function RagIngestDashboard() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">RAG-Wissensbasis</h1>
             <p className="text-gray-600 mt-1">
-              PDFs indexieren und den Mandanten-Chunk-Speicher einsehen — was das Retrieval-„Gehirn“ gerade
-              kennt.
+              PDFs indexieren und den Mandanten-Chunk-Speicher einsehen.
             </p>
           </div>
         </div>

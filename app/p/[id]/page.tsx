@@ -1355,49 +1355,6 @@ function formatManufacturerRichText(
 }
 
 
-/** Human-in-the-loop: Abnahme-Anzeige (Auditor · Zeitpunkt oder Ausstehend). */
-function formatHumanVerificationLine(raw: Record<string, unknown>): string {
-  const rev = asRecord(raw.enrichmentReview);
-  const auditor =
-    asString(rev?.validatedBy)?.trim()
-    ?? asString(rev?.auditor)?.trim()
-    ?? asString(rev?.reviewer)?.trim()
-    ?? asString(raw.validatedBy)?.trim()
-    ?? asString(raw.verifiziertDurch)?.trim();
-
-  const status = asString(rev?.status);
-  const validatedAtIso = asString(rev?.validatedAt);
-  const humanValidated = status === 'VALIDATED';
-  const hasValidatedAt = Boolean(validatedAtIso?.trim());
-
-  if (!humanValidated && !hasValidatedAt) {
-    return 'Ausstehend — Human Review / Abnahme noch nicht abgeschlossen';
-  }
-
-  let dateSuffix: string | undefined;
-  if (validatedAtIso) {
-    const d = new Date(validatedAtIso);
-    dateSuffix =
-      Number.isFinite(d.getTime())
-        ? d.toLocaleString('de-DE', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          })
-        : validatedAtIso.trim();
-  }
-
-  if (auditor && dateSuffix) {
-    return `${auditor} · ${dateSuffix}`;
-  }
-  if (auditor) {
-    return auditor;
-  }
-  if (dateSuffix) {
-    return `Abnahme am ${dateSuffix} (Auditor nicht hinterlegt)`;
-  }
-  return 'Abnahme erfasst — Zeitstempel fehlt in den Daten';
-}
-
 function hasText(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -1895,7 +1852,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             />
           ) : null}
           <HumanReviewStatusBar />
-          <Field label="Verifiziert durch · Auditor" value={formatHumanVerificationLine(raw)} />
           <ReviewField
             label="Ursprungsland"
             value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}

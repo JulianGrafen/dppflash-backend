@@ -1,6 +1,8 @@
 import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
+import { TraceabilityTieredFlowchart } from '@/app/components/dpp/traceability/TraceabilityTieredFlowchart';
 import { tryTraceabilitySankeyFromRaw } from '@/app/domain/dpp/materialCompositionToSankey';
+import { buildTraceabilityTieredFlowFromRaw } from '@/app/domain/dpp/traceability/traceabilityTieredFlowModel';
 
 type TraceabilitySectionProps = {
   /** Product passport fields (needs `regulatoryExtraction`, `materialComposition`, `chemicalComposition`). */
@@ -9,27 +11,30 @@ type TraceabilitySectionProps = {
 };
 
 /**
- * Rückverfolgbarkeit: Sankey-Herkunftsfluss mit allen SDB-Inhaltsstoffen (wie Chemische Zusammensetzung).
+ * Rückverfolgbarkeit: 3-Stufen-Materialfluss (Rohstoff → Herkunft/Verarbeitung → Endprodukt).
  */
 export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
+  const tieredModel = buildTraceabilityTieredFlowFromRaw(raw, productDisplayName);
   const { graph, source } = tryTraceabilitySankeyFromRaw(raw, productDisplayName);
 
-  if (!graph) {
+  if (!tieredModel && !graph) {
     return null;
   }
 
+  const usesTieredFlow = tieredModel !== null;
+
   const chainSubtitle =
-    source === 'regulatory'
+    source === 'regulatory' && !usesTieredFlow
       ? 'Herkunftskette — Lieferkette'
-      : source === 'chemical'
-        ? 'Herkunftskette — Inhaltsstoffe (Abschnitt 3)'
+      : usesTieredFlow
+        ? 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung'
         : 'Herkunftskette — aus Materialanteilen (%)';
 
   const footnote =
-    source === 'regulatory'
+    source === 'regulatory' && !usesTieredFlow
       ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-      : source === 'chemical'
-        ? 'Flussbreiten folgen dem Mittelwert jedes Konzentrationsbereichs (z. B. 40–60 % → 50 %). Fehlende Anteile werden als „Nicht deklarationspflichtige Stoffe“ ergänzt.'
+      : usesTieredFlow
+        ? 'Flussbreiten folgen den SDB-Mittelwerten; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).'
         : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
 
   return (
@@ -49,7 +54,11 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
         </div>
       </header>
       <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
-        <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />
+        {tieredModel ? (
+          <TraceabilityTieredFlowchart model={tieredModel} />
+        ) : graph ? (
+          <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />
+        ) : null}
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
       </div>
     </section>

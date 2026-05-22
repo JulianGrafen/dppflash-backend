@@ -102,6 +102,11 @@ function resolveSourceUrl(
   docs: readonly ComplianceSourceDocument[],
   fieldName?: string,
 ): string | undefined {
+  const matchedByFileName = matchComplianceDocumentByFileName(entry.source.fileName, docs, { fieldName })?.url;
+  if (matchedByFileName) {
+    return matchedByFileName;
+  }
+
   const source = entry.source as Record<string, unknown>;
   const directUrl =
     typeof source.url === 'string' && source.url.trim()
@@ -113,7 +118,7 @@ function resolveSourceUrl(
     return directUrl;
   }
 
-  return matchComplianceDocumentByFileName(entry.source.fileName, docs, { fieldName })?.url;
+  return undefined;
 }
 
 function buildAuditSourceFromRow(

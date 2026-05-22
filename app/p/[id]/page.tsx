@@ -1115,6 +1115,38 @@ function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData
   return 'Digitaler Produktpass';
 }
 
+function collectLiveKnowledgeAnchorCandidates(
+  raw: Record<string, unknown>,
+  displayProductName: string,
+): readonly string[] {
+  const candidates = [
+    resolvePrimaryProductNameAnchor(raw),
+    displayProductName,
+    typeof raw.productName === 'string' ? raw.productName : undefined,
+    typeof raw.modellname === 'string' ? raw.modellname : undefined,
+    typeof raw.model === 'string' ? raw.model : undefined,
+    typeof raw.gtin === 'string' ? raw.gtin : undefined,
+    resolvePassportSku(raw),
+  ];
+  const manufacturer = typeof raw.hersteller === 'string' ? raw.hersteller.trim() : '';
+  const model = typeof raw.modellname === 'string' ? raw.modellname.trim() : '';
+  if (manufacturer && model) {
+    candidates.push(`${manufacturer} ${model}`);
+  }
+  const uniq = new Set<string>();
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+    const trimmed = candidate.trim();
+    if (!trimmed) {
+      continue;
+    }
+    uniq.add(trimmed);
+  }
+  return [...uniq];
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ProductPage({ params, searchParams }: PageProps) {
@@ -1287,19 +1319,23 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     typeof raw.tenantId === 'string' && raw.tenantId.trim().length > 0
       ? raw.tenantId.trim()
       : 'default';
-  const anchorProductName = resolvePrimaryProductNameAnchor(raw);
+  const anchorCandidates = collectLiveKnowledgeAnchorCandidates(raw, displayProductName);
   let liveSourceDocuments: readonly unknown[] = [];
-  if (anchorProductName) {
-    try {
-      const rag = getRagComplianceOrchestrator();
-      const snapshot = await rag.resolveAgentKnowledgeSnapshot({
-        tenantId,
-        anchorProductName,
-      });
-      liveSourceDocuments = snapshot.sourceDocuments;
-    } catch (err) {
-      console.warn('[ProductPage] live compliance docs lookup failed', err);
+  if (anchorCandidates.length > 0) {
+    const rag = getRagComplianceOrchestrator();
+    const collected: unknown[] = [];
+    for (const anchorProductName of anchorCandidates) {
+      try {
+        const snapshot = await rag.resolveAgentKnowledgeSnapshot({
+          tenantId,
+          anchorProductName,
+        });
+        collected.push(...snapshot.sourceDocuments);
+      } catch (err) {
+        console.warn('[ProductPage] live compliance docs lookup failed', { anchorProductName, err });
+      }
     }
+    liveSourceDocuments = collected;
   }
   const mergedComplianceDocuments = collectComplianceSourceDocuments(
     raw.attachments,

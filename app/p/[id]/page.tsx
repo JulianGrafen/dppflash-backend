@@ -1585,21 +1585,6 @@ function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData
   return 'Digitaler Produktpass';
 }
 
-function ConfidenceBadge({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const ring =
-    pct >= 75 ? 'bg-emerald-50 text-emerald-800 ring-emerald-200/70' :
-    pct >= 50 ? 'bg-amber-50 text-amber-900 ring-amber-200/70' :
-                'bg-rose-50 text-rose-800 ring-rose-200/70';
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${ring}`}
-    >
-      Konfidenz {pct}%
-    </span>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ProductPage({ params, searchParams }: PageProps) {
@@ -1847,9 +1832,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
                   {p.id}
                 </code>
               </p>
-              <div className="mt-4 flex justify-center md:justify-start">
-                <ConfidenceBadge score={p.extractionConfidence} />
-              </div>
             </div>
           </div>
         </div>

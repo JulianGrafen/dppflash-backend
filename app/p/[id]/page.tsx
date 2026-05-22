@@ -1,7 +1,6 @@
 import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import {
-  AlertTriangle,
   Menu,
   ShieldCheck,
 } from 'lucide-react';
@@ -1494,28 +1493,6 @@ function formatManufacturerRichText(
 }
 
 
-function hasText(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function isManufacturerPresent(
-  raw: Record<string, unknown>,
-  p: EsprProductData,
-  manufacturerDisplayBlock: string,
-): boolean {
-  return Boolean(
-    manufacturerDisplayBlock.trim()
-    || p.hersteller.trim()
-    || p.manufacturer.name.trim()
-    || hasText(raw.hersteller)
-    || hasText(raw.Hersteller),
-  );
-}
-
-function hasArrayContent(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0;
-}
-
 /**
  * Liest `handlingInstructions` bzw. `handlingAndApplicationInstructions` aus dem rohen
  * Pass-Objekt — sowohl als reiner String als auch eingewickelt in einen Provenance-Container
@@ -1558,82 +1535,6 @@ function isHandlingInstructionsFromRag(raw: Record<string, unknown>): boolean {
     }
   }
   return false;
-}
-
-function isWarningStillRelevant(
-  warning: string,
-  raw: Record<string, unknown>,
-  p: EsprProductData,
-  manufacturerDisplayBlock: string,
-): boolean {
-  if (/(manufacturer|hersteller)/i.test(warning)) {
-    return !isManufacturerPresent(raw, p, manufacturerDisplayBlock);
-  }
-  if (/(model|modell)/i.test(warning)) {
-    return !p.modellname.trim() && !p.model.trim();
-  }
-  if (/(capacity|kapazit)/i.test(warning)) {
-    return p.capacityKwh === undefined;
-  }
-  if (/(chemistry|chemisches system)/i.test(warning)) {
-    return !p.chemistry?.trim();
-  }
-  if (/(carbon footprint|co2|co₂|fußabdruck)/i.test(warning)) {
-    return !(typeof p.carbonFootprint.totalKg === 'number' && p.carbonFootprint.totalKg > 0)
-      && !(typeof p.carbonFootprint.perKwhKg === 'number' && p.carbonFootprint.perKwhKg > 0);
-  }
-  if (/(waste\s*code|abfall(?:schl|code)|ewc)/i.test(warning)) {
-    return !hasText(raw.wasteCode) && !hasText(raw.ewcCode);
-  }
-  if (/(end\s*-?\s*of\s*-?\s*life|entsorgung|disposal)/i.test(warning)) {
-    return !hasText(raw.endOfLifeInstructions) && !hasText(p.endOfLife?.disposalInstructions);
-  }
-  if (/(chemical\s*composition|material\s*composition|zusammensetzung)/i.test(warning)) {
-    return !hasArrayContent(raw.chemicalComposition) && !hasArrayContent(raw.materialComposition);
-  }
-  return true;
-}
-
-function localizeDataQualityWarning(warning: string): string {
-  const trimmed = warning.trim();
-  const lower = trimmed.toLowerCase();
-  if (/manufacturer.*missing|manufacturer details are missing/.test(lower)) {
-    return 'Herstellerangaben fehlen oder konnten nicht eindeutig aus dem Dokument übernommen werden.';
-  }
-  if (/mandatory espr field "([^"]+)" is missing/.test(lower)) {
-    const field = trimmed.match(/"([^"]+)"/)?.[1] ?? 'ein Pflichtfeld';
-    return `Pflichtfeld fehlt und muss manuell geprüft werden: ${field}.`;
-  }
-  if (/carbon footprint is missing/.test(lower)) {
-    return 'CO₂-Fußabdruck fehlt; eine manuelle ESPR-Prüfung wird empfohlen.';
-  }
-  if (/carbon footprint must/.test(lower)) {
-    return 'CO₂-Fußabdruck muss als plausibler, nicht negativer kg-CO₂e-Wert vorliegen.';
-  }
-  if (/added synthetic filler entry/.test(lower)) {
-    return 'Materialbilanz wurde mit einem rechnerischen Restanteil ergänzt; bitte Zusammensetzung prüfen.';
-  }
-  if (lower.includes('missing')) {
-    return trimmed
-      .replace(/\bis missing\b/gi, 'ist nicht verfügbar')
-      .replace(/\bare missing\b/gi, 'sind nicht verfügbar')
-      .replace(/\bmissing\b/gi, 'nicht verfügbar')
-      .replace(/manual review is recommended/gi, 'manuelle Prüfung empfohlen')
-      .replace(/requires manual completion/gi, 'muss manuell ergänzt werden');
-  }
-  return trimmed;
-}
-
-function buildDataQualityWarnings(
-  raw: Record<string, unknown>,
-  p: EsprProductData,
-  manufacturerDisplayBlock: string,
-): string[] {
-  const warnings = p.extractionWarnings
-    .filter((warning) => isWarningStillRelevant(warning, raw, p, manufacturerDisplayBlock))
-    .map(localizeDataQualityWarning)
-    .filter((warning) => warning.length > 0);
-  return [...new Set(warnings)];
 }
 
 function readDisplayProductName(raw: Record<string, unknown>, p: EsprProductData): string {
@@ -1816,8 +1717,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
   const manufacturerPublication = resolveManufacturerPublication(raw, p);
   const manufacturerDisplayBlock = manufacturerPublication.displayText;
-  const dataQualityWarnings = buildDataQualityWarnings(raw, p, manufacturerDisplayBlock);
-  const hasWarnings = dataQualityWarnings.length > 0;
   const productImageUrl = asString(raw.gtin) ? `/images/products/${asString(raw.gtin)}.png` : null;
   const showAvv170106DisposalDetail = shouldShowAvv170106DisposalDetail(
     asString(raw.wasteCode),
@@ -1927,23 +1826,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 sm:space-y-6">
-
-        {/* ── Extraction warnings ── */}
-        {hasWarnings && (
-          <div className="rounded-2xl border border-amber-200/90 bg-amber-50/90 px-5 py-4 shadow-sm ring-1 ring-amber-900/[0.04]">
-            <div className="flex items-start gap-2 text-amber-700">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold mb-1">Hinweise zur Datenqualität</p>
-                <ul className="text-sm space-y-0.5">
-                  {dataQualityWarnings.map((w, i) => (
-                    <li key={i}>• {w}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
 
         {isReviewRequired && (
           <div className="space-y-3 rounded-2xl border border-amber-200/90 bg-amber-50/80 px-5 py-5 shadow-sm ring-1 ring-amber-900/[0.04]">

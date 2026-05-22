@@ -1,4 +1,4 @@
-import { calculateFlowRibbonPath } from '@/app/domain/dpp/traceability/calculateBezierPath';
+import { calculateBezierPath } from '@/app/domain/dpp/traceability/calculateBezierPath';
 import type { TraceabilityTieredFlowModel } from '@/app/domain/dpp/traceability/traceabilityTieredFlowModel';
 
 export type LayoutRect = {
@@ -26,6 +26,7 @@ export type LayoutFlow = {
   readonly gradientId: string;
   readonly sourceColor: string;
   readonly targetColor: string;
+  readonly strokeWidth: number;
   readonly value: number;
   readonly sourceLabel: string;
   readonly targetLabel: string;
@@ -41,26 +42,19 @@ export type TraceabilityTieredLayout = {
 };
 
 const VIEWBOX_WIDTH = 1180;
-const HEADER_HEIGHT = 56;
-const CHART_TOP = 68;
-const MIN_BAND_HEIGHT = 12;
-const MIN_BAND_HEIGHT_STRICT = 28;
-const BAND_GAP = 5;
-const BASE_STACK_HEIGHT = 280;
-const MAX_STACK_HEIGHT = 320;
+const VIEWBOX_HEIGHT = 380;
+const HEADER_Y = 38;
+const LANE_TOP = 78;
+const LANE_GAP = 14;
+const RAW_NODE_HEIGHT = 42;
+const PROCESS_NODE_HEIGHT = 72;
+const PRODUCT_NODE_HEIGHT = 88;
 
 const COLUMNS = {
-  tier1Label: { x: 12, width: 268 },
-  tier1Bar: { x: 288, width: 32 },
-  tier2Bar: { x: 468, width: 32 },
-  tier2Label: { x: 512, width: 268 },
-  tier3Bar: { x: 860, width: 36 },
-  tier3Label: { x: 908, width: 260 },
+  tier1: { x: 24, width: 250 },
+  tier2: { x: 450, width: 250 },
+  tier3: { x: 890, width: 250 },
 } as const;
-
-type NodePlacement = LayoutRect & {
-  nextSlotY: number;
-};
 
 function formatPercentDe(value: number): string {
   if (Number.isInteger(value)) {
@@ -77,7 +71,7 @@ function truncateLabel(label: string, max = 42): string {
   return `${trimmed.slice(0, max - 1).trimEnd()}…`;
 }
 
-function wrapLabelLines(label: string, maxCharsPerLine: number, maxLines = 3): string[] {
+function wrapLabelLines(label: string, maxCharsPerLine: number, maxLines = 2): string[] {
   const words = label.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) {
     return [''];
@@ -116,178 +110,74 @@ function wrapLabelLines(label: string, maxCharsPerLine: number, maxLines = 3): s
   return lines;
 }
 
-function stackHeightFromBandMap(
-  nodes: readonly { readonly id: string }[],
-  heightsById: Map<string, number>,
-): number {
-  const body = nodes.reduce((sum, node) => sum + (heightsById.get(node.id) ?? MIN_BAND_HEIGHT), 0);
-  return body + Math.max(0, nodes.length - 1) * BAND_GAP;
+function flowStrokeWidth(linkValue: number, totalPercent: number): number {
+  if (totalPercent <= 0) {
+    return 4;
+  }
+  return Math.max(4, Math.min(20, (linkValue / totalPercent) * 30));
 }
 
-function fitHeightsToStack(
-  nodes: readonly { readonly id: string }[],
-  heightsById: Map<string, number>,
-  stackHeight: number,
-): Map<string, number> {
-  const gaps = Math.max(0, nodes.length - 1) * BAND_GAP;
-  const targetBody = stackHeight - gaps;
-  const currentBody = nodes.reduce((sum, node) => sum + (heightsById.get(node.id) ?? MIN_BAND_HEIGHT), 0);
-  if (currentBody <= 0 || Math.abs(currentBody - targetBody) < 0.01) {
-    return heightsById;
-  }
-
-  const scale = targetBody / currentBody;
-  const fitted = new Map<string, number>();
-  for (const node of nodes) {
-    fitted.set(node.id, (heightsById.get(node.id) ?? MIN_BAND_HEIGHT) * scale);
-  }
-  return fitted;
-}
-
-function resolveSharedStackHeight(
-  tier1: readonly { readonly id: string; readonly sharePercent: number }[],
-  tier2: readonly { readonly id: string; readonly sharePercent: number }[],
-  totalPercent: number,
-): { readonly stackHeight: number; readonly tier1Heights: Map<string, number>; readonly tier2Heights: Map<string, number> } {
-  let stackHeight = BASE_STACK_HEIGHT;
-
-  for (let iteration = 0; iteration < 64; iteration += 1) {
-    const tier1Heights = computeTierBandHeights(tier1, totalPercent, stackHeight);
-    const tier2Heights = computeTierBandHeights(tier2, totalPercent, stackHeight);
-    const nextHeight = Math.max(
-      stackHeightFromBandMap(tier1, tier1Heights),
-      stackHeightFromBandMap(tier2, tier2Heights),
-    );
-
-    if (nextHeight <= stackHeight + 0.001) {
-      stackHeight = nextHeight;
-      break;
-    }
-
-    stackHeight = nextHeight;
-  }
-
-  if (stackHeight > MAX_STACK_HEIGHT) {
-    stackHeight = MAX_STACK_HEIGHT;
-    return {
-      stackHeight,
-      tier1Heights: fitHeightsToStack(
-        tier1,
-        computeTierBandHeights(tier1, totalPercent, stackHeight, MIN_BAND_HEIGHT),
-        stackHeight,
-      ),
-      tier2Heights: fitHeightsToStack(
-        tier2,
-        computeTierBandHeights(tier2, totalPercent, stackHeight, MIN_BAND_HEIGHT),
-        stackHeight,
-      ),
-    };
-  }
-
-  const tier1Heights = fitHeightsToStack(
-    tier1,
-    computeTierBandHeights(tier1, totalPercent, stackHeight),
-    stackHeight,
-  );
-  const tier2Heights = fitHeightsToStack(
-    tier2,
-    computeTierBandHeights(tier2, totalPercent, stackHeight),
-    stackHeight,
-  );
-
-  return { stackHeight, tier1Heights, tier2Heights };
-}
-
-function computeTierBandHeights(
-  nodes: readonly { readonly id: string; readonly sharePercent: number }[],
-  totalPercent: number,
-  columnHeight: number,
-  minBandHeight = MIN_BAND_HEIGHT_STRICT,
-): Map<string, number> {
-  const gaps = Math.max(0, nodes.length - 1) * BAND_GAP;
-  const available = columnHeight - gaps;
-  const heightsById = new Map<string, number>();
-
-  for (const node of nodes) {
-    heightsById.set(
-      node.id,
-      Math.max(minBandHeight, (node.sharePercent / totalPercent) * available),
-    );
-  }
-
-  return heightsById;
-}
-
-function flowBandHeight(linkValue: number, totalPercent: number, columnHeight: number, tierNodeCount: number): number {
-  const gaps = Math.max(0, tierNodeCount - 1) * BAND_GAP;
-  const available = columnHeight - gaps;
-  return Math.max(MIN_BAND_HEIGHT, (linkValue / totalPercent) * available);
-}
-
-function placeTierStack(
-  nodes: readonly { readonly id: string; readonly sharePercent: number }[],
-  heightsById: Map<string, number>,
-  barX: number,
-  barWidth: number,
-): Map<string, NodePlacement> {
-  const placements = new Map<string, NodePlacement>();
-  let yCursor = CHART_TOP;
-
-  for (const node of nodes) {
-    const height = heightsById.get(node.id) ?? MIN_BAND_HEIGHT;
-    placements.set(node.id, {
-      x: barX,
-      y: yCursor,
-      width: barWidth,
-      height,
-      nextSlotY: yCursor,
-    });
-    yCursor += height + BAND_GAP;
-  }
-
-  return placements;
+function centerY(rect: LayoutRect): number {
+  return rect.y + rect.height / 2;
 }
 
 function buildLabelMeta(
   node: { readonly label: string; readonly tier: 1 | 2 | 3; readonly sharePercent: number },
-  bar: LayoutRect,
+  rect: LayoutRect,
 ): Pick<LayoutNode, 'labelRect' | 'labelAnchor' | 'labelLines'> {
-  if (node.tier === 1) {
-    return {
-      labelRect: {
-        x: COLUMNS.tier1Label.x,
-        y: bar.y,
-        width: COLUMNS.tier1Label.width,
-        height: bar.height,
-      },
-      labelAnchor: 'end',
-      labelLines: wrapLabelLines(node.label, 34, 3),
-    };
-  }
-
-  if (node.tier === 2) {
-    return {
-      labelRect: {
-        x: COLUMNS.tier2Label.x,
-        y: bar.y,
-        width: COLUMNS.tier2Label.width,
-        height: bar.height,
-      },
-      labelAnchor: 'start',
-      labelLines: wrapLabelLines(node.label, 36, 3),
-    };
-  }
-
   return {
-    labelRect: {
-      x: COLUMNS.tier3Label.x,
-      y: bar.y,
-      width: COLUMNS.tier3Label.width,
-      height: bar.height,
-    },
-    labelAnchor: 'start',
-    labelLines: wrapLabelLines(node.label, 34, 4),
+    labelRect: rect,
+    labelAnchor: 'middle',
+    labelLines: wrapLabelLines(node.label, node.tier === 3 ? 28 : 30, node.tier === 3 ? 3 : 2),
   };
+}
+
+function placeRawNodes(tier1: readonly { readonly id: string }[]): Map<string, LayoutRect> {
+  const placements = new Map<string, LayoutRect>();
+  for (const [index, node] of tier1.entries()) {
+    placements.set(node.id, {
+      x: COLUMNS.tier1.x,
+      y: LANE_TOP + index * (RAW_NODE_HEIGHT + LANE_GAP),
+      width: COLUMNS.tier1.width,
+      height: RAW_NODE_HEIGHT,
+    });
+  }
+  return placements;
+}
+
+function placeProcessingNodes(
+  tier2: readonly { readonly id: string }[],
+  rawStackHeight: number,
+): Map<string, LayoutRect> {
+  const placements = new Map<string, LayoutRect>();
+  const totalHeight = tier2.length * PROCESS_NODE_HEIGHT + Math.max(0, tier2.length - 1) * 42;
+  const startY = LANE_TOP + Math.max(0, (rawStackHeight - totalHeight) / 2);
+
+  for (const [index, node] of tier2.entries()) {
+    placements.set(node.id, {
+      x: COLUMNS.tier2.x,
+      y: startY + index * (PROCESS_NODE_HEIGHT + 42),
+      width: COLUMNS.tier2.width,
+      height: PROCESS_NODE_HEIGHT,
+    });
+  }
+  return placements;
+}
+
+function placeProductNodes(
+  tier3: readonly { readonly id: string }[],
+  rawStackHeight: number,
+): Map<string, LayoutRect> {
+  const placements = new Map<string, LayoutRect>();
+  for (const node of tier3) {
+    placements.set(node.id, {
+      x: COLUMNS.tier3.x,
+      y: LANE_TOP + Math.max(0, (rawStackHeight - PRODUCT_NODE_HEIGHT) / 2),
+      width: COLUMNS.tier3.width,
+      height: PRODUCT_NODE_HEIGHT,
+    });
+  }
+  return placements;
 }
 
 /**
@@ -301,41 +191,14 @@ export function computeTraceabilityTieredLayout(
   const tier2 = model.nodes.filter((node) => node.tier === 2);
   const tier3 = model.nodes.filter((node) => node.tier === 3);
   const totalMass = tier1.reduce((sum, node) => sum + node.sharePercent, 0);
-  const resolved = resolveSharedStackHeight(tier1, tier2, totalMass);
-  const stackHeight = resolved.stackHeight;
-  const tier1Heights = resolved.tier1Heights;
-  const tier2Heights = resolved.tier2Heights;
+  const rawStackHeight =
+    tier1.length * RAW_NODE_HEIGHT + Math.max(0, tier1.length - 1) * LANE_GAP;
+  const stackHeight = Math.max(rawStackHeight, 220);
 
-  const placements = new Map<string, NodePlacement>();
-  const tier1Placements = placeTierStack(
-    tier1,
-    tier1Heights,
-    COLUMNS.tier1Bar.x,
-    COLUMNS.tier1Bar.width,
-  );
-  const tier2Placements = placeTierStack(
-    tier2,
-    tier2Heights,
-    COLUMNS.tier2Bar.x,
-    COLUMNS.tier2Bar.width,
-  );
-
-  for (const [id, placement] of tier1Placements) {
-    placements.set(id, placement);
-  }
-  for (const [id, placement] of tier2Placements) {
-    placements.set(id, placement);
-  }
-
-  for (const node of tier3) {
-    placements.set(node.id, {
-      x: COLUMNS.tier3Bar.x,
-      y: CHART_TOP,
-      width: COLUMNS.tier3Bar.width,
-      height: stackHeight,
-      nextSlotY: CHART_TOP,
-    });
-  }
+  const placements = new Map<string, LayoutRect>();
+  for (const [id, rect] of placeRawNodes(tier1)) placements.set(id, rect);
+  for (const [id, rect] of placeProcessingNodes(tier2, stackHeight)) placements.set(id, rect);
+  for (const [id, rect] of placeProductNodes(tier3, stackHeight)) placements.set(id, rect);
 
   const sortedLinks = [...model.links].sort((a, b) => {
     const tierDelta =
@@ -364,36 +227,18 @@ export function computeTraceabilityTieredLayout(
       continue;
     }
 
-    const sourceTierCount = source.tier === 1 ? tier1.length : tier2.length;
-    const flowHeight = flowBandHeight(link.value, totalMass, stackHeight, sourceTierCount);
-    const sourceY0 = sourcePlacement.nextSlotY;
-    const sourceY1 = sourceY0 + flowHeight;
-    const targetY0 = targetPlacement.nextSlotY;
-    const targetY1 = targetY0 + flowHeight;
-
-    placements.set(link.sourceId, {
-      ...sourcePlacement,
-      nextSlotY: sourceY1,
-    });
-    placements.set(link.targetId, {
-      ...targetPlacement,
-      nextSlotY: targetY1,
-    });
+    const startX = sourcePlacement.x + sourcePlacement.width;
+    const endX = targetPlacement.x;
 
     flows.push({
       id: link.id,
-      path: calculateFlowRibbonPath(
-        sourcePlacement.x + sourcePlacement.width,
-        sourceY0,
-        sourceY1,
-        targetPlacement.x,
-        targetY0,
-        targetY1,
-        { bendRatio: 0.5 },
-      ),
+      path: calculateBezierPath(startX, centerY(sourcePlacement), endX, centerY(targetPlacement), {
+        bendRatio: 0.5,
+      }),
       gradientId: `flow-gradient-${link.id}`,
       sourceColor: link.color,
       targetColor: target.color,
+      strokeWidth: flowStrokeWidth(link.value, totalMass),
       value: link.value,
       sourceLabel: source.label,
       targetLabel: target.label,
@@ -406,13 +251,13 @@ export function computeTraceabilityTieredLayout(
       return [];
     }
 
-    const barRect = {
+    const rect = {
       x: placement.x,
       y: placement.y,
       width: placement.width,
       height: placement.height,
     };
-    const labelMeta = buildLabelMeta(node, barRect);
+    const labelMeta = buildLabelMeta(node, rect);
 
     return [{
       id: node.id,
@@ -420,23 +265,21 @@ export function computeTraceabilityTieredLayout(
       tier: node.tier,
       color: node.color,
       sharePercent: node.sharePercent,
-      rect: barRect,
+      rect,
       ...labelMeta,
     }];
   });
 
-  const viewBoxHeight = CHART_TOP + stackHeight + 16;
-
   return {
     viewBoxWidth: VIEWBOX_WIDTH,
-    viewBoxHeight,
+    viewBoxHeight: VIEWBOX_HEIGHT,
     stackHeight,
     nodes: layoutNodes,
     flows,
     columnLabels: [
-      { x: COLUMNS.tier1Label.x, label: 'Rohstoffe' },
-      { x: COLUMNS.tier2Label.x, label: 'Herkunft / Verarbeitung' },
-      { x: COLUMNS.tier3Label.x, label: 'Endprodukt' },
+      { x: COLUMNS.tier1.x, label: 'Rohstoffe' },
+      { x: COLUMNS.tier2.x, label: 'Herkunft / Verarbeitung' },
+      { x: COLUMNS.tier3.x, label: 'Endprodukt' },
     ],
   };
 }

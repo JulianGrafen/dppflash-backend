@@ -23,7 +23,6 @@ type HoverState =
 const HEADER_HEIGHT = 56;
 const LINE_HEIGHT = 12;
 const PERCENT_LINE_HEIGHT = 11;
-const MIN_BAND_VISUAL = 12;
 
 const GRADIENT_COLUMNS = {
   tier1BarEnd: 288 + 32,
@@ -42,39 +41,24 @@ function labelStartY(node: LayoutNode): number {
   return node.labelRect.y + Math.max(8, (node.labelRect.height - textBlockHeight) / 2);
 }
 
-function minCardHeight(node: LayoutNode): number {
-  return node.labelLines.length * LINE_HEIGHT + PERCENT_LINE_HEIGHT + 16;
-}
-
 function NodeLabel({ node }: { readonly node: LayoutNode }) {
   const startY = labelStartY(node);
   const textX =
     node.labelAnchor === 'end'
       ? node.labelRect.x + node.labelRect.width
-      : node.labelRect.x;
-  const showCard = node.tier === 2 || node.tier === 3;
+      : node.labelAnchor === 'middle'
+        ? node.labelRect.x + node.labelRect.width / 2
+        : node.labelRect.x;
 
   return (
     <g className="traceability-label">
-      {showCard ? (
-        <rect
-          x={node.labelRect.x - 8}
-          y={node.labelRect.y + 4}
-          width={node.labelRect.width + 12}
-          height={Math.max(node.labelRect.height - 8, minCardHeight(node))}
-          rx={10}
-          fill="#ffffff"
-          stroke="#e2e8f0"
-          strokeWidth={1}
-        />
-      ) : null}
       <text
         x={textX}
         y={startY}
         textAnchor={node.labelAnchor}
-        fill={node.tier === 1 ? '#0f172a' : '#1e293b'}
+        fill="#ffffff"
         fontSize={11}
-        fontWeight={600}
+        fontWeight={700}
       >
         {node.labelLines.map((line, index) => (
           <tspan key={`${node.id}-line-${index}`} x={textX} dy={index === 0 ? 0 : LINE_HEIGHT}>
@@ -84,7 +68,7 @@ function NodeLabel({ node }: { readonly node: LayoutNode }) {
         <tspan
           x={textX}
           dy={LINE_HEIGHT + 2}
-          fill="#64748b"
+          fill="rgba(255,255,255,0.82)"
           fontSize={10}
           fontWeight={700}
         >
@@ -105,18 +89,18 @@ function FlowBand({
   return (
     <path
       d={flow.path}
-      fill={`url(#${flow.gradientId})`}
-      stroke="#ffffff"
-      strokeOpacity={0.35}
-      strokeWidth={0.75}
-      opacity={0.88}
+      fill="none"
+      stroke={`url(#${flow.gradientId})`}
+      strokeLinecap="round"
+      strokeWidth={flow.strokeWidth}
+      opacity={0.5}
       onMouseEnter={() => onHover(flow)}
       onMouseLeave={() => onHover(null)}
       onFocus={() => onHover(flow)}
       onBlur={() => onHover(null)}
       tabIndex={0}
       aria-label={formatTraceabilityFlowTooltip(flow)}
-      className="transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none"
+      className="transition-opacity hover:opacity-90 focus:opacity-90 focus:outline-none"
     />
   );
 }
@@ -141,15 +125,15 @@ function NodeBar({
       className="focus:outline-none"
     >
       <rect
-        x={rect.x - 1}
-        y={rect.y - 1}
-        width={rect.width + 2}
-        height={Math.max(rect.height, MIN_BAND_VISUAL)}
-        rx={node.tier === 3 ? 10 : 6}
+        x={rect.x}
+        y={rect.y}
+        width={rect.width}
+        height={rect.height}
+        rx={node.tier === 3 ? 14 : 11}
         fill={node.color}
-        fillOpacity={node.tier === 3 ? 0.95 : 0.9}
+        fillOpacity={node.tier === 3 ? 0.96 : 0.92}
         stroke="#ffffff"
-        strokeWidth={1.5}
+        strokeWidth={2}
       />
     </g>
   );
@@ -182,7 +166,7 @@ export function TraceabilityTieredFlowchart({ model, className = '' }: Traceabil
           preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label="Rückverfolgbarkeits-Materialfluss mit Herkunftsstufe"
-          className="h-auto max-h-[360px] w-full min-w-[880px]"
+          className="h-auto max-h-[380px] w-full min-w-[880px]"
         >
           <defs>
             {layout.flows.map((flow) => (

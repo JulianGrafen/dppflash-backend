@@ -60,7 +60,7 @@ describe('buildTraceabilityTieredFlowModel', () => {
 });
 
 describe('computeTraceabilityTieredLayout', () => {
-  it('preserves mass balance height across tiers', () => {
+  it('creates a compact non-overlapping lane layout', () => {
     const model = buildTraceabilityTieredFlowModel({
       materials: HENKEL_LIKE_MATERIALS,
       productLabel: 'Cimsec Fliesen Kleber S1 Flex',
@@ -68,18 +68,18 @@ describe('computeTraceabilityTieredLayout', () => {
     expect(model).not.toBeNull();
 
     const layout = computeTraceabilityTieredLayout(model!);
-    const stackGap = (count: number) => Math.max(0, count - 1) * 5;
-    const tier1Nodes = layout.nodes.filter((n) => n.tier === 1);
-    const tier2Nodes = layout.nodes.filter((n) => n.tier === 2);
-    const tier1Stack = tier1Nodes.reduce((sum, n) => sum + n.rect.height, 0) + stackGap(tier1Nodes.length);
-    const tier2Stack = tier2Nodes.reduce((sum, n) => sum + n.rect.height, 0) + stackGap(tier2Nodes.length);
-    const productHeight = layout.nodes.find((n) => n.tier === 3)?.rect.height ?? 0;
+    const tier1Nodes = layout.nodes.filter((node) => node.tier === 1);
+    const sortedTier1 = [...tier1Nodes].sort((a, b) => a.rect.y - b.rect.y);
 
-    expect(Math.max(tier1Stack, tier2Stack)).toBeCloseTo(layout.stackHeight, 0);
-    expect(productHeight).toBeCloseTo(layout.stackHeight, 0);
+    for (let index = 1; index < sortedTier1.length; index += 1) {
+      const previous = sortedTier1[index - 1]!;
+      const current = sortedTier1[index]!;
+      expect(current.rect.y).toBeGreaterThanOrEqual(previous.rect.y + previous.rect.height + 14);
+    }
+
+    expect(layout.nodes.filter((node) => node.tier === 2)).toHaveLength(2);
     expect(layout.flows.length).toBe(model!.links.length);
-    expect(layout.stackHeight).toBeLessThanOrEqual(320);
-    expect(layout.viewBoxHeight).toBeLessThanOrEqual(420);
-    expect(layout.nodes.every((node) => node.rect.height >= 8)).toBe(true);
+    expect(layout.viewBoxHeight).toBe(380);
+    expect(layout.flows.every((flow) => flow.strokeWidth >= 4 && flow.strokeWidth <= 20)).toBe(true);
   });
 });

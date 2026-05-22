@@ -219,7 +219,7 @@ export default function CreateDashboard() {
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Neues Produkt erstellen
+              Neuen Produktpass erstellen
             </h1>
             <p className="text-gray-600">
               PDF hochladen und Produktpass erstellen
@@ -553,9 +553,6 @@ export default function CreateDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Erfolgreich erstellt!
             </h1>
-            <p className="text-gray-600">
-              Dein {dpp.type === 'BATTERY' ? 'Batterie' : 'Textil'} Passport ist bereit
-            </p>
           </div>
 
           {/* QR Code Section */}

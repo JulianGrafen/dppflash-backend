@@ -90,6 +90,17 @@ export function classifyComplianceDocument(
   fileName: string,
   documentText: string,
 ): ComplianceDocumentClassification | null {
+  const inferredFromFileName = inferComplianceDocumentTypeFromFileName(fileName);
+  if (inferredFromFileName === 'rohs_confirmation') {
+    return { type: 'rohs_confirmation', title: 'RoHS Confirmation' };
+  }
+  if (
+    inferredFromFileName === 'technical_brief'
+    && !isSafetyDataSheet(fileName, documentText)
+  ) {
+    return { type: 'technical_brief', title: 'Technisches Merkblatt' };
+  }
+
   if (isRegulatoryDataSheet(documentText)) {
     return { type: 'regulatory_data_sheet', title: 'Regulatorisches Datenblatt' };
   }
@@ -102,14 +113,15 @@ export function classifyComplianceDocument(
   if (isTechnicalBrief(fileName, documentText)) {
     return { type: 'technical_brief', title: 'Technisches Merkblatt' };
   }
+
+  if (inferredFromFileName === 'safety_data_sheet') {
+    return { type: 'safety_data_sheet', title: 'Sicherheitsdatenblatt' };
+  }
+
   return null;
 }
 
-export function inferComplianceDocumentType(fileName: string, documentText = ''): string {
-  const classified = classifyComplianceDocument(fileName, documentText);
-  if (classified) {
-    return classified.type;
-  }
+function inferComplianceDocumentTypeFromFileName(fileName: string): string {
   const lower = fileName.toLowerCase();
   if (lower.includes('rohs')) {
     return 'rohs_confirmation';
@@ -133,7 +145,18 @@ export function inferComplianceDocumentType(fileName: string, documentText = '')
   ) {
     return 'technical_brief';
   }
+  if (lower.includes('regulatorisches') || /\brds\b/.test(lower)) {
+    return 'regulatory_data_sheet';
+  }
   return 'compliance_pdf';
+}
+
+export function inferComplianceDocumentType(fileName: string, documentText = ''): string {
+  const classified = classifyComplianceDocument(fileName, documentText);
+  if (classified) {
+    return classified.type;
+  }
+  return inferComplianceDocumentTypeFromFileName(fileName);
 }
 
 export function titleFromFileName(fileName: string): string {
@@ -227,6 +250,15 @@ function inferDocumentTypeFromReference(reference: string): string | undefined {
   if (/\brohs\b/.test(normalized)) {
     return 'rohs_confirmation';
   }
+  if (
+    normalized.includes('merkblatt')
+    || normalized.includes('produktdatenblatt')
+    || normalized.includes('produktdaten')
+    || normalized.includes('technicaldatasheet')
+    || normalized.includes('productdatasheet')
+  ) {
+    return 'technical_brief';
+  }
   if (normalized.includes('regulatorisches') || /\brds\b/.test(normalized)) {
     return 'regulatory_data_sheet';
   }
@@ -237,7 +269,7 @@ function findUniqueComplianceDocumentByType(
   docs: readonly ComplianceSourceDocument[],
   type: string,
 ): ComplianceSourceDocument | undefined {
-  const matches = docs.filter((doc) => doc.type === type);
+  const matches = docs.filter((doc) => enrichComplianceDocumentEntry(doc).type === type);
   return matches.length === 1 ? matches[0] : undefined;
 }
 
@@ -316,6 +348,18 @@ function scoreComplianceDocumentMatch(
   ) {
     score = Math.max(score, 70);
   }
+  if (
+    doc.type === 'technical_brief'
+    && inferDocumentTypeFromReference(fileStemKey) === 'technical_brief'
+  ) {
+    score = Math.max(score, 70);
+  }
+  if (
+    doc.type === 'rohs_confirmation'
+    && inferDocumentTypeFromReference(fileStemKey) === 'rohs_confirmation'
+  ) {
+    score = Math.max(score, 70);
+  }
 
   return score;
 }
@@ -363,8 +407,10 @@ export function matchComplianceDocumentByFileName(
     return bestDoc;
   }
 
-  const inferredType = inferDocumentTypeFromReference(trimmed);
-  if (inferredType) {
+  const inferredType =
+    inferDocumentTypeFromReference(trimmed)
+    ?? inferComplianceDocumentType(trimmed, trimmed);
+  if (inferredType && inferredType !== 'compliance_pdf') {
     const uniqueByType = findUniqueComplianceDocumentByType(docs, inferredType);
     if (uniqueByType) {
       return uniqueByType;
@@ -394,6 +440,117 @@ export function collectComplianceSourceDocuments(
     merged.push(...parseComplianceSourceDocuments(source));
   }
   return dedupeComplianceSourceDocuments(merged);
+}
+
+function complianceDocumentTitleForType(
+  type: string,
+  fileName: string,
+  currentTitle: string,
+): string {
+  switch (type) {
+    case 'safety_data_sheet':
+      return 'Sicherheitsdatenblatt';
+    case 'technical_brief':
+      return 'Technisches Merkblatt';
+    case 'rohs_confirmation':
+      return 'RoHS Confirmation';
+    case 'regulatory_data_sheet':
+      return 'Regulatorisches Datenblatt';
+    default:
+      return currentTitle.trim() || titleFromFileName(fileName);
+  }
+}
+
+/** Typ/Titel aus Dateiname ableiten — gleiche Heuristik wie Chunk-Matching. */
+export function enrichComplianceDocumentEntry(doc: ComplianceSourceDocument): ComplianceSourceDocument {
+  const fileName = stripStorageUuidPrefix(basenameFromDocumentUrl(doc.url)) || doc.title;
+  const inferredType = inferComplianceDocumentType(fileName, doc.title);
+  const type = doc.type === 'compliance_pdf' ? inferredType : doc.type;
+  return {
+    ...doc,
+    type,
+    title: complianceDocumentTitleForType(type, fileName, doc.title),
+  };
+}
+
+function isDisplayableComplianceDocument(doc: ComplianceSourceDocument): boolean {
+  const fileName = stripStorageUuidPrefix(basenameFromDocumentUrl(doc.url)) || doc.title;
+  const inferredType = inferComplianceDocumentType(fileName, doc.title);
+  return inferredType !== 'compliance_pdf' || doc.type !== 'compliance_pdf';
+}
+
+function pushAuditSourceFileName(value: unknown, names: Set<string>): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  const source = value.source;
+  if (isRecord(source) && typeof source.fileName === 'string' && source.fileName.trim()) {
+    names.add(source.fileName.trim());
+  }
+}
+
+/** Sammelt `source.fileName` aus dem RAG-Audit-Trail (wie in der PDF-Vorschau). */
+export function extractAuditSourceFileNames(raw: Record<string, unknown>): readonly string[] {
+  const names = new Set<string>();
+  const enrichment = raw.ragEnrichment;
+  if (!isRecord(enrichment) || enrichment.success !== true) {
+    return [];
+  }
+  const trail = enrichment.auditTrail;
+  if (!isRecord(trail)) {
+    return [];
+  }
+
+  pushAuditSourceFileName(trail.gtin, names);
+  pushAuditSourceFileName(trail.ewcCode, names);
+  const fields = trail.fields;
+  if (isRecord(fields)) {
+    for (const value of Object.values(fields)) {
+      pushAuditSourceFileName(value, names);
+    }
+  }
+
+  return [...names];
+}
+
+/**
+ * Baut die Download-Liste für „Zugehörige Compliance-Dokumente“:
+ * alle erkannten Typen (SDB, Merkblatt, RoHS, RDS) inkl. Audit-Referenzen.
+ */
+export function resolveComplianceDocumentsForPassport(
+  raw: Record<string, unknown>,
+): ComplianceSourceDocument[] {
+  const extracted =
+    isRecord(raw.extracted_attributes)
+      ? raw.extracted_attributes
+      : isRecord(raw.extractedAttributes)
+        ? raw.extractedAttributes
+        : undefined;
+
+  const pool = collectComplianceSourceDocuments(
+    raw.attachments,
+    raw.downloadableDocuments,
+    raw.sourceDocuments,
+    extracted?.sourceDocuments,
+  );
+
+  const enriched = pool.map(enrichComplianceDocumentEntry);
+  const selected = new Map<string, ComplianceSourceDocument>();
+
+  for (const doc of enriched) {
+    if (isDisplayableComplianceDocument(doc)) {
+      selected.set(doc.url, doc);
+    }
+  }
+
+  for (const fileName of extractAuditSourceFileNames(raw)) {
+    const matched = matchComplianceDocumentByFileName(fileName, enriched);
+    if (matched) {
+      selected.set(matched.url, enrichComplianceDocumentEntry(matched));
+    }
+  }
+
+  return dedupeComplianceSourceDocuments([...selected.values()]);
 }
 
 export function dedupeComplianceSourceDocuments(

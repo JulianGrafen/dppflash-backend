@@ -4,9 +4,11 @@ import {
   classifyComplianceDocument,
   collectComplianceSourceDocuments,
   dedupeComplianceSourceDocuments,
+  enrichComplianceDocumentEntry,
   inferComplianceDocumentType,
   matchComplianceDocumentByFileName,
   parseComplianceSourceDocuments,
+  resolveComplianceDocumentsForPassport,
 } from '@/app/domain/rag/sourceDocuments';
 
 describe('sourceDocuments', () => {
@@ -41,10 +43,26 @@ describe('sourceDocuments', () => {
 
     expect(
       classifyComplianceDocument(
+        'RoHS_Confirmation.pdf',
+        'Short directive reference only.',
+      ),
+    ).toMatchObject({ type: 'rohs_confirmation' });
+
+    expect(
+      classifyComplianceDocument(
         'datenblatt.pdf',
         'Regulatorisches Datenblatt\nProdukt: Test',
       ),
     ).toMatchObject({ type: 'regulatory_data_sheet', title: 'Regulatorisches Datenblatt' });
+  });
+
+  it('classifies Merkblatt from filename even when body text is sparse', () => {
+    expect(
+      classifyComplianceDocument(
+        'Technisches_Merkblatt_Cimsec.pdf',
+        'Produktname und Verarbeitung',
+      ),
+    ).toMatchObject({ type: 'technical_brief', title: 'Technisches Merkblatt' });
   });
 
   it('does not classify normal product data sheets as compliance documents', () => {
@@ -115,6 +133,69 @@ describe('sourceDocuments', () => {
     expect(
       matchComplianceDocumentByFileName('_000000670689_SDB_UA_DE.PDF', docs)?.title,
     ).toBe('Sicherheitsdatenblatt');
+  });
+
+  it('matches Merkblatt and RoHS filenames to typed compliance documents', () => {
+    const docs = [
+      {
+        title: 'Alt',
+        url: 'https://cdn.example.com/p1/uuid-Merkblatt.pdf',
+        type: 'compliance_pdf',
+      },
+      {
+        title: 'Alt',
+        url: 'https://cdn.example.com/p1/uuid-RoHS_Confirmation.pdf',
+        type: 'compliance_pdf',
+      },
+    ];
+
+    expect(matchComplianceDocumentByFileName('Merkblatt.pdf', docs)?.url).toContain('Merkblatt.pdf');
+    expect(matchComplianceDocumentByFileName('RoHS.pdf', docs)?.url).toContain('RoHS_Confirmation.pdf');
+  });
+
+  it('resolveComplianceDocumentsForPassport shows Merkblatt, RoHS and SDB from attachments', () => {
+    const raw = {
+      attachments: [
+        {
+          title: 'Upload',
+          url: 'https://cdn.example.com/p1/uuid-SDB.pdf',
+          type: 'safety_data_sheet',
+        },
+        {
+          title: 'Upload',
+          url: 'https://cdn.example.com/p1/uuid-Produktdatenblatt.pdf',
+          type: 'compliance_pdf',
+        },
+        {
+          title: 'Upload',
+          url: 'https://cdn.example.com/p1/uuid-RoHS.pdf',
+          type: 'compliance_pdf',
+        },
+      ],
+      ragEnrichment: {
+        success: true,
+        auditTrail: {
+          fields: {
+            handlingInstructions: {
+              value: 'Reinigung',
+              source: { fileName: 'Produktdatenblatt.pdf', contextSnippet: 'Reinigung' },
+            },
+          },
+        },
+      },
+    };
+
+    const docs = resolveComplianceDocumentsForPassport(raw);
+    expect(docs.map((doc) => doc.type).sort()).toEqual([
+      'rohs_confirmation',
+      'safety_data_sheet',
+      'technical_brief',
+    ]);
+    expect(enrichComplianceDocumentEntry({
+      title: 'Alt',
+      url: 'https://cdn.example.com/p1/uuid-Produktdatenblatt.pdf',
+      type: 'compliance_pdf',
+    }).title).toBe('Technisches Merkblatt');
   });
 
   it('collects documents from multiple attachment containers', () => {

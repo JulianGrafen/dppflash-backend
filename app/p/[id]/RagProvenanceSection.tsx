@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import {
-  collectComplianceSourceDocuments,
   matchComplianceDocumentByFileName,
+  parseComplianceSourceDocuments,
   type ComplianceSourceDocument,
 } from '@/app/domain/rag/sourceDocuments';
 import { ChevronDown, ExternalLink, FileSearch, FileText } from 'lucide-react';
@@ -193,7 +193,7 @@ export function RagProvenanceSection({
       applied: appliedFieldKeys,
       cryptoOk: cryptoValidationOk,
       cryptoErrors: validationErrors,
-      complianceDocs: collectComplianceSourceDocuments(attachments),
+      complianceDocs: parseComplianceSourceDocuments(attachments),
     };
   }, [ragEnrichment, attachments]);
 

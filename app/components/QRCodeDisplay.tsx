@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, Share2, Copy, Check } from 'lucide-react';
+import { Download, Share2, Copy, Check, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
 interface QRCodeDisplayProps {
   productId: string;
@@ -61,7 +62,9 @@ export default function QRCodeDisplay({
     ? `?d=${encodeURIComponent(JSON.stringify(compactFallbackPayload))}`
     : '';
 
-  const dppLink = `${baseUrl}/p/${productId}${fallbackQuery}`;
+  const dppPath = `/p/${productId}${fallbackQuery}`;
+
+  const dppLink = `${baseUrl}${dppPath}`;
 
   // Generiere QR-Code wenn nicht vorhanden
   useEffect(() => {
@@ -169,14 +172,20 @@ export default function QRCodeDisplay({
         {isLoading ? (
           <div className="text-gray-500 text-sm">QR-Code wird generiert...</div>
         ) : qrUrl ? (
-          <div className="relative w-64 h-64">
+          <Link
+            href={dppPath}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative block w-64 h-64 rounded-md transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2"
+            title="Produktpass öffnen"
+          >
             <img
               src={qrUrl}
-              alt="DPP QR-Code"
-              className="w-full h-full object-contain"
+              alt="DPP QR-Code — tippen zum Öffnen"
+              className="h-full w-full object-contain"
               onError={() => console.error('QR-Code Bild konnte nicht geladen werden')}
             />
-          </div>
+          </Link>
         ) : (
           <div className="text-red-500 text-sm">QR-Code konnte nicht generiert werden</div>
         )}
@@ -235,8 +244,38 @@ export default function QRCodeDisplay({
       {/* DPP Link Preview */}
       <div className="w-full mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <p className="text-xs text-gray-500 mb-2 uppercase font-bold">DPP-Link</p>
-        <div className="flex items-center gap-2 bg-gray-100 p-2 rounded break-all">
-          <code className="text-xs text-gray-700 flex-1 font-mono">{dppLink}</code>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Link
+            href={dppPath}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-800 underline decoration-sky-200 underline-offset-2 transition hover:border-sky-300 hover:bg-sky-50 hover:text-sky-950"
+          >
+            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="truncate font-mono text-xs sm:text-sm">{dppLink}</span>
+          </Link>
+          <button
+            type="button"
+            onClick={copyLink}
+            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+              copiedToClipboard
+                ? 'bg-emerald-600 text-white'
+                : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Link in Zwischenablage kopieren"
+          >
+            {copiedToClipboard ? (
+              <>
+                <Check size={16} aria-hidden />
+                Kopiert
+              </>
+            ) : (
+              <>
+                <Copy size={16} aria-hidden />
+                Kopieren
+              </>
+            )}
+          </button>
         </div>
       </div>
 

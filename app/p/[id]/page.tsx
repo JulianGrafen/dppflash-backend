@@ -20,7 +20,7 @@ import {
 } from '@/app/domain/rag/hazardStatementCodes';
 import { ComplianceDocumentsSection } from './ComplianceDocumentsSection';
 import { GhsPictogramBadges } from './GhsPictogramBadges';
-import { parseComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
+import { collectComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
@@ -1775,8 +1775,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   );
   const hazardFromRagAudit = (key: string) =>
     readRagAuditTrailFieldValues(raw, [key]).length > 0 && !ragSuppliedFields.includes(key);
-  const complianceAttachments = parseComplianceSourceDocuments(
-    raw.attachments ?? raw.downloadableDocuments,
+  const complianceAttachments = collectComplianceSourceDocuments(
+    raw.attachments,
+    raw.downloadableDocuments,
+    raw.sourceDocuments,
   );
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
@@ -1983,7 +1985,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
         <RagProvenanceSection
           ragEnrichment={raw.ragEnrichment}
-          attachments={raw.attachments ?? raw.downloadableDocuments ?? raw.sourceDocuments}
+          attachments={complianceAttachments}
         />
 
         {hasRecycledContentSection ? (

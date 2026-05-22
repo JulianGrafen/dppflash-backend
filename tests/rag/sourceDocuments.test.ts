@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   appendSourceDocumentToExtractedAttributes,
   classifyComplianceDocument,
+  collectComplianceSourceDocuments,
   dedupeComplianceSourceDocuments,
   inferComplianceDocumentType,
+  matchComplianceDocumentByFileName,
   parseComplianceSourceDocuments,
 } from '@/app/domain/rag/sourceDocuments';
 
@@ -57,5 +59,32 @@ describe('sourceDocuments', () => {
   it('infers SDS type from filename but not technical product data sheets', () => {
     expect(inferComplianceDocumentType('Produkt-SDB-final.pdf')).toBe('safety_data_sheet');
     expect(inferComplianceDocumentType('Technisches_Merkblatt.pdf')).toBe('compliance_pdf');
+  });
+
+  it('matches RAG source file names to compliance storage URLs', () => {
+    const docs = [
+      {
+        title: 'Sicherheitsdatenblatt',
+        url: 'https://cdn.example.com/p1/uuid-SDB_Cimsec.pdf',
+        type: 'safety_data_sheet',
+      },
+      {
+        title: 'Technisches Merkblatt',
+        url: 'https://cdn.example.com/p1/uuid-Merkblatt.pdf',
+        type: 'compliance_pdf',
+      },
+    ];
+
+    expect(matchComplianceDocumentByFileName('SDB-Cimsec.pdf', docs)?.title).toBe('Sicherheitsdatenblatt');
+    expect(matchComplianceDocumentByFileName('Merkblatt.pdf', docs)?.title).toBe('Technisches Merkblatt');
+  });
+
+  it('collects documents from multiple attachment containers', () => {
+    const docs = collectComplianceSourceDocuments(
+      [{ title: 'A', url: 'https://x.com/1.pdf', type: 'compliance_pdf' }],
+      undefined,
+      [{ title: 'SDB', url: 'https://x.com/2.pdf', type: 'safety_data_sheet' }],
+    );
+    expect(docs).toHaveLength(2);
   });
 });

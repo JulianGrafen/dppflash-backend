@@ -122,6 +122,88 @@ export function parseComplianceSourceDocuments(raw: unknown): ComplianceSourceDo
   return out;
 }
 
+/** **Normalisiert** Datei- und Titelstrings für robustes Matching (SDB ↔ Storage-Dateiname). */
+export function normalizeDocumentMatchKey(value: string): string {
+  return normalizeSearchText(value).replace(/[^a-z0-9]/g, '');
+}
+
+export function basenameFromDocumentUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    return path.split('/').pop() ?? '';
+  } catch {
+    const withoutQuery = url.split('?')[0] ?? url;
+    return withoutQuery.split('/').pop() ?? '';
+  }
+}
+
+function stripStorageUuidPrefix(fileBaseName: string): string {
+  return fileBaseName.replace(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i,
+    '',
+  );
+}
+
+function keysOverlap(a: string, b: string): boolean {
+  if (!a || !b) {
+    return false;
+  }
+  return a.includes(b) || b.includes(a);
+}
+
+/**
+ * Findet das Compliance-PDF zu einem RAG-`source.fileName` (Titel, URL-Basename, SDB-Typ).
+ */
+export function matchComplianceDocumentByFileName(
+  fileName: string,
+  docs: readonly ComplianceSourceDocument[],
+): ComplianceSourceDocument | undefined {
+  const trimmed = fileName.trim();
+  if (!trimmed || docs.length === 0) {
+    return undefined;
+  }
+
+  const fileStemKey = normalizeDocumentMatchKey(trimmed.replace(/\.[^.]+$/i, ''));
+  const fileFullKey = normalizeDocumentMatchKey(trimmed);
+
+  for (const doc of docs) {
+    const titleKey = normalizeDocumentMatchKey(doc.title);
+    const urlBase = stripStorageUuidPrefix(basenameFromDocumentUrl(doc.url));
+    const urlStemKey = normalizeDocumentMatchKey(urlBase.replace(/\.[^.]+$/i, ''));
+    const urlFullKey = normalizeDocumentMatchKey(urlBase);
+
+    if (
+      keysOverlap(fileStemKey, titleKey)
+      || keysOverlap(fileFullKey, titleKey)
+      || keysOverlap(fileStemKey, urlStemKey)
+      || keysOverlap(fileFullKey, urlFullKey)
+      || keysOverlap(fileStemKey, urlFullKey)
+    ) {
+      return doc;
+    }
+
+    if (
+      doc.type === 'safety_data_sheet'
+      && /sdb|sicherheitsdatenblatt|safety|msds|sds/i.test(trimmed)
+    ) {
+      return doc;
+    }
+  }
+
+  return undefined;
+}
+
+/** Vereinigt alle bekannten Attachment-Container aus dem Pass (ohne Duplikate). */
+export function collectComplianceSourceDocuments(
+  ...sources: readonly unknown[]
+): ComplianceSourceDocument[] {
+  const merged: ComplianceSourceDocument[] = [];
+  for (const source of sources) {
+    merged.push(...parseComplianceSourceDocuments(source));
+  }
+  return dedupeComplianceSourceDocuments(merged);
+}
+
 export function dedupeComplianceSourceDocuments(
   docs: readonly ComplianceSourceDocument[],
 ): ComplianceSourceDocument[] {

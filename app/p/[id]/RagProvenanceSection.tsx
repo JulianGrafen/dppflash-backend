@@ -1,5 +1,9 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
-import { parseComplianceSourceDocuments } from '@/app/domain/rag/sourceDocuments';
+import {
+  collectComplianceSourceDocuments,
+  matchComplianceDocumentByFileName,
+  type ComplianceSourceDocument,
+} from '@/app/domain/rag/sourceDocuments';
 import { ChevronDown, ExternalLink, FileSearch, FileText } from 'lucide-react';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -67,7 +71,7 @@ function buildPdfPageUrl(url: string, pageNumber: number): string {
   return url.includes('#') ? url : `${url}#page=${cleanPage}`;
 }
 
-function resolveSourceUrl(entry: AuditedValue, attachments: unknown): string | undefined {
+function resolveSourceUrl(entry: AuditedValue, docs: readonly ComplianceSourceDocument[]): string | undefined {
   const source = entry.source as Record<string, unknown>;
   const directUrl =
     typeof source.url === 'string' && source.url.trim()
@@ -79,20 +83,7 @@ function resolveSourceUrl(entry: AuditedValue, attachments: unknown): string | u
     return directUrl;
   }
 
-  const docs = parseComplianceSourceDocuments(attachments);
-  const fileName = entry.source.fileName.toLowerCase();
-  const normalizedFileName = fileName.replace(/[^a-z0-9]/g, '');
-  return docs.find((doc) => {
-    const title = doc.title.toLowerCase();
-    const url = doc.url.toLowerCase();
-    const normalizedTitle = title.replace(/[^a-z0-9]/g, '');
-    const normalizedUrl = url.replace(/[^a-z0-9]/g, '');
-    return fileName.includes(title)
-      || title.includes(fileName)
-      || url.includes(fileName)
-      || (normalizedFileName.length > 0 && normalizedUrl.includes(normalizedFileName))
-      || (normalizedTitle.length > 0 && normalizedFileName.includes(normalizedTitle));
-  })?.url;
+  return matchComplianceDocumentByFileName(entry.source.fileName, docs)?.url;
 }
 
 export function RagProvenanceSection({
@@ -154,6 +145,8 @@ export function RagProvenanceSection({
     }
   }
 
+  const complianceDocs = collectComplianceSourceDocuments(attachments);
+
   return (
     <details className="group overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
       <summary className="flex cursor-pointer list-none items-center gap-3 bg-[#0c1929] px-5 py-4 text-white marker:hidden">
@@ -207,7 +200,7 @@ export function RagProvenanceSection({
       ) : (
         <ul className="divide-y divide-slate-100">
           {rows.map(({ key, entry }) => {
-            const sourceUrl = resolveSourceUrl(entry, attachments);
+            const sourceUrl = resolveSourceUrl(entry, complianceDocs);
             const pdfPageUrl = sourceUrl
               ? buildPdfPageUrl(sourceUrl, entry.source.pageNumber)
               : undefined;
@@ -264,6 +257,30 @@ export function RagProvenanceSection({
           })}
         </ul>
       )}
+      {complianceDocs.length > 0 ? (
+        <div className="border-t border-slate-200/80 bg-white">
+          <div className="px-5 py-3">
+            <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-slate-700">
+              Compliance-Dokumente (PDF-Vorschau)
+            </h3>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              Alle indizierten Nachweis-PDFs — inkl. Sicherheitsdatenblatt und Merkblätter.
+            </p>
+          </div>
+          <ul className="divide-y divide-slate-100">
+            {complianceDocs.map((doc) => (
+              <li key={doc.url} className="space-y-2 px-5 py-4">
+                <p className="text-[13px] font-semibold text-slate-900">{doc.title}</p>
+                <PdfMiniPreview
+                  url={buildPdfPageUrl(doc.url, 1)}
+                  fileName={doc.title}
+                  pageNumber={1}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </details>
   );
 }

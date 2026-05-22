@@ -4,7 +4,29 @@ import { useState, useEffect, useRef } from 'react';
 import { DPPFactory } from '../../services/dppFormService';
 import { ProductPassport } from '../../types/dpp-types';
 import QRCodeDisplay from '../../components/QRCodeDisplay';
-import { AlertCircle, ChevronLeft, Upload, File } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Clock, Upload, File } from 'lucide-react';
+
+function captureProcessingDuration(
+  startedAt: number | null,
+  fallbackSeconds: number,
+): number {
+  if (startedAt === null) {
+    return fallbackSeconds;
+  }
+  return Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+}
+
+function formatProcessingDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} Sekunde${seconds === 1 ? '' : 'n'}`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (rest === 0) {
+    return `${minutes} Minute${minutes === 1 ? '' : 'n'}`;
+  }
+  return `${minutes} Min. ${rest} Sek.`;
+}
 
 export default function CreateDashboard() {
   const [dpp, setDpp] = useState<ProductPassport | null>(null);
@@ -12,6 +34,7 @@ export default function CreateDashboard() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [processingElapsedSeconds, setProcessingElapsedSeconds] = useState(0);
+  const [pdfProcessingDurationSeconds, setPdfProcessingDurationSeconds] = useState<number | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
   const processingStartedAtRef = useRef<number | null>(null);
@@ -59,6 +82,7 @@ export default function CreateDashboard() {
     setUploadedFile(file);
     setErrorMessage(null);
     setProcessingElapsedSeconds(0);
+    setPdfProcessingDurationSeconds(null);
     setIsLoading(true);
     setStep('pdf-upload');
 
@@ -100,6 +124,13 @@ export default function CreateDashboard() {
       } as any;
 
       setDpp(savedDpp);
+
+      const duration = captureProcessingDuration(
+        processingStartedAtRef.current,
+        processingElapsedSeconds,
+      );
+      setPdfProcessingDurationSeconds(duration);
+      setProcessingElapsedSeconds(duration);
 
       // confidence < 0.5 means 2+ mandatory fields are missing — show form to complete
       const confidence: number = result.confidence ?? 0;
@@ -225,10 +256,12 @@ export default function CreateDashboard() {
     } else if (step === 'form') {
       setDpp(null);
       setExtractedData(null);
+      setPdfProcessingDurationSeconds(null);
       setStep('select');
     } else if (step === 'pdf-upload') {
       setUploadedFile(null);
       setErrorMessage(null);
+      setPdfProcessingDurationSeconds(null);
       setStep('select');
     }
   };
@@ -313,15 +346,24 @@ export default function CreateDashboard() {
             </h1>
             <p className="text-gray-600">
               Bitte warten Sie, während die KI die Daten extrahiert…
-              {isLoading ? (
-                <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 px-3 py-0.5 text-sm font-semibold text-purple-700 tabular-nums">
-                  {processingElapsedSeconds} s
-                </span>
-              ) : null}
             </p>
           </div>
 
-          <div className="mt-10 bg-white rounded-xl shadow-lg p-8">
+          <div className="mt-8 rounded-2xl border-2 border-purple-200 bg-white px-8 py-6 text-center shadow-lg">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-600">
+              Verstrichene Zeit
+            </p>
+            <p
+              className="text-7xl font-bold leading-none text-purple-700 tabular-nums"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {processingElapsedSeconds}
+              <span className="ml-2 text-3xl font-semibold text-purple-500">s</span>
+            </p>
+          </div>
+
+          <div className="mt-6 bg-white rounded-xl shadow-lg p-8">
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-6"></div>
               
@@ -581,6 +623,26 @@ export default function CreateDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Erfolgreich erstellt!
             </h1>
+            {pdfProcessingDurationSeconds !== null ? (
+              <div className="mx-auto mt-4 flex flex-col items-center gap-2">
+                <p className="text-sm font-semibold text-emerald-800">
+                  Compliance Scan durchgeführt
+                </p>
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm text-emerald-900 shadow-sm">
+                  <Clock className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                  <span>
+                    Benötigte Zeit:{' '}
+                    <span className="font-bold tabular-nums">
+                      {formatProcessingDuration(pdfProcessingDurationSeconds)}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm font-semibold text-emerald-800">
+                Compliance Scan durchgeführt
+              </p>
+            )}
           </div>
 
           {/* QR Code Section */}
@@ -655,6 +717,7 @@ export default function CreateDashboard() {
                 setDpp(null);
                 setExtractedData(null);
                 setUploadedFile(null);
+                setPdfProcessingDurationSeconds(null);
                 setStep('select');
                 setErrorMessage(null);
               }}

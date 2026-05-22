@@ -137,6 +137,23 @@ function isOrphanHouseNumberLine(line: string): boolean {
   return /^\d+[a-zA-Z0-9/-]*$/.test(line.trim());
 }
 
+function isCompanyLegalSuffixContinuation(previousLine: string, currentLine: string): boolean {
+  const prev = previousLine.trim();
+  const curr = currentLine.trim();
+  if (!prev || !curr) {
+    return false;
+  }
+
+  // Keep legal company suffixes on the same line, e.g. "Henkel AG & Co." + "KGaA".
+  if (/[&\s]co\.$/i.test(prev) && /^(?:kgaa|kg|gmbh|ag|mbh)\b/i.test(curr)) {
+    return true;
+  }
+  if (/\b(?:ag|gmbh)\.$/i.test(prev) && /^(?:kgaa|kg|mbh)\b/i.test(curr)) {
+    return true;
+  }
+  return false;
+}
+
 function isContactLine(line: string): boolean {
   return /^(?:tel\.?|telefon|telefax|fax|e-mail|email|mail:|internet:|notruf:|www\.|https?:\/\/|\+?\d)/i.test(line.trim());
 }
@@ -270,6 +287,11 @@ function normalizeManufacturerLineBreaks(lines: readonly string[]): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
+      continue;
+    }
+
+    if (normalized.length > 0 && isCompanyLegalSuffixContinuation(normalized[normalized.length - 1], trimmed)) {
+      normalized[normalized.length - 1] = `${normalized[normalized.length - 1]} ${trimmed}`;
       continue;
     }
 

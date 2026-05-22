@@ -1878,7 +1878,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               label="Hersteller / Verantwortlicher"
               value={manufacturerDisplayBlock}
               multiline
-              sourceBadge={ragSuppliedFields.includes('hersteller') ? 'RAG' : undefined}
             />
           ) : null}
           <HumanReviewStatusBar />

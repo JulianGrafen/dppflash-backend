@@ -27,6 +27,8 @@ import { IsccPlusSection } from './IsccPlusSection';
 import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
 import { HumanReviewStatusBar } from './HumanReviewStatusBar';
 import { ProductImageCard } from './ProductImageCard';
+import { Avv170106DisposalDetailCard } from './Avv170106DisposalDetailCard';
+import { shouldShowAvv170106DisposalDetail } from '@/app/domain/dpp/waste/avv170106DisposalGuidance';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
@@ -1817,6 +1819,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const dataQualityWarnings = buildDataQualityWarnings(raw, p, manufacturerDisplayBlock);
   const hasWarnings = dataQualityWarnings.length > 0;
   const productImageUrl = asString(raw.gtin) ? `/images/products/${asString(raw.gtin)}.png` : null;
+  const showAvv170106DisposalDetail = shouldShowAvv170106DisposalDetail(
+    asString(raw.wasteCode),
+    asString(raw.ewcCode),
+  );
 
   const chemicalCompositionSankey = tryChemicalCompositionToSankey(
     raw.chemicalComposition,
@@ -2035,6 +2041,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <Section>
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
+          {showAvv170106DisposalDetail ? <Avv170106DisposalDetailCard /> : null}
           <HazardCodesField
             label="P-Sätze (Sicherheitshinweise)"
             codes={productLevelPStatements}

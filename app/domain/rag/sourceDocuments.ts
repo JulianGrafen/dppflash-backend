@@ -137,11 +137,20 @@ function inferComplianceDocumentTypeFromFileName(fileName: string): string {
   }
   if (
     lower.includes('merkblatt')
+    || lower.includes('merkbaltt')
+    || lower.includes('merblatt')
+    || lower.includes('merblatt')
     || lower.includes('produktdatenblatt')
+    || lower.includes('produkt datenblatt')
     || lower.includes('product-data-sheet')
     || lower.includes('product_data_sheet')
+    || lower.includes('product data sheet')
     || lower.includes('technical-data-sheet')
     || lower.includes('technical_data_sheet')
+    || lower.includes('technical data sheet')
+    || lower.includes('technisches-datenblatt')
+    || lower.includes('technisches_datenblatt')
+    || lower.includes('technisches datenblatt')
   ) {
     return 'technical_brief';
   }

@@ -183,10 +183,6 @@ export class DocumentIngestionService {
 
     const sourceDocumentsCollected: ComplianceSourceDocument[] = [];
 
-    if (semanticChunks.length === 0) {
-      return { chunkCount: 0, sourceDocuments: sourceDocumentsCollected };
-    }
-
     const excerptFirstPage = layoutBlocks
       .slice(0, 1)
       .map((b) => b.text)
@@ -247,6 +243,24 @@ export class DocumentIngestionService {
       if (docRef) {
         sourceDocumentsCollected.push(docRef);
       }
+    }
+
+    if (semanticChunks.length === 0) {
+      let sourceDocuments = sourceDocumentsCollected;
+      if (productId && this.dependencies.productEntityService) {
+        try {
+          const fromDb = await this.dependencies.productEntityService.fetchSourceDocuments(productId);
+          sourceDocuments = dedupeComplianceSourceDocuments([...sourceDocuments, ...fromDb]);
+        } catch (err) {
+          console.warn('[DPP] fetch_source_documents_after_ingest_failed', err);
+        }
+      }
+
+      return {
+        chunkCount: 0,
+        productEntityId: productId ?? undefined,
+        sourceDocuments,
+      };
     }
 
     // Phase 2 — Chunk-Index (Retrieval; Lückenfüllung beim DPP nutzt Structured Key Lookup, nicht diese Chunks)

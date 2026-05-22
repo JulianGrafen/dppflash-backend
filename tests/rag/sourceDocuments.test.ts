@@ -77,6 +77,7 @@ describe('sourceDocuments', () => {
   it('infers SDS type from filename but not technical product data sheets', () => {
     expect(inferComplianceDocumentType('Produkt-SDB-final.pdf')).toBe('safety_data_sheet');
     expect(inferComplianceDocumentType('Technisches_Merkblatt.pdf')).toBe('technical_brief');
+    expect(inferComplianceDocumentType('Technisches_Merkbaltt.pdf')).toBe('technical_brief');
     expect(inferComplianceDocumentType('Produktdatenblatt_ABC.pdf')).toBe('technical_brief');
     expect(inferComplianceDocumentType('RoHS_Confirmation.pdf')).toBe('rohs_confirmation');
   });

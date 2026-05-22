@@ -1,15 +1,6 @@
 import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
-import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
-import {
-  compositionGraphHasMeaningfulFlows,
-  tryChemicalCompositionToSankey,
-  tryMaterialCompositionToSankeyFromRaw,
-} from '@/app/domain/dpp/materialCompositionToSankey';
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
-}
+import { tryTraceabilitySankeyFromRaw } from '@/app/domain/dpp/materialCompositionToSankey';
 
 type TraceabilitySectionProps = {
   /** Product passport fields (needs `regulatoryExtraction`, `materialComposition`, `chemicalComposition`). */
@@ -18,40 +9,28 @@ type TraceabilitySectionProps = {
 };
 
 /**
- * Rückverfolgbarkeit: Sankey-Herkunftsfluss (Material, Lieferkette oder Inhaltsstoffe).
+ * Rückverfolgbarkeit: Sankey-Herkunftsfluss mit allen SDB-Inhaltsstoffen (wie Chemische Zusammensetzung).
  */
 export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
-  const fromReg = isRecord(raw.regulatoryExtraction)
-    ? compositionGraphSchema.safeParse(raw.regulatoryExtraction.compositionGraph)
-    : null;
-
-  const materialGraph = tryMaterialCompositionToSankeyFromRaw(raw, productDisplayName);
-  const chemicalGraph = tryChemicalCompositionToSankey(raw.chemicalComposition, productDisplayName);
-
-  const regulatoryGraph =
-    fromReg?.success === true && compositionGraphHasMeaningfulFlows(fromReg.data) ? fromReg.data : null;
-
-  /** Kernfeld-Materialfluss hat Vorrang, dann Lieferkette, sonst Inhaltsstoff-Sankey. */
-  const graph = materialGraph ?? regulatoryGraph ?? chemicalGraph;
+  const { graph, source } = tryTraceabilitySankeyFromRaw(raw, productDisplayName);
 
   if (!graph) {
     return null;
   }
 
-  const usedRegGraph = regulatoryGraph !== null && materialGraph === null && chemicalGraph === null;
-  const usedChemicalGraph = chemicalGraph !== null && materialGraph === null && regulatoryGraph === null;
+  const chainSubtitle =
+    source === 'regulatory'
+      ? 'Herkunftskette — Lieferkette'
+      : source === 'chemical'
+        ? 'Herkunftskette — Inhaltsstoffe (Abschnitt 3)'
+        : 'Herkunftskette — aus Materialanteilen (%)';
 
-  const chainSubtitle = usedRegGraph
-    ? 'Herkunftskette — Lieferkette'
-    : usedChemicalGraph
-      ? 'Herkunftskette — Inhaltsstoffe (Abschnitt 3)'
-      : 'Herkunftskette — aus Materialanteilen (%)';
-
-  const footnote = usedRegGraph
-    ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-    : usedChemicalGraph
-      ? 'Flussbreiten folgen dem Mittelwert jedes Konzentrationsbereichs (z. B. 40–60 % → 50 %). Fehlende Anteile werden als „Nicht deklarationspflichtige Stoffe“ ergänzt.'
-      : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
+  const footnote =
+    source === 'regulatory'
+      ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
+      : source === 'chemical'
+        ? 'Flussbreiten folgen dem Mittelwert jedes Konzentrationsbereichs (z. B. 40–60 % → 50 %). Fehlende Anteile werden als „Nicht deklarationspflichtige Stoffe“ ergänzt.'
+        : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">

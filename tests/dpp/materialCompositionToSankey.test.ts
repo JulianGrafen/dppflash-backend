@@ -10,6 +10,7 @@ import {
   tryChemicalCompositionToSankey,
   tryMaterialCompositionToSankey,
   tryMaterialCompositionToSankeyFromRaw,
+  tryTraceabilitySankeyFromRaw,
 } from '@/app/domain/dpp/materialCompositionToSankey';
 
 describe('tryMaterialCompositionToSankey', () => {
@@ -165,7 +166,26 @@ describe('closeSankeyRowsWithNonDeclarableFiller', () => {
       { material: 'Nicht deklarationspflichtige Stoffe / Füllstoffe', percentage: 12 },
     ]);
     expect(balanced).toHaveLength(2);
-    expect(balanced.find((r) => r.material === NON_DECLARABLE_FILLER_LABEL)?.percentage).toBe(12);
+    expect(balanced.find((r) => r.material === 'Nicht deklarationspflichtige Stoffe / Füllstoffe')?.percentage).toBe(12);
+  });
+});
+
+describe('tryTraceabilitySankeyFromRaw', () => {
+  it('prefers chemicalComposition over materialComposition like composition section', () => {
+    const { graph, source } = tryTraceabilitySankeyFromRaw(
+      {
+        materialComposition: [{ material: 'Nur Material', percentage: 100 }],
+        chemicalComposition: [
+          { stoffname: 'Quarz (SiO2)', prozentAnteil: '40-60 %' },
+          { stoffname: 'Zement, Portland', prozentAnteil: '20-40 %' },
+        ],
+      },
+      'Produkt',
+    );
+    expect(source).toBe('chemical');
+    expect(graph).not.toBeNull();
+    expect(graph!.nodes.some((n) => n.label.includes('Quarz'))).toBe(true);
+    expect(graph!.nodes.some((n) => n.label.includes('Zement'))).toBe(true);
   });
 });
 

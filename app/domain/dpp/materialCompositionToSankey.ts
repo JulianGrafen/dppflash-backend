@@ -307,6 +307,7 @@ export function closeSankeyRowsWithNonDeclarableFiller(
 
   const declared: { material: string; percentage: number }[] = [];
   let existingFillerPct = 0;
+  let existingFillerLabel: string | undefined;
 
   for (const row of rows) {
     const material = row.material.trim();
@@ -316,6 +317,9 @@ export function closeSankeyRowsWithNonDeclarableFiller(
     const pct = Math.max(0, row.percentage);
     if (isNonDeclarableFillerMaterialName(material)) {
       existingFillerPct += pct;
+      if (pct > 0 && !existingFillerLabel) {
+        existingFillerLabel = material;
+      }
       continue;
     }
     if (pct > 0) {
@@ -336,7 +340,10 @@ export function closeSankeyRowsWithNonDeclarableFiller(
   const gap = 100 - declaredSum - existingFillerPct;
 
   if (existingFillerPct > 0.05) {
-    result.push({ material: NON_DECLARABLE_FILLER_LABEL, percentage: existingFillerPct });
+    result.push({
+      material: existingFillerLabel ?? NON_DECLARABLE_FILLER_LABEL,
+      percentage: existingFillerPct,
+    });
   } else if (gap > 0.05) {
     result.push({ material: NON_DECLARABLE_FILLER_LABEL, percentage: gap });
   }
@@ -433,7 +440,7 @@ export function extractChemicalCompositionRowsForSankey(
     }
     const o = item as Record<string, unknown>;
     const material = materialLabelFromRow(o);
-    if (!material || isNonDeclarableFillerMaterialName(material)) {
+    if (!material) {
       continue;
     }
 
@@ -482,6 +489,37 @@ export function tryChemicalCompositionToSankey(
     return null;
   }
   return buildSankeyFromRows([...rows], productLabel);
+}
+
+/**
+ * **Rückverfolgbarkeit** — gleiche Priorität wie „Chemische Zusammensetzung“:
+ * zuerst alle SDB-Inhaltsstoffe (`chemicalComposition`), sonst Kernfeld-Material, dann Lieferkette.
+ */
+export function tryTraceabilitySankeyFromRaw(
+  raw: Record<string, unknown>,
+  productLabel: string,
+): { readonly graph: CompositionGraphPayload | null; readonly source: 'chemical' | 'material' | 'regulatory' | null } {
+  const chemicalGraph = tryChemicalCompositionToSankey(raw.chemicalComposition, productLabel);
+  if (chemicalGraph) {
+    return { graph: chemicalGraph, source: 'chemical' };
+  }
+
+  const materialGraph = tryMaterialCompositionToSankeyFromRaw(raw, productLabel);
+  if (materialGraph) {
+    return { graph: materialGraph, source: 'material' };
+  }
+
+  const reg = raw.regulatoryExtraction;
+  if (reg && typeof reg === 'object' && !Array.isArray(reg)) {
+    const parsed = compositionGraphSchema.safeParse(
+      (reg as Record<string, unknown>).compositionGraph,
+    );
+    if (parsed.success && compositionGraphHasMeaningfulFlows(parsed.data)) {
+      return { graph: parsed.data, source: 'regulatory' };
+    }
+  }
+
+  return { graph: null, source: null };
 }
 
 export type ChemicalIngredientListRow = {

@@ -2040,6 +2040,12 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section>
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
+          <ReviewField
+            label="GTIN"
+            value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
+            highlighted={enrichmentFields.includes('gtin')}
+            sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
+          />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           {showAvv170106DisposalDetail ? <Avv170106DisposalDetailCard /> : null}
           <HazardCodesField
@@ -2048,12 +2054,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             sourceBadge={
               ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements') ? 'RAG' : undefined
             }
-          />
-          <ReviewField
-            label="GTIN"
-            value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
-            highlighted={enrichmentFields.includes('gtin')}
-            sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
           />
           {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
           {renderChemicalComposition(raw.chemicalComposition)}

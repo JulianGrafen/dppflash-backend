@@ -1152,11 +1152,11 @@ function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | u
   return pickBestManufacturerChunk(candidates);
 }
 
-/** Teilt eingebettete Kontaktzeilen (Tel./Fax/E-Mail …) von der Adresszeile. */
+/** Teilt eingebettete Kontaktzeilen (Tel./Fax/E-Mail …) von der Adresszeile — ohne Telefonnummern zu zerschneiden. */
 function splitInlineManufacturerContacts(text: string): string[] {
   return text
     .split(
-      /\s+(?=(?:Tel\.?|Telefon|Telefax|Fax|E-Mail|E-mail|e-mail|Mail:|Email:|Internet:|Notruf:|www\.|https?:\/\/|\+?\d{2,3}[\s/-]?\(?\d{2,}))/gi,
+      /\s+(?=(?:Tel\.?|Telefon|Telefax|Fax|E-Mail|E-mail|e-mail|Mail:|Email:|Internet:|Notruf:|www\.|https?:\/\/))/gi,
     )
     .map((segment) => segment.trim())
     .filter(Boolean);
@@ -1170,6 +1170,10 @@ function isContactLine(line: string): boolean {
   return /^(?:tel\.?|telefon|telefax|fax|e-mail|email|mail:|internet:|notruf:|www\.|https?:\/\/|\+?\d)/i.test(line.trim());
 }
 
+function phoneDigitCount(line: string): number {
+  return line.replace(/\D/g, '').length;
+}
+
 function isPhoneContactLine(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed || /^fax:/i.test(trimmed)) {
@@ -1178,24 +1182,69 @@ function isPhoneContactLine(line: string): boolean {
   if (/^(?:tel\.?|telefon):/i.test(trimmed)) {
     return true;
   }
-  const digits = trimmed.replace(/\D/g, '');
-  return digits.length >= 8 && /^\+?\d/.test(trimmed.replace(/\s/g, ''));
+  const digits = phoneDigitCount(trimmed);
+  return digits >= 10 && /^\+?\d/.test(trimmed.replace(/\s/g, ''));
 }
 
-/** Behält unter Hersteller **nur die erste** Telefonzeile; weitere Tel.-Duplikate entfernen. */
-function dedupeManufacturerPhoneLines(displayText: string): string {
+/** Fügt Tel.-Zeilen mit abgesplitterten Nummernteilen (z. B. „797 0“) wieder zusammen. */
+function coalesceManufacturerPhoneLines(displayText: string): string {
   const lines = displayText.split('\n').map((line) => line.trim()).filter(Boolean);
   const result: string[] = [];
-  let phoneIncluded = false;
 
-  for (const line of lines) {
-    if (isPhoneContactLine(line)) {
-      if (phoneIncluded) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!/^(?:tel\.?|telefon):/i.test(line)) {
+      result.push(line);
+      continue;
+    }
+
+    let merged = line;
+    while (index + 1 < lines.length) {
+      const next = lines[index + 1];
+      if (/^(?:tel\.?|telefon|telefax|fax|e-mail|email|mail:|internet:|notruf:|www\.|https?:)/i.test(next)) {
+        break;
+      }
+      if (/^[\d\s().+\-/]+$/.test(next) && phoneDigitCount(next) <= 6) {
+        merged = `${merged} ${next}`;
+        index += 1;
         continue;
       }
-      phoneIncluded = true;
+      break;
     }
-    result.push(line);
+
+    result.push(merged);
+  }
+
+  return result.join('\n');
+}
+
+/** Behält unter Hersteller **eine** vollständige Telefonzeile (die mit den meisten Ziffern). */
+function dedupeManufacturerPhoneLines(displayText: string): string {
+  const lines = displayText.split('\n').map((line) => line.trim()).filter(Boolean);
+  let bestPhoneIndex = -1;
+  let bestPhoneDigits = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isPhoneContactLine(lines[index])) {
+      continue;
+    }
+    const digits = phoneDigitCount(lines[index]);
+    if (digits > bestPhoneDigits) {
+      bestPhoneDigits = digits;
+      bestPhoneIndex = index;
+    }
+  }
+
+  if (bestPhoneIndex === -1) {
+    return lines.join('\n');
+  }
+
+  const result: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (isPhoneContactLine(lines[index]) && index !== bestPhoneIndex) {
+      continue;
+    }
+    result.push(lines[index]);
   }
 
   return result.join('\n');
@@ -1452,16 +1501,18 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
 
   return {
     displayText: dedupeManufacturerPhoneLines(
-      insertDefaultManufacturerPhone(
-        polishManufacturerDisplayText(
-          appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+      coalesceManufacturerPhoneLines(
+        insertDefaultManufacturerPhone(
+          polishManufacturerDisplayText(
+            appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+          ),
         ),
       ),
     ),
   };
 }
 
-const DEFAULT_MANUFACTURER_PHONE = 'Tel.: +49 211 797 0';
+const DEFAULT_MANUFACTURER_PHONE = 'Tel.: +49 211 797-0';
 
 function manufacturerTextIncludesPhone(text: string): boolean {
   return text.split('\n').some((line) => isPhoneContactLine(line));

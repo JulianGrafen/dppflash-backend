@@ -1395,10 +1395,32 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
     : fromSynth;
 
   return {
-    displayText: polishManufacturerDisplayText(
-      appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+    displayText: insertDefaultManufacturerPhone(
+      polishManufacturerDisplayText(
+        appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+      ),
     ),
   };
+}
+
+const DEFAULT_MANUFACTURER_PHONE = 'Tel.: +49 211 797 0';
+
+function manufacturerTextIncludesPhone(text: string): boolean {
+  return /\+49\s*211[\s/-]*797|2117970/i.test(text.replace(/\s/g, ''));
+}
+
+/** **Standard-Hersteller-Telefon** direkt nach Anschrift, vor E-Mail/Web. */
+function insertDefaultManufacturerPhone(displayText: string): string {
+  const trimmed = displayText.trim();
+  if (!trimmed || manufacturerTextIncludesPhone(trimmed)) {
+    return trimmed;
+  }
+
+  const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
+  const firstContactIndex = lines.findIndex((line) => isContactLine(line));
+  const insertAt = firstContactIndex === -1 ? lines.length : firstContactIndex;
+  lines.splice(insertAt, 0, DEFAULT_MANUFACTURER_PHONE);
+  return lines.join('\n');
 }
 
 function formatTelDisplay(phone: string | undefined): string | undefined {

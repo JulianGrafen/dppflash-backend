@@ -135,14 +135,6 @@ export default function CreateDashboard() {
 
   // ============= EVENT HANDLERS =============
 
-  const handleSelectCategory = (type: ProductPassport['type']) => {
-    log(`Category selected: ${type}`);
-    const newDpp = DPPFactory.createEmptyPassport(type);
-    setDpp(newDpp);
-    setErrorMessage(null);
-    setStep('form');
-  };
-
   const handleFieldChange = (field: string, value: string | number) => {
     log(`Field changed: ${field} = ${value}`);
     if (!dpp) return;
@@ -230,7 +222,7 @@ export default function CreateDashboard() {
               Neues Produkt erstellen
             </h1>
             <p className="text-gray-600">
-              Wähle die Produktkategorie aus
+              PDF hochladen und Produktpass erstellen
             </p>
             <p className="text-sm mt-3">
               <a
@@ -243,90 +235,37 @@ export default function CreateDashboard() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* BATTERY Button */}
-            <button
-              type="button"
-              onClick={() => {
-                log('BATTERY button clicked');
-                handleSelectCategory('BATTERY');
-              }}
-              className="group relative p-8 bg-white border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:shadow-lg hover:bg-blue-50 transition-all duration-200 cursor-pointer text-left font-medium"
-            >
-              <div className="text-3xl mb-3">🔋</div>
-              <h2 className="text-2xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                Batterie
-              </h2>
-              <p className="text-gray-600 text-sm mt-2">
-                Digital Battery Passport für Batterien nach EU-Verordnung
-              </p>
-              <div className="mt-4 text-xs text-gray-500">
-                Kapazität, Chemie, Herkunft
-              </div>
-            </button>
-
-            {/* TEXTILE Button */}
-            <button
-              type="button"
-              onClick={() => {
-                log('TEXTILE button clicked');
-                handleSelectCategory('TEXTILE');
-              }}
-              className="group relative p-8 bg-white border-2 border-gray-200 rounded-xl hover:border-green-500 hover:shadow-lg hover:bg-green-50 transition-all duration-200 cursor-pointer text-left font-medium"
-            >
-              <div className="text-3xl mb-3">👕</div>
-              <h2 className="text-2xl font-bold text-gray-900 group-hover:text-green-600 transition-colors">
-                Textil
-              </h2>
-              <p className="text-gray-600 text-sm mt-2">
-                Digital Textile Passport für Kleidung und Textilien
-              </p>
-              <div className="mt-4 text-xs text-gray-500">
-                Material, Herkunftsland, Care Labels
-              </div>
-            </button>
-          </div>
-
-          {/* PDF UPLOAD SECTION */}
-          <div className="mt-12">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex-1 border-t border-gray-300"></div>
-              <span className="text-gray-600 font-medium">ODER</span>
-              <div className="flex-1 border-t border-gray-300"></div>
+          <div
+            className="border-2 border-dashed border-purple-300 rounded-xl p-10 text-center bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer"
+            onClick={() => {
+              const input = document.getElementById('pdf-upload');
+              if (input instanceof HTMLInputElement) input.click();
+            }}
+          >
+            <Upload className="w-12 h-12 text-purple-500 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              PDF hochladen und Produktpass erstellen
+            </h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Laden Sie ein PDF hoch — die KI extrahiert die Produktdaten automatisch.
+            </p>
+            <div className="inline-block px-4 py-2 bg-purple-500 text-white rounded-lg font-medium text-sm">
+              PDF-Datei auswählen
             </div>
-
-            <div
-              className="border-2 border-dashed border-purple-300 rounded-xl p-10 text-center bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer"
-              onClick={() => {
-                const input = document.getElementById('pdf-upload');
-                if (input instanceof HTMLInputElement) input.click();
+            <input
+              id="pdf-upload"
+              type="file"
+              accept=".pdf"
+              onChange={(e) => {
+                if (e.target.files?.[0]) {
+                  handlePdfUpload(e.target.files[0]);
+                }
               }}
-            >
-              <Upload className="w-12 h-12 text-purple-500 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
-                PDF Produktpass hochladen
-              </h3>
-              <p className="text-gray-600 text-sm mb-4">
-                Lade einen Produktpass als PDF hoch und lasse unsere KI die Daten automatisch extrahieren
-              </p>
-              <div className="inline-block px-4 py-2 bg-purple-500 text-white rounded-lg font-medium text-sm">
-                PDF-Datei auswählen
-              </div>
-              <input
-                id="pdf-upload"
-                type="file"
-                accept=".pdf"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    handlePdfUpload(e.target.files[0]);
-                  }
-                }}
-                className="hidden"
-              />
-              <p className="text-xs text-gray-500 mt-4">
-                Max. 10 MB | Nur PDF
-              </p>
-            </div>
+              className="hidden"
+            />
+            <p className="text-xs text-gray-500 mt-4">
+              Max. 10 MB | Nur PDF
+            </p>
           </div>
 
           {errorMessage && (

@@ -344,14 +344,6 @@ export default function RagIngestDashboard() {
             </div>
           )}
 
-          <p className="text-xs text-gray-500 border-t border-gray-100 pt-4">
-            Hinweis: Ohne Supabase-Umgebungsvariablen liegt der Index nur im RAM dieses Server-Prozesses.
-            Mit <code className="text-gray-700">NEXT_PUBLIC_SUPABASE_URL</code> und{' '}
-            <code className="text-gray-700">SUPABASE_SERVICE_ROLE_KEY</code> (plus Migration{' '}
-            <code className="text-gray-700">rag_chunks</code>) werden Chunks in Postgres persistiert und
-            überleben Deployments. Sehr große Mandanten: Abruf aktuell auf 8&nbsp;000 Chunks pro Suche
-            begrenzt (Hybrid-Ranking im Prozess).
-          </p>
         </div>
         )}
 

@@ -674,11 +674,20 @@ export default function CreateDashboard() {
             QR-Code scannen, um den Produktpass zu öffnen
           </p>
           {dpp.id ? (
-            <QRCodeDisplay
-              productId={dpp.id}
-              productName={dpp.modellname || dpp.type}
-              productData={dpp as any}
-            />
+            <div className="space-y-4">
+              <QRCodeDisplay
+                productId={dpp.id}
+                productName={dpp.modellname || dpp.type}
+                productData={dpp as any}
+              />
+              <Link
+                href={`/p/${dpp.id}`}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0c1929] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Produktpass ansehen
+                <ExternalLink className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
           ) : null}
         </div>
 
@@ -705,15 +714,6 @@ export default function CreateDashboard() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          {dpp.id ? (
-            <Link
-              href={`/p/${dpp.id}`}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0c1929] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
-              Produktpass ansehen
-              <ExternalLink className="h-4 w-4" aria-hidden />
-            </Link>
-          ) : null}
           <button
             type="button"
             onClick={() => {

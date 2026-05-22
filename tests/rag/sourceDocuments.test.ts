@@ -79,6 +79,42 @@ describe('sourceDocuments', () => {
     expect(matchComplianceDocumentByFileName('Merkblatt.pdf', docs)?.title).toBe('Technisches Merkblatt');
   });
 
+  it('matches SDB audit fields to the single safety data sheet by field hint', () => {
+    const docs = [
+      {
+        title: 'Sicherheitsdatenblatt',
+        url: 'https://cdn.example.com/p1/uuid-000000670689_SDB_UA_DE.pdf',
+        type: 'safety_data_sheet',
+      },
+      {
+        title: 'Regulatorisches Datenblatt',
+        url: 'https://cdn.example.com/p1/uuid-000000670689_RDS_UA_DE.pdf',
+        type: 'regulatory_data_sheet',
+      },
+    ];
+
+    expect(
+      matchComplianceDocumentByFileName('chunk-ref.pdf', docs, { fieldName: 'hStatements' })?.title,
+    ).toBe('Sicherheitsdatenblatt');
+    expect(
+      matchComplianceDocumentByFileName('_000000670689_RDS_UA_DE.PDF', docs, { fieldName: 'hersteller' })?.title,
+    ).toBe('Regulatorisches Datenblatt');
+  });
+
+  it('matches numeric SDB filenames against storage basenames', () => {
+    const docs = [
+      {
+        title: 'Sicherheitsdatenblatt',
+        url: 'https://cdn.example.com/p1/8b1e2f3a-1111-2222-3333-444444444444-_000000670689_SDB_UA_DE.pdf',
+        type: 'safety_data_sheet',
+      },
+    ];
+
+    expect(
+      matchComplianceDocumentByFileName('_000000670689_SDB_UA_DE.PDF', docs)?.title,
+    ).toBe('Sicherheitsdatenblatt');
+  });
+
   it('collects documents from multiple attachment containers', () => {
     const docs = collectComplianceSourceDocuments(
       [{ title: 'A', url: 'https://x.com/1.pdf', type: 'compliance_pdf' }],

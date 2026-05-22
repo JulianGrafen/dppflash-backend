@@ -96,7 +96,11 @@ function buildPdfPageUrl(url: string, pageNumber: number): string {
   return url.includes('#') ? url : `${url}#page=${cleanPage}`;
 }
 
-function resolveSourceUrl(entry: AuditedValue, docs: readonly ComplianceSourceDocument[]): string | undefined {
+function resolveSourceUrl(
+  entry: AuditedValue,
+  docs: readonly ComplianceSourceDocument[],
+  fieldName?: string,
+): string | undefined {
   const source = entry.source as Record<string, unknown>;
   const directUrl =
     typeof source.url === 'string' && source.url.trim()
@@ -108,7 +112,7 @@ function resolveSourceUrl(entry: AuditedValue, docs: readonly ComplianceSourceDo
     return directUrl;
   }
 
-  return matchComplianceDocumentByFileName(entry.source.fileName, docs)?.url;
+  return matchComplianceDocumentByFileName(entry.source.fileName, docs, { fieldName })?.url;
 }
 
 function buildAuditSourceFromRow(
@@ -117,7 +121,7 @@ function buildAuditSourceFromRow(
   complianceDocs: readonly ComplianceSourceDocument[],
 ): ActiveAuditSource {
   const pageNumber = parsePageNumber(entry.source.pageNumber);
-  const rawUrl = resolveSourceUrl(entry, complianceDocs);
+  const rawUrl = resolveSourceUrl(entry, complianceDocs, key);
   const pdfUrl = rawUrl ? buildPdfPageUrl(rawUrl, pageNumber) : null;
 
   return {
@@ -294,7 +298,7 @@ export function RagProvenanceSection({
           <ul className="divide-y divide-slate-100">
             {rows.map(({ key, entry }) => {
               const isActive = activeAuditSource?.fieldName === key;
-              const sourceUrl = resolveSourceUrl(entry, complianceDocs);
+              const sourceUrl = resolveSourceUrl(entry, complianceDocs, key);
               const pageNumber = parsePageNumber(entry.source.pageNumber);
               const pdfPageUrl = sourceUrl ? buildPdfPageUrl(sourceUrl, pageNumber) : undefined;
 

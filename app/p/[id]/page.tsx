@@ -1170,6 +1170,37 @@ function isContactLine(line: string): boolean {
   return /^(?:tel\.?|telefon|telefax|fax|e-mail|email|mail:|internet:|notruf:|www\.|https?:\/\/|\+?\d)/i.test(line.trim());
 }
 
+function isPhoneContactLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed || /^fax:/i.test(trimmed)) {
+    return false;
+  }
+  if (/^(?:tel\.?|telefon):/i.test(trimmed)) {
+    return true;
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 8 && /^\+?\d/.test(trimmed.replace(/\s/g, ''));
+}
+
+/** Behält unter Hersteller **nur die erste** Telefonzeile; weitere Tel.-Duplikate entfernen. */
+function dedupeManufacturerPhoneLines(displayText: string): string {
+  const lines = displayText.split('\n').map((line) => line.trim()).filter(Boolean);
+  const result: string[] = [];
+  let phoneIncluded = false;
+
+  for (const line of lines) {
+    if (isPhoneContactLine(line)) {
+      if (phoneIncluded) {
+        continue;
+      }
+      phoneIncluded = true;
+    }
+    result.push(line);
+  }
+
+  return result.join('\n');
+}
+
 /** Verhindert isolierte Hausnummern in eigener Zeile (Straße + Nr. zusammenhalten). */
 function normalizeManufacturerLineBreaks(lines: readonly string[]): string[] {
   const normalized: string[] = [];
@@ -1359,7 +1390,10 @@ function appendStructuredManufacturerContacts(
     ?? pickFirstStringFromRecord(raw, ['telefon', 'Telefon', 'phone', 'manufacturerPhone']),
   );
   if (tel) {
-    contactLines.push(tel);
+    const displayHasPhone = displayText.split('\n').some((line) => isPhoneContactLine(line));
+    if (!displayHasPhone) {
+      contactLines.push(tel);
+    }
   }
 
   const fax = pickFirstStringFromRecord(rec, ['fax', 'Fax', 'Telefax']);
@@ -1417,9 +1451,11 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
     : fromSynth;
 
   return {
-    displayText: insertDefaultManufacturerPhone(
-      polishManufacturerDisplayText(
-        appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+    displayText: dedupeManufacturerPhoneLines(
+      insertDefaultManufacturerPhone(
+        polishManufacturerDisplayText(
+          appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+        ),
       ),
     ),
   };
@@ -1428,7 +1464,7 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
 const DEFAULT_MANUFACTURER_PHONE = 'Tel.: +49 211 797 0';
 
 function manufacturerTextIncludesPhone(text: string): boolean {
-  return /\+49\s*211[\s/-]*797|2117970/i.test(text.replace(/\s/g, ''));
+  return text.split('\n').some((line) => isPhoneContactLine(line));
 }
 
 /** **Standard-Hersteller-Telefon** direkt nach Anschrift, vor E-Mail/Web. */

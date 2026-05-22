@@ -6,7 +6,9 @@ import { resolveRequestPublicOrigin } from '@/app/lib/resolveRequestPublicOrigin
 import { assertSafeProductId } from '@/app/lib/security/safeProductId';
 import { saveProductToStore } from '@/app/lib/server-store';
 import {
+  basenameFromDocumentUrl,
   dedupeComplianceSourceDocuments,
+  normalizeDocumentMatchKey,
   type ComplianceSourceDocument,
 } from '@/app/domain/rag/sourceDocuments';
 import { getProductEntityService, getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
@@ -55,6 +57,28 @@ function toPublicExtractedData(
       )),
     ),
   };
+}
+
+function docReferencesProductHints(
+  doc: ComplianceSourceDocument,
+  productHints: readonly string[],
+): boolean {
+  const joined = `${doc.title} ${basenameFromDocumentUrl(doc.url)}`;
+  const docKey = normalizeDocumentMatchKey(joined);
+  if (!docKey) {
+    return false;
+  }
+  const docTokens = docKey.match(/[a-z]{4,}|\d{4,}/g) ?? [];
+  if (docTokens.length === 0) {
+    return false;
+  }
+  const hintTokens = productHints.flatMap((hint) => {
+    const key = normalizeDocumentMatchKey(hint);
+    return key.match(/[a-z]{4,}|\d{4,}/g) ?? [];
+  });
+  return hintTokens.some((hintToken) =>
+    docTokens.some((docToken) => docToken === hintToken || docToken.includes(hintToken) || hintToken.includes(docToken)),
+  );
 }
 
 /**
@@ -259,10 +283,28 @@ export async function POST(request: NextRequest) {
         anchorProductName: anchorForEntity,
         productEntityId,
       });
-      const mergedAttachments = dedupeComplianceSourceDocuments([
+      let mergedAttachments = dedupeComplianceSourceDocuments([
         ...ingestSourceDocuments,
         ...agentKnowledge.sourceDocuments,
       ]);
+      const productHints = [
+        typeof extractedFields.gtin === 'string' ? extractedFields.gtin.trim() : '',
+        typeof extractedFields.sku === 'string' ? extractedFields.sku.trim() : '',
+        productName,
+        modellname,
+      ].filter((v) => v.length > 0);
+      if (productHints.length > 0) {
+        const pe = getProductEntityService();
+        if (pe) {
+          try {
+            const tenantDocs = await pe.fetchTenantSourceDocuments(safeTenantId);
+            const tenantMatches = tenantDocs.filter((doc) => docReferencesProductHints(doc, productHints));
+            mergedAttachments = dedupeComplianceSourceDocuments([...mergedAttachments, ...tenantMatches]);
+          } catch (tenantDocErr) {
+            console.warn('[DPP] tenant_source_documents_fallback_failed', tenantDocErr);
+          }
+        }
+      }
       Object.assign(
         productPassport,
         rag.applyComplianceAttachmentsToDpp(

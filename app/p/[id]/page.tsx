@@ -1344,6 +1344,24 @@ function normalizeManufacturerCompareLine(line: string): string {
   return line.trim().toLowerCase().replace(/\s+/g, '');
 }
 
+/** Entfernt doppelte Hersteller-Zeilen (Name, Adresse, Kontakt), behält Reihenfolge. */
+function dedupeManufacturerLines(displayText: string): string {
+  const lines = displayText.split('\n').map((line) => line.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const line of lines) {
+    const normalized = normalizeManufacturerCompareLine(line);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push(line);
+  }
+
+  return out.join('\n');
+}
+
 /** Ergänzt strukturierte Kontaktzeilen, die im Chunk noch fehlen (Tel./E-Mail …). */
 function mergeManufacturerDisplayTexts(primary: string, secondary: string): string {
   if (!secondary.trim()) {
@@ -1500,7 +1518,8 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
     : fromSynth;
 
   return {
-    displayText: dedupeManufacturerPhoneLines(
+    displayText: dedupeManufacturerLines(
+      dedupeManufacturerPhoneLines(
       coalesceManufacturerPhoneLines(
         insertDefaultManufacturerPhone(
           polishManufacturerDisplayText(
@@ -1508,6 +1527,7 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
           ),
         ),
       ),
+    ),
     ),
   };
 }

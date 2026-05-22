@@ -9,7 +9,7 @@ export type ComplianceSourceDocument = {
 };
 
 export type ComplianceDocumentClassification = {
-  readonly type: 'safety_data_sheet' | 'rohs_confirmation' | 'regulatory_data_sheet';
+  readonly type: 'safety_data_sheet' | 'rohs_confirmation' | 'regulatory_data_sheet' | 'technical_brief';
   readonly title: string;
 };
 
@@ -62,6 +62,30 @@ function isRegulatoryDataSheet(documentText: string): boolean {
   );
 }
 
+function isTechnicalBrief(fileName: string, documentText: string): boolean {
+  const haystack = normalizeSearchText(`${fileName}\n${documentText.slice(0, 24_000)}`);
+  if (
+    haystack.includes('sicherheitsdatenblatt')
+    || /\bsdb\b/.test(haystack)
+    || haystack.includes('safety data sheet')
+    || /\bsds\b/.test(haystack)
+    || /\bmsds\b/.test(haystack)
+    || /\brohs\b/.test(haystack)
+    || haystack.includes('regulatorisches datenblatt')
+  ) {
+    return false;
+  }
+  return (
+    haystack.includes('technisches merkblatt')
+    || haystack.includes('technisches datenblatt')
+    || haystack.includes('merkblatt')
+    || haystack.includes('produktdatenblatt')
+    || haystack.includes('produktdaten')
+    || haystack.includes('product data sheet')
+    || haystack.includes('technical data sheet')
+  );
+}
+
 export function classifyComplianceDocument(
   fileName: string,
   documentText: string,
@@ -75,6 +99,9 @@ export function classifyComplianceDocument(
   if (isSafetyDataSheet(fileName, documentText)) {
     return { type: 'safety_data_sheet', title: 'Sicherheitsdatenblatt' };
   }
+  if (isTechnicalBrief(fileName, documentText)) {
+    return { type: 'technical_brief', title: 'Technisches Merkblatt' };
+  }
   return null;
 }
 
@@ -84,6 +111,9 @@ export function inferComplianceDocumentType(fileName: string, documentText = '')
     return classified.type;
   }
   const lower = fileName.toLowerCase();
+  if (lower.includes('rohs')) {
+    return 'rohs_confirmation';
+  }
   if (
     lower.includes('sdb')
     || lower.includes('sicherheitsdatenblatt')
@@ -92,6 +122,16 @@ export function inferComplianceDocumentType(fileName: string, documentText = '')
     || lower.includes('sds')
   ) {
     return 'safety_data_sheet';
+  }
+  if (
+    lower.includes('merkblatt')
+    || lower.includes('produktdatenblatt')
+    || lower.includes('product-data-sheet')
+    || lower.includes('product_data_sheet')
+    || lower.includes('technical-data-sheet')
+    || lower.includes('technical_data_sheet')
+  ) {
+    return 'technical_brief';
   }
   return 'compliance_pdf';
 }
@@ -292,13 +332,18 @@ export function matchComplianceDocumentByFileName(
   docs: readonly ComplianceSourceDocument[],
   options?: MatchComplianceDocumentOptions,
 ): ComplianceSourceDocument | undefined {
-  const trimmed = fileName.trim();
   if (docs.length === 0) {
     return undefined;
   }
 
+  const fieldHintDoc = resolveFieldHintDocument(options?.fieldName, docs);
+  if (fieldHintDoc) {
+    return fieldHintDoc;
+  }
+
+  const trimmed = fileName.trim();
   if (!trimmed || trimmed === 'unknown') {
-    return resolveFieldHintDocument(options?.fieldName, docs);
+    return undefined;
   }
 
   const fileStemKey = normalizeDocumentMatchKey(trimmed.replace(/\.[^.]+$/i, ''));
@@ -324,11 +369,6 @@ export function matchComplianceDocumentByFileName(
     if (uniqueByType) {
       return uniqueByType;
     }
-  }
-
-  const fieldHintDoc = resolveFieldHintDocument(options?.fieldName, docs);
-  if (fieldHintDoc) {
-    return fieldHintDoc;
   }
 
   const uniqueSdb = findUniqueComplianceDocumentByType(docs, 'safety_data_sheet');

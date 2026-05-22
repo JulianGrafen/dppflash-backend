@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DPPFactory } from '../../services/dppFormService';
 import { ProductPassport } from '../../types/dpp-types';
 import QRCodeDisplay from '../../components/QRCodeDisplay';
@@ -14,16 +14,26 @@ export default function CreateDashboard() {
   const [processingElapsedSeconds, setProcessingElapsedSeconds] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [extractedData, setExtractedData] = useState<any>(null);
+  const processingStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (step !== 'pdf-upload' || !isLoading) return;
+    if (step !== 'pdf-upload' || !isLoading) {
+      processingStartedAtRef.current = null;
+      return;
+    }
 
+    processingStartedAtRef.current = Date.now();
     setProcessingElapsedSeconds(0);
-    const interval = setInterval(() => {
-      setProcessingElapsedSeconds((seconds) => seconds + 1);
-    }, 1000);
 
-    return () => clearInterval(interval);
+    const interval = window.setInterval(() => {
+      const startedAt = processingStartedAtRef.current;
+      if (startedAt === null) {
+        return;
+      }
+      setProcessingElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
+
+    return () => window.clearInterval(interval);
   }, [step, isLoading]);
 
   // Logger function for debugging
@@ -48,6 +58,7 @@ export default function CreateDashboard() {
 
     setUploadedFile(file);
     setErrorMessage(null);
+    setProcessingElapsedSeconds(0);
     setIsLoading(true);
     setStep('pdf-upload');
 
@@ -300,13 +311,13 @@ export default function CreateDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               PDF wird verarbeitet
             </h1>
-            {isLoading && (
-              <p className="text-2xl font-semibold text-purple-600 tabular-nums mb-2">
-                {processingElapsedSeconds} s
-              </p>
-            )}
             <p className="text-gray-600">
-              Bitte warten Sie, während die KI die Daten extrahiert...
+              Bitte warten Sie, während die KI die Daten extrahiert…
+              {isLoading ? (
+                <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 px-3 py-0.5 text-sm font-semibold text-purple-700 tabular-nums">
+                  {processingElapsedSeconds} s
+                </span>
+              ) : null}
             </p>
           </div>
 

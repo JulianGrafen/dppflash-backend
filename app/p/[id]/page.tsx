@@ -1043,14 +1043,46 @@ function provenanceContextSnippet(envelopeValue: unknown): string | undefined {
 }
 
 /** Wörtlicher PDF-/Index-Belegauszug zu Hersteller (Eager-/RAG-Provenance `contextSnippet`). */
-function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | undefined {
-  const fromPassportEnvelope =
-    provenanceContextSnippet(raw.hersteller)
-    ?? provenanceContextSnippet(raw.manufacturer)
-    ?? provenanceContextSnippet(raw.Hersteller);
-  if (fromPassportEnvelope) {
-    return fromPassportEnvelope;
+function scoreManufacturerChunkRichness(text: string): number {
+  let score = text.trim().length;
+  if (/[@+]|\btel\b|telefon|fax|e-mail|https?:\/\//i.test(text)) {
+    score += 500;
   }
+  if (text.includes('\n')) {
+    score += 200;
+  }
+  return score;
+}
+
+function pickBestManufacturerChunk(candidates: readonly string[]): string | undefined {
+  const unique = [...new Set(candidates.map((c) => c.trim()).filter(Boolean))];
+  if (unique.length === 0) {
+    return undefined;
+  }
+  return unique.sort((a, b) => scoreManufacturerChunkRichness(b) - scoreManufacturerChunkRichness(a))[0];
+}
+
+function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | undefined {
+  const candidates: string[] = [];
+
+  const push = (value: unknown) => {
+    const snippet = provenanceContextSnippet(value);
+    if (snippet) {
+      candidates.push(snippet);
+    }
+    if (isRagProvenanceEnvelope(value)) {
+      const inner = (value as Record<string, unknown>).value;
+      if (typeof inner === 'string' && inner.trim()) {
+        candidates.push(inner.trim());
+      }
+    } else if (typeof value === 'string' && value.trim()) {
+      candidates.push(value.trim());
+    }
+  };
+
+  push(raw.hersteller);
+  push(raw.manufacturer);
+  push(raw.Hersteller);
 
   const enrichment = raw.ragEnrichment;
   const enrichmentRecord =
@@ -1058,45 +1090,121 @@ function pickManufacturerDocumentChunk(raw: Record<string, unknown>): string | u
       ? (enrichment as Record<string, unknown>)
       : undefined;
   if (
-    !enrichmentRecord
-    || !('auditTrail' in enrichmentRecord)
-    || enrichmentRecord.success !== true
+    enrichmentRecord
+    && 'auditTrail' in enrichmentRecord
+    && enrichmentRecord.success === true
   ) {
-    return undefined;
-  }
-  const auditTrail = enrichmentRecord.auditTrail;
-  if (!auditTrail || typeof auditTrail !== 'object' || Array.isArray(auditTrail)) {
-    return undefined;
-  }
-  const trailRec = auditTrail as Record<string, unknown>;
-  const fields =
-    trailRec.fields && typeof trailRec.fields === 'object' && trailRec.fields !== null
-      ? (trailRec.fields as Record<string, unknown>)
-      : undefined;
+    const auditTrail = enrichmentRecord.auditTrail;
+    if (auditTrail && typeof auditTrail === 'object' && !Array.isArray(auditTrail)) {
+      const trailRec = auditTrail as Record<string, unknown>;
+      const fields =
+        trailRec.fields && typeof trailRec.fields === 'object' && trailRec.fields !== null
+          ? (trailRec.fields as Record<string, unknown>)
+          : undefined;
 
-  const keysToTry = [
-    'hersteller',
-    'manufacturer',
-    'herstellerName',
-    'herstellername',
-    'Manufacturer',
-  ] as const;
-  for (const key of keysToTry) {
-    const audited = fields?.[key];
-    if (!audited || typeof audited !== 'object' || audited === null) {
-      continue;
-    }
-    const src = 'source' in audited ? (audited as { source?: unknown }).source : undefined;
-    if (!src || typeof src !== 'object' || Array.isArray(src)) {
-      continue;
-    }
-    const snippetRaw = (src as Record<string, unknown>).contextSnippet;
-    const sn = typeof snippetRaw === 'string' ? snippetRaw.trim() : '';
-    if (sn.length > 0) {
-      return sn;
+      const keysToTry = [
+        'hersteller',
+        'manufacturer',
+        'herstellerName',
+        'herstellername',
+        'Manufacturer',
+      ] as const;
+      for (const key of keysToTry) {
+        const audited = fields?.[key];
+        if (!audited || typeof audited !== 'object' || audited === null) {
+          continue;
+        }
+        const auditedRec = audited as Record<string, unknown>;
+        const src = auditedRec.source;
+        if (src && typeof src === 'object' && !Array.isArray(src)) {
+          const snippetRaw = (src as Record<string, unknown>).contextSnippet;
+          const sn = typeof snippetRaw === 'string' ? snippetRaw.trim() : '';
+          if (sn.length > 0) {
+            candidates.push(sn);
+          }
+        }
+        const auditedValue = auditedRec.value;
+        if (typeof auditedValue === 'string' && auditedValue.trim()) {
+          candidates.push(auditedValue.trim());
+        }
+      }
     }
   }
-  return undefined;
+
+  return pickBestManufacturerChunk(candidates);
+}
+
+/** Teilt eingebettete Kontaktzeilen (Tel./Fax/E-Mail …) von der Adresszeile. */
+function splitInlineManufacturerContacts(text: string): string[] {
+  return text
+    .split(
+      /\s+(?=(?:Tel\.?|Telefon|Telefax|Fax|E-Mail|E-mail|e-mail|Mail:|Email:|Internet:|Notruf:|www\.|https?:\/\/|\+?\d{2,3}[\s/-]?\(?\d{2,}))/gi,
+    )
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+/** Voller Dokument-Chunk: mehrzeilig belassen, Kontaktdaten nicht abschneiden. */
+function formatManufacturerDocumentChunk(text: string): string {
+  const normalized = text.trim().replace(/\r\n/g, '\n');
+  if (!normalized) {
+    return normalized;
+  }
+  if (normalized.includes('\n')) {
+    return normalized
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  const segments = splitInlineManufacturerContacts(normalized);
+  if (segments.length <= 1) {
+    return formatFlatManufacturerBlock(normalized);
+  }
+
+  const [head, ...contacts] = segments;
+  const formattedHead = head ? formatFlatManufacturerBlock(head) : '';
+  return [formattedHead, ...contacts].filter(Boolean).join('\n');
+}
+
+function normalizeManufacturerCompareLine(line: string): string {
+  return line.trim().toLowerCase().replace(/\s+/g, '');
+}
+
+/** Ergänzt strukturierte Kontaktzeilen, die im Chunk noch fehlen (Tel./E-Mail …). */
+function mergeManufacturerDisplayTexts(primary: string, secondary: string): string {
+  if (!secondary.trim()) {
+    return primary;
+  }
+  if (!primary.trim()) {
+    return secondary;
+  }
+
+  const primaryNorm = primary
+    .split('\n')
+    .map(normalizeManufacturerCompareLine)
+    .filter(Boolean);
+  const primaryBlob = primaryNorm.join('|');
+
+  const extras = secondary
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      const norm = normalizeManufacturerCompareLine(line);
+      if (!norm || primaryNorm.includes(norm)) {
+        return false;
+      }
+      return !primaryBlob.includes(norm);
+    });
+
+  if (extras.length === 0) {
+    return primary;
+  }
+  return [primary, ...extras].join('\n');
 }
 
 /** Wandelt einzeilige SDB-Herstellerblöcke in lesbare Zeilen (Firma · Straße · PLZ Ort · Land). */
@@ -1137,7 +1245,7 @@ function formatFlatManufacturerBlock(text: string): string {
   return [beforePlz, `${plz} ${afterPlz}`].join('\n');
 }
 
-/** Priorisiert strukturierten mehrzeiligen Freitext; Chunk nur als Fallback. */
+/** Priorisiert den vollständigen Dokument-Chunk (Abschnitt 1) inkl. Tel./E-Mail. */
 function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprProductData): {
   readonly displayText: string;
 } {
@@ -1147,13 +1255,17 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
     || p.manufacturer.name.trim()
     || (typeof raw.hersteller === 'string' ? raw.hersteller.trim() : '');
 
-  const candidate =
-    synthesized.length > 0
-      ? synthesized
-      : chunk ?? '';
+  const fromChunk = chunk ? formatManufacturerDocumentChunk(chunk) : '';
+  const fromSynth = synthesized ? formatManufacturerDocumentChunk(synthesized) : '';
+
+  if (fromChunk) {
+    return {
+      displayText: mergeManufacturerDisplayTexts(fromChunk, fromSynth),
+    };
+  }
 
   return {
-    displayText: formatFlatManufacturerBlock(candidate),
+    displayText: fromSynth,
   };
 }
 

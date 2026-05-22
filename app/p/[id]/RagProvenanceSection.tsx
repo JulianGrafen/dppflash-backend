@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import {
   collectComplianceSourceDocuments,
@@ -5,6 +8,14 @@ import {
   type ComplianceSourceDocument,
 } from '@/app/domain/rag/sourceDocuments';
 import { ChevronDown, ExternalLink, FileSearch, FileText } from 'lucide-react';
+
+type ActiveAuditSource = {
+  readonly pdfName: string;
+  readonly pdfUrl: string | null;
+  readonly pageNumber: number;
+  readonly contextSnippet: string;
+  readonly fieldName: string;
+};
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -19,8 +30,8 @@ function isAuditedValue(v: unknown): v is AuditedValue {
     && 'requiresManualReview' in v
     && isRecord(v.source)
     && typeof v.source.fileName === 'string'
-    && typeof v.source.pageNumber === 'number'
     && typeof v.source.contextSnippet === 'string'
+    && (typeof v.source.pageNumber === 'number' || typeof v.source.pageNumber === 'string')
   );
 }
 
@@ -59,6 +70,20 @@ function formatStructuredValue(value: unknown): string {
   return String(value);
 }
 
+/** **Extrahiert** eine Seitennummer aus Zahl oder Text wie „Seite 1“. */
+export function parsePageNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 1) {
+    return Math.floor(value);
+  }
+  if (typeof value === 'string') {
+    const match = value.match(/(?:seite\s*)?(\d+)/i);
+    if (match) {
+      return Math.max(1, parseInt(match[1], 10));
+    }
+  }
+  return 1;
+}
+
 /**
  * Hängt den Seiten-Anker an die PDF-URL (`#page=N`), damit moderne PDF-Viewer direkt
  * zur belegenden Seite springen — ohne den eigentlichen Storage-Link zu manipulieren.
@@ -86,6 +111,36 @@ function resolveSourceUrl(entry: AuditedValue, docs: readonly ComplianceSourceDo
   return matchComplianceDocumentByFileName(entry.source.fileName, docs)?.url;
 }
 
+function buildAuditSourceFromRow(
+  key: string,
+  entry: AuditedValue,
+  complianceDocs: readonly ComplianceSourceDocument[],
+): ActiveAuditSource {
+  const pageNumber = parsePageNumber(entry.source.pageNumber);
+  const rawUrl = resolveSourceUrl(entry, complianceDocs);
+  const pdfUrl = rawUrl ? buildPdfPageUrl(rawUrl, pageNumber) : null;
+
+  return {
+    pdfName: entry.source.fileName,
+    pdfUrl,
+    pageNumber,
+    contextSnippet: entry.source.contextSnippet,
+    fieldName: key,
+  };
+}
+
+function pickDefaultAuditSource(
+  rows: readonly { readonly key: string; readonly entry: AuditedValue }[],
+  complianceDocs: readonly ComplianceSourceDocument[],
+): ActiveAuditSource | null {
+  if (rows.length === 0) {
+    return null;
+  }
+  const herstellerRow = rows.find(({ key }) => key === 'hersteller');
+  const pick = herstellerRow ?? rows[0];
+  return buildAuditSourceFromRow(pick.key, pick.entry, complianceDocs);
+}
+
 export function RagProvenanceSection({
   ragEnrichment,
   attachments,
@@ -93,6 +148,71 @@ export function RagProvenanceSection({
   readonly ragEnrichment: unknown;
   readonly attachments?: unknown;
 }) {
+  const { rows, applied, cryptoOk, cryptoErrors, complianceDocs } = useMemo(() => {
+    if (!isRecord(ragEnrichment) || ragEnrichment.success !== true) {
+      return {
+        rows: [] as { readonly key: string; readonly entry: AuditedValue }[],
+        applied: [] as string[],
+        cryptoOk: false,
+        cryptoErrors: [] as string[],
+        complianceDocs: [] as ComplianceSourceDocument[],
+      };
+    }
+
+    const trail = isRecord(ragEnrichment.auditTrail) ? ragEnrichment.auditTrail : {};
+    const appliedFieldKeys = Array.isArray(ragEnrichment.appliedFieldKeys)
+      ? (ragEnrichment.appliedFieldKeys as string[])
+      : [];
+    const crypto = isRecord(ragEnrichment.cryptoValidation)
+      ? ragEnrichment.cryptoValidation
+      : undefined;
+    const cryptoValidationOk = crypto?.ok === true;
+    const validationErrors = Array.isArray(crypto?.errors) ? (crypto.errors as string[]) : [];
+
+    const auditRows: { readonly key: string; readonly entry: AuditedValue }[] = [];
+    if (trail.gtin && isAuditedValue(trail.gtin)) {
+      auditRows.push({ key: 'gtin', entry: trail.gtin });
+    }
+    if (trail.ewcCode && isAuditedValue(trail.ewcCode)) {
+      auditRows.push({ key: 'ewcCode', entry: trail.ewcCode });
+    }
+    if (trail.fields && isRecord(trail.fields)) {
+      for (const [key, val] of Object.entries(trail.fields)) {
+        if (isAuditedValue(val)) {
+          auditRows.push({ key, entry: val });
+        }
+      }
+    }
+
+    return {
+      rows: auditRows,
+      applied: appliedFieldKeys,
+      cryptoOk: cryptoValidationOk,
+      cryptoErrors: validationErrors,
+      complianceDocs: collectComplianceSourceDocuments(attachments),
+    };
+  }, [ragEnrichment, attachments]);
+
+  const defaultAuditSource = useMemo(
+    () => pickDefaultAuditSource(rows, complianceDocs),
+    [rows, complianceDocs],
+  );
+
+  const [activeAuditSource, setActiveAuditSource] = useState<ActiveAuditSource | null>(defaultAuditSource);
+
+  useEffect(() => {
+    if (!defaultAuditSource) {
+      setActiveAuditSource(null);
+      return;
+    }
+    setActiveAuditSource((prev) => {
+      if (prev && rows.some(({ key }) => key === prev.fieldName)) {
+        return prev;
+      }
+      return defaultAuditSource;
+    });
+  }, [defaultAuditSource, rows]);
+
   if (!isRecord(ragEnrichment)) {
     return null;
   }
@@ -118,34 +238,6 @@ export function RagProvenanceSection({
   if (ragEnrichment.success !== true) {
     return null;
   }
-
-  const trail = isRecord(ragEnrichment.auditTrail) ? ragEnrichment.auditTrail : {};
-
-  const applied = Array.isArray(ragEnrichment.appliedFieldKeys)
-    ? (ragEnrichment.appliedFieldKeys as string[])
-    : [];
-  const crypto = isRecord(ragEnrichment.cryptoValidation)
-    ? ragEnrichment.cryptoValidation
-    : undefined;
-  const cryptoOk = crypto?.ok === true;
-  const cryptoErrors = Array.isArray(crypto?.errors) ? (crypto.errors as string[]) : [];
-
-  const rows: { readonly key: string; readonly entry: AuditedValue }[] = [];
-  if (trail.gtin && isAuditedValue(trail.gtin)) {
-    rows.push({ key: 'gtin', entry: trail.gtin });
-  }
-  if (trail.ewcCode && isAuditedValue(trail.ewcCode)) {
-    rows.push({ key: 'ewcCode', entry: trail.ewcCode });
-  }
-  if (trail.fields && isRecord(trail.fields)) {
-    for (const [key, val] of Object.entries(trail.fields)) {
-      if (isAuditedValue(val)) {
-        rows.push({ key, entry: val });
-      }
-    }
-  }
-
-  const complianceDocs = collectComplianceSourceDocuments(attachments);
 
   return (
     <details className="group overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
@@ -198,64 +290,79 @@ export function RagProvenanceSection({
           Keine auditierten RAG-Felder im Trail (Modell hat vermutlich null geliefert oder nichts extrahiert).
         </div>
       ) : (
-        <ul className="divide-y divide-slate-100">
-          {rows.map(({ key, entry }) => {
-            const sourceUrl = resolveSourceUrl(entry, complianceDocs);
-            const pdfPageUrl = sourceUrl
-              ? buildPdfPageUrl(sourceUrl, entry.source.pageNumber)
-              : undefined;
-            return (
-            <li key={key} className="space-y-2 px-5 py-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="rounded-md bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-900 ring-1 ring-sky-200/80">
-                  {key}
-                </span>
-                <span className="text-xs font-medium text-slate-500">
-                  Konfidenz {(entry.confidence * 100).toFixed(0)} %
-                  {entry.requiresManualReview ? ' · manuelle Prüfung' : ''}
-                </span>
-              </div>
-              <p className="break-words text-[13px] font-semibold text-slate-900">
-                {formatStructuredValue(entry.value)}
-              </p>
-              <dl className="grid gap-1 text-xs text-slate-600">
-                <div>
-                  <dt className="inline text-slate-500">Quelle:</dt>{' '}
-                  <dd className="inline font-medium text-slate-800">
-                    {pdfPageUrl ? (
-                      <a
-                        href={pdfPageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline decoration-slate-300 underline-offset-2 hover:text-sky-700"
-                      >
-                        {entry.source.fileName}
-                      </a>
-                    ) : (
-                      entry.source.fileName
-                    )}
-                  </dd>
-                  <span className="text-slate-400"> · </span>
-                  <dd className="inline">Seite {entry.source.pageNumber}</dd>
-                </div>
-                <div>
-                  <dt className="mb-0.5 text-slate-500">Kontext (Chunk-Auszug)</dt>
-                  <dd className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-100 bg-slate-50 p-2 font-mono text-[11px] leading-relaxed text-slate-800">
-                    {entry.source.contextSnippet}
-                  </dd>
-                </div>
-                </dl>
-                {pdfPageUrl ? (
-                  <PdfMiniPreview
-                    url={pdfPageUrl}
-                    fileName={entry.source.fileName}
-                    pageNumber={entry.source.pageNumber}
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] lg:items-start">
+          <ul className="divide-y divide-slate-100">
+            {rows.map(({ key, entry }) => {
+              const isActive = activeAuditSource?.fieldName === key;
+              const sourceUrl = resolveSourceUrl(entry, complianceDocs);
+              const pageNumber = parsePageNumber(entry.source.pageNumber);
+              const pdfPageUrl = sourceUrl ? buildPdfPageUrl(sourceUrl, pageNumber) : undefined;
+
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAuditSource(buildAuditSourceFromRow(key, entry, complianceDocs))}
+                    className={[
+                      'w-full space-y-2 border-l-2 px-5 py-4 text-left transition-all duration-200',
+                      'cursor-pointer hover:bg-slate-50',
+                      isActive
+                        ? 'border-blue-600 bg-blue-50/30'
+                        : 'border-transparent',
+                    ].join(' ')}
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="rounded-md bg-sky-50 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-900 ring-1 ring-sky-200/80">
+                        {key}
+                      </span>
+                      <span className="text-xs font-medium text-slate-500">
+                        Konfidenz {(entry.confidence * 100).toFixed(0)} %
+                        {entry.requiresManualReview ? ' · manuelle Prüfung' : ''}
+                      </span>
+                    </div>
+                    <p className="break-words text-[13px] font-semibold text-slate-900">
+                      {formatStructuredValue(entry.value)}
+                    </p>
+                    <dl className="grid gap-1 text-xs text-slate-600">
+                      <div>
+                        <dt className="inline text-slate-500">Quelle:</dt>{' '}
+                        <dd className="inline font-medium text-slate-800">
+                          {pdfPageUrl ? (
+                            <a
+                              href={pdfPageUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              className="underline decoration-slate-300 underline-offset-2 hover:text-sky-700"
+                            >
+                              {entry.source.fileName}
+                            </a>
+                          ) : (
+                            entry.source.fileName
+                          )}
+                        </dd>
+                        <span className="text-slate-400"> · </span>
+                        <dd className="inline">Seite {pageNumber}</dd>
+                      </div>
+                      <div>
+                        <dt className="mb-0.5 text-slate-500">Kontext (Chunk-Auszug)</dt>
+                        <dd className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-slate-100 bg-slate-50 p-2 font-mono text-[11px] leading-relaxed text-slate-800">
+                          {entry.source.contextSnippet}
+                        </dd>
+                      </div>
+                    </dl>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {activeAuditSource ? (
+            <aside className="border-t border-slate-200/80 bg-slate-50/40 lg:sticky lg:top-4 lg:border-l lg:border-t-0">
+              <ActiveAuditPdfPreview source={activeAuditSource} />
+            </aside>
+          ) : null}
+        </div>
       )}
       {complianceDocs.length > 0 ? (
         <div className="border-t border-slate-200/80 bg-white">
@@ -264,18 +371,23 @@ export function RagProvenanceSection({
               Compliance-Dokumente (PDF-Vorschau)
             </h3>
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-              Alle indizierten Nachweis-PDFs — inkl. Sicherheitsdatenblatt und Merkblätter.
+              Alle indizierten Nachweis-PDFs — inkl. Sicherheitsdatenblatt und Merkblätter. Klicken Sie oben ein
+              Quellenfeld, um die Vorschau zu synchronisieren.
             </p>
           </div>
           <ul className="divide-y divide-slate-100">
             {complianceDocs.map((doc) => (
-              <li key={doc.url} className="space-y-2 px-5 py-4">
-                <p className="text-[13px] font-semibold text-slate-900">{doc.title}</p>
-                <PdfMiniPreview
-                  url={buildPdfPageUrl(doc.url, 1)}
-                  fileName={doc.title}
-                  pageNumber={1}
-                />
+              <li key={doc.url} className="px-5 py-3">
+                <a
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-[13px] font-semibold text-sky-800 underline decoration-sky-200 underline-offset-2 hover:text-sky-950"
+                >
+                  <FileText className="h-4 w-4 shrink-0 text-red-700" strokeWidth={1.75} aria-hidden />
+                  {doc.title}
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                </a>
               </li>
             ))}
           </ul>
@@ -286,47 +398,64 @@ export function RagProvenanceSection({
 }
 
 /**
- * Mini-Vorschau für die belegende PDF-Seite: kompakte Karte mit rotem PDF-Icon und
- * primärem Action-Button („Original-PDF auf Seite X öffnen“), darunter ein eingebettetes
- * Iframe mit Seiten-Anker für sofortiges visuelles Auditing.
+ * **Synchronisierte** Mini-PDF-Vorschau: reagiert auf `activeAuditSource` und zeigt den
+ * KI-Kontextausschnitt prominent über dem Iframe.
  */
-function PdfMiniPreview({
-  url,
-  fileName,
-  pageNumber,
-}: {
-  readonly url: string;
-  readonly fileName: string;
-  readonly pageNumber: number;
-}) {
+function ActiveAuditPdfPreview({ source }: { readonly source: ActiveAuditSource }) {
+  const iframeSrc = source.pdfUrl ?? undefined;
+
   return (
-    <div className="mt-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700 ring-1 ring-red-100">
-          <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-semibold text-slate-900" title={fileName}>
-            {fileName}
-          </p>
-          <p className="text-[11px] text-slate-500">PDF · Seite {pageNumber}</p>
+    <div className="overflow-hidden p-4">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50/80 px-3 py-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700 ring-1 ring-red-100">
+            <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-semibold text-slate-900" title={source.pdfName}>
+              {source.pdfName}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Feld <span className="font-mono font-semibold">{source.fieldName}</span> · Seite {source.pageNumber}
+            </p>
+          </div>
+          {iframeSrc ? (
+            <a
+              href={iframeSrc}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#0c1929] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+            >
+              Original-PDF auf Seite {source.pageNumber} öffnen
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            </a>
+          ) : null}
         </div>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md bg-[#0c1929] px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800"
-        >
-          Original-PDF auf Seite {pageNumber} öffnen
-          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-        </a>
+
+        <div className="border-b border-amber-100 bg-amber-50/70 px-3 py-3">
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-900">
+            KI-Hervorhebung (Seite {source.pageNumber}):
+          </p>
+          <p className="rounded border border-amber-200 bg-amber-50 p-3 text-xs italic leading-relaxed text-amber-900 shadow-inner font-mono whitespace-pre-wrap break-words">
+            {source.contextSnippet}
+          </p>
+        </div>
+
+        {iframeSrc ? (
+          <iframe
+            key={`${source.fieldName}-${iframeSrc}`}
+            src={iframeSrc}
+            title={`PDF-Vorschau: ${source.pdfName}, Seite ${source.pageNumber}`}
+            className="block h-56 w-full bg-slate-100"
+          />
+        ) : (
+          <div className="flex h-40 flex-col items-center justify-center gap-2 bg-slate-50 px-4 text-center">
+            <FileSearch className="h-8 w-8 text-slate-400" strokeWidth={1.5} aria-hidden />
+            <p className="text-[12px] font-medium text-slate-600">Keine PDF-Vorschau für dieses Feld verfügbar</p>
+            <p className="text-[11px] text-slate-500">Quelldatei konnte keinem Compliance-Dokument zugeordnet werden.</p>
+          </div>
+        )}
       </div>
-      <iframe
-        src={url}
-        title={`PDF-Vorschau: ${fileName}, Seite ${pageNumber}`}
-        className="block h-48 w-full bg-slate-100"
-        loading="lazy"
-      />
     </div>
   );
 }

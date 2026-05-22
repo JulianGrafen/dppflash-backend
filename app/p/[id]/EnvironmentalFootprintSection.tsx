@@ -31,8 +31,8 @@ function FootprintRow({ label, value }: { readonly label: string; readonly value
 }
 
 /**
- * **ESPR-Umweltblock**: CO₂-Fußabdruck (Art. 7) und Umweltwirkung mit **Proxy-Benchmarks**
- * wenn kein produktspezifisches LCA vorliegt.
+ * **ESPR-Umweltblock**: CO₂-Fußabdruck (Art. 7) und Umweltwirkung mit **stoffspezifischer Schätzung**
+ * aus `chemicalComposition` oder statischem Branchen-Benchmark.
  */
 export function EnvironmentalFootprintSection({
   raw,
@@ -69,7 +69,9 @@ export function EnvironmentalFootprintSection({
         <FootprintMetricRow
           label="CO₂-Fußabdruck"
           value={co2.display}
-          isProxyBenchmark={co2.isProxyBenchmark}
+          estimateKind={co2.estimateKind}
+          badge={co2.badge}
+          tooltipText={co2.tooltip}
         />
         {lifecycleStage ? <FootprintRow label="Lebenszyklusphase" value={lifecycleStage} /> : null}
         {calculationMethod ? <FootprintRow label="Berechnungsmethode" value={calculationMethod} /> : null}
@@ -90,7 +92,9 @@ export function EnvironmentalFootprintSection({
           <FootprintMetricRow
             label="Wasserfußabdruck"
             value={water.display}
-            isProxyBenchmark={water.isProxyBenchmark}
+            estimateKind={water.estimateKind}
+            badge={water.badge}
+            tooltipText={water.tooltip}
           />
           {impactNotes ? <FootprintRow label="Umwelthinweise" value={impactNotes} /> : null}
         </dl>

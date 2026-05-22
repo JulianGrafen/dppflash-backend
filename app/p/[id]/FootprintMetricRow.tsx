@@ -2,12 +2,13 @@
 
 import { useId, useState } from 'react';
 import { Info } from 'lucide-react';
-import { PROXY_BENCHMARK_BADGE, PROXY_BENCHMARK_TOOLTIP } from '@/app/domain/dpp/environmentalFootprintBenchmarks';
+import type { FootprintEstimateKind } from '@/app/domain/dpp/environmentalFootprintBenchmarks';
 
 type FootprintMetricRowProps = {
   readonly label: string;
   readonly value: string;
-  readonly isProxyBenchmark?: boolean;
+  readonly estimateKind?: FootprintEstimateKind;
+  readonly badge?: string;
   readonly tooltipText?: string;
 };
 
@@ -48,20 +49,29 @@ function ProxyBenchmarkInfo({ tooltipText }: { readonly tooltipText: string }) {
 export function FootprintMetricRow({
   label,
   value,
-  isProxyBenchmark = false,
-  tooltipText = PROXY_BENCHMARK_TOOLTIP,
+  estimateKind = 'verified',
+  badge,
+  tooltipText,
 }: FootprintMetricRowProps) {
+  const showEstimateUi = estimateKind === 'composition' || estimateKind === 'industry_benchmark';
+
   return (
     <div className="flex flex-col gap-1.5 px-5 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
       <dt className="flex items-center gap-1.5 text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">
         <span>{label}</span>
-        {isProxyBenchmark ? <ProxyBenchmarkInfo tooltipText={tooltipText} /> : null}
+        {showEstimateUi && tooltipText ? <ProxyBenchmarkInfo tooltipText={tooltipText} /> : null}
       </dt>
       <dd className="flex flex-col items-start gap-2 sm:max-w-[58%] sm:items-end">
         <span className="text-[13px] font-semibold text-slate-900">{value}</span>
-        {isProxyBenchmark ? (
-          <span className="inline-flex rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold leading-snug text-sky-900 ring-1 ring-sky-200/80">
-            {PROXY_BENCHMARK_BADGE}
+        {showEstimateUi && badge ? (
+          <span
+            className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold leading-snug ring-1 ${
+              estimateKind === 'composition'
+                ? 'bg-violet-100 text-violet-900 ring-violet-200/80'
+                : 'bg-sky-100 text-sky-900 ring-sky-200/80'
+            }`}
+          >
+            {badge}
           </span>
         ) : null}
       </dd>

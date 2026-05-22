@@ -23,6 +23,25 @@ import {
 } from '@/app/domain/rag/ragPassportFieldTargets';
 import type { ProductPassport } from '@/app/types/dpp-types';
 
+function attachEstimatedFootprintPatch(
+  orchestrator: RagComplianceOrchestrator,
+  basePassport: Record<string, unknown>,
+  passportPatch: Record<string, unknown>,
+): Record<string, unknown> {
+  const withFootprints = orchestrator.applyEstimatedFootprintsToDpp(
+    { ...basePassport, ...passportPatch },
+    { ...basePassport, ...passportPatch },
+  );
+  if (withFootprints.estimatedCo2 === undefined) {
+    return passportPatch;
+  }
+  return {
+    ...passportPatch,
+    estimatedCo2: withFootprints.estimatedCo2,
+    estimatedWater: withFootprints.estimatedWater,
+  };
+}
+
 function emptyEnrichmentOutcome(): ComplianceEnrichmentResult {
   const emptyTrail = safeParseAuditTrail({ fields: {} });
   if (!emptyTrail.success) {
@@ -83,7 +102,11 @@ export class ProductPassportRagEnrichmentService {
         trailForMerge,
         mergeAllowKeys,
       );
-      const passportPatch = flattenProvenancePatchForPersistence(patch);
+      const passportPatch = attachEstimatedFootprintPatch(
+        orchestrator,
+        p,
+        flattenProvenancePatchForPersistence(patch),
+      );
       return {
         passportPatch,
         appliedKeys,
@@ -106,7 +129,11 @@ export class ProductPassportRagEnrichmentService {
         trailForMerge,
         mergeAllowKeys,
       );
-      const passportPatch = flattenProvenancePatchForPersistence(patch);
+      const passportPatch = attachEstimatedFootprintPatch(
+        orchestrator,
+        p,
+        flattenProvenancePatchForPersistence(patch),
+      );
       return {
         passportPatch,
         appliedKeys,
@@ -166,7 +193,11 @@ export class ProductPassportRagEnrichmentService {
       mergeOpts,
     );
 
-    const passportPatch = flattenProvenancePatchForPersistence(patch);
+    const passportPatch = attachEstimatedFootprintPatch(
+      orchestrator,
+      p,
+      flattenProvenancePatchForPersistence(patch),
+    );
 
     const dppPreview = { ...p, ...passportPatch } as Record<string, unknown>;
     const mz = dppPreview.materialZusammensetzung ?? dppPreview.zusammensetzung;

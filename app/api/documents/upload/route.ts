@@ -282,6 +282,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    Object.assign(
+      productPassport,
+      rag.applyEstimatedFootprintsToDpp(
+        productPassport as Record<string, unknown>,
+        productPassport as Record<string, unknown>,
+      ),
+    );
+
     // Speichere das Produkt
     await saveProductToStore(productPassport);
     console.info('[DPP] product_passport_saved', { productId });

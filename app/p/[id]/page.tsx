@@ -10,6 +10,7 @@ import {
   coerceMaterialCompositionArray,
   tryChemicalCompositionToSankey,
 } from '@/app/domain/dpp/materialCompositionToSankey';
+import { buildChemicalMassBalanceSegments } from '@/app/domain/dpp/chemicalMassBalance';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
 import {
   extractHazardStatementCodesFromTexts,
@@ -921,7 +922,9 @@ function renderChemicalComposition(value: unknown) {
     return null;
   }
 
-  const tableRows = extractSdsCompositionRows(inner);
+  const tableRows = extractSdsCompositionRows(inner).filter(
+    (row) => !isSyntheticFillerMaterialName(row.stoffname),
+  );
   if (tableRows.length > 0) {
     return renderChemicalCompositionTable(
       'Chemische Zusammensetzung',
@@ -1727,6 +1730,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     raw.chemicalComposition,
     displayProductName,
   );
+  const chemicalMassBalanceSegments = buildChemicalMassBalanceSegments(raw.chemicalComposition);
   const enrichmentReview = asRecord(raw.enrichmentReview);
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
@@ -1913,7 +1917,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
         <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
 
-        {chemicalCompositionSankey ? (
+        {chemicalCompositionSankey && !chemicalMassBalanceSegments ? (
           <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />
         ) : null}
 

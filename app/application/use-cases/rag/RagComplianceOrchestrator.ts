@@ -15,6 +15,13 @@ import { safeParseAuditTrail } from '@/app/domain/rag/auditTrailSchema';
 import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
 import { extractedAttributesToAuditTrailFields } from '@/app/domain/rag/extractedAttributesJson';
 import { computeRetrievalMatchConfidence } from '@/app/domain/rag/productBrainMatch';
+import {
+  calculateEstimatedFootprintsFromComposition,
+  EMISSION_FACTORS,
+} from '@/app/domain/dpp/chemicalCompositionFootprintCalculator';
+
+/** **Re-Export** des Emissionsfaktoren-Lexikons für Bauchemie-Proxys (Ecoinvent-Durchschnitte). */
+export { EMISSION_FACTORS };
 
 function pickHandlingInstructionsValue(raw: unknown): string | undefined {
   if (typeof raw === 'string') {
@@ -165,6 +172,28 @@ export class RagComplianceOrchestrator {
     return {
       ...dpp,
       handlingInstructions: candidate,
+    };
+  }
+
+  /**
+   * **Stoffspezifische Umwelt-Schätzung** aus `chemicalComposition` → `estimatedCo2` / `estimatedWater`
+   * (kg CO₂e bzw. Liter pro kg Produkt), inkl. **Massenbilanz-Auffüllung** via DEFAULT_FILLER.
+   */
+  applyEstimatedFootprintsToDpp<T extends Record<string, unknown>>(
+    dpp: T,
+    agentResult: Record<string, unknown> | null | undefined,
+  ): T & { estimatedCo2?: number; estimatedWater?: number } {
+    const chemicalComposition =
+      agentResult?.chemicalComposition ?? dpp.chemicalComposition;
+    const estimates = calculateEstimatedFootprintsFromComposition(chemicalComposition);
+    if (!estimates) {
+      return dpp;
+    }
+
+    return {
+      ...dpp,
+      estimatedCo2: estimates.estimatedCo2,
+      estimatedWater: estimates.estimatedWater,
     };
   }
 

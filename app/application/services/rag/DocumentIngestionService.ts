@@ -146,6 +146,13 @@ export class DocumentIngestionService {
       });
       return null;
     }
+    console.info('[DPP] compliance_document_classified', {
+      fileName: params.fileName,
+      documentType: classification.type,
+      classificationTitle: classification.title,
+      productEntityId: params.productEntityId,
+      dppProductId: params.dppProductId ?? null,
+    });
 
     const storageProductKey = params.dppProductId?.trim() || params.productEntityId;
     const upload = await uploadComplianceDocumentToStorage({
@@ -157,13 +164,33 @@ export class DocumentIngestionService {
     });
 
     if (!upload.ok) {
+      console.warn('[DPP] compliance_document_upload_failed', {
+        fileName: params.fileName,
+        documentType: classification.type,
+        productEntityId: params.productEntityId,
+        dppProductId: params.dppProductId ?? null,
+        error: upload.error,
+      });
       return null;
     }
+    console.info('[DPP] compliance_document_uploaded', {
+      fileName: params.fileName,
+      documentType: upload.document.type,
+      storagePath: upload.storagePath,
+      publicUrl: upload.document.url,
+      productEntityId: params.productEntityId,
+      dppProductId: params.dppProductId ?? null,
+    });
 
     const { productEntityService } = this.dependencies;
     if (productEntityService) {
       try {
         await productEntityService.appendSourceDocument(params.productEntityId, upload.document);
+        console.info('[DPP] compliance_document_linked_to_product', {
+          fileName: params.fileName,
+          productEntityId: params.productEntityId,
+          documentType: upload.document.type,
+        });
       } catch (err) {
         console.error('[DPP] append_source_document_failed', err);
       }
@@ -249,8 +276,17 @@ export class DocumentIngestionService {
       let sourceDocuments = sourceDocumentsCollected;
       if (productId && this.dependencies.productEntityService) {
         try {
+          const beforeCount = sourceDocuments.length;
           const fromDb = await this.dependencies.productEntityService.fetchSourceDocuments(productId);
           sourceDocuments = dedupeComplianceSourceDocuments([...sourceDocuments, ...fromDb]);
+          console.info('[DPP] compliance_documents_merged_after_ingest', {
+            phase: 'no_chunks',
+            fileName: input.fileName,
+            productEntityId: productId,
+            collectedCount: beforeCount,
+            fromDbCount: fromDb.length,
+            mergedCount: sourceDocuments.length,
+          });
         } catch (err) {
           console.warn('[DPP] fetch_source_documents_after_ingest_failed', err);
         }
@@ -288,8 +324,17 @@ export class DocumentIngestionService {
     let sourceDocuments = sourceDocumentsCollected;
     if (productId && this.dependencies.productEntityService) {
       try {
+        const beforeCount = sourceDocuments.length;
         const fromDb = await this.dependencies.productEntityService.fetchSourceDocuments(productId);
         sourceDocuments = dedupeComplianceSourceDocuments([...sourceDocuments, ...fromDb]);
+        console.info('[DPP] compliance_documents_merged_after_ingest', {
+          phase: 'with_chunks',
+          fileName: input.fileName,
+          productEntityId: productId,
+          collectedCount: beforeCount,
+          fromDbCount: fromDb.length,
+          mergedCount: sourceDocuments.length,
+        });
       } catch (err) {
         console.warn('[DPP] fetch_source_documents_after_ingest_failed', err);
       }

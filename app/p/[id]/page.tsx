@@ -12,7 +12,10 @@ import {
   tryChemicalCompositionToSankey,
 } from '@/app/domain/dpp/materialCompositionToSankey';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
-import { getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
+import {
+  getProductEntityService,
+  getRagComplianceOrchestrator,
+} from '@/app/infrastructure/rag/ragServerSingleton';
 import {
   extractHazardStatementCodesFromTexts,
   extractPrecautionaryStatementCodesFromTexts,
@@ -22,7 +25,9 @@ import {
 import { ComplianceDocumentsSection } from './ComplianceDocumentsSection';
 import { GhsPictogramBadges } from './GhsPictogramBadges';
 import {
+  basenameFromDocumentUrl,
   collectComplianceSourceDocuments,
+  normalizeDocumentMatchKey,
   resolveComplianceDocumentsForPassport,
 } from '@/app/domain/rag/sourceDocuments';
 import { RagProvenanceSection } from './RagProvenanceSection';
@@ -1147,6 +1152,21 @@ function collectLiveKnowledgeAnchorCandidates(
   return [...uniq];
 }
 
+function docReferencesProductHints(
+  doc: { readonly title: string; readonly url: string },
+  productHints: readonly string[],
+): boolean {
+  const joined = `${doc.title} ${basenameFromDocumentUrl(doc.url)}`;
+  const docKey = normalizeDocumentMatchKey(joined);
+  if (!docKey) {
+    return false;
+  }
+  return productHints.some((hint) => {
+    const key = normalizeDocumentMatchKey(hint);
+    return key.length >= 6 && (docKey.includes(key) || key.includes(docKey));
+  });
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function ProductPage({ params, searchParams }: PageProps) {
@@ -1320,6 +1340,11 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
       ? raw.tenantId.trim()
       : 'default';
   const anchorCandidates = collectLiveKnowledgeAnchorCandidates(raw, displayProductName);
+  const productIdHints = [
+    typeof raw.gtin === 'string' ? raw.gtin.trim() : '',
+    resolvePassportSku(raw) ?? '',
+    displayProductName,
+  ].filter((v) => v.length > 0);
   let liveSourceDocuments: readonly unknown[] = [];
   if (anchorCandidates.length > 0) {
     const rag = getRagComplianceOrchestrator();
@@ -1336,6 +1361,17 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
       }
     }
     liveSourceDocuments = collected;
+  }
+  if (liveSourceDocuments.length === 0 && productIdHints.length > 0) {
+    try {
+      const pe = getProductEntityService();
+      if (pe) {
+        const tenantDocs = await pe.fetchTenantSourceDocuments(tenantId);
+        liveSourceDocuments = tenantDocs.filter((doc) => docReferencesProductHints(doc, productIdHints));
+      }
+    } catch (err) {
+      console.warn('[ProductPage] tenant sourceDocuments fallback failed', err);
+    }
   }
   const mergedComplianceDocuments = collectComplianceSourceDocuments(
     raw.attachments,

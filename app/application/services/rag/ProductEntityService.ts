@@ -7,6 +7,7 @@ import {
 } from '@/app/domain/rag/extractedAttributesJson';
 import {
   appendSourceDocumentToExtractedAttributes,
+  dedupeComplianceSourceDocuments,
   parseComplianceSourceDocuments,
   type ComplianceSourceDocument,
 } from '@/app/domain/rag/sourceDocuments';
@@ -427,5 +428,42 @@ export class ProductEntityService {
       }
       throw new Error(`products sourceDocuments update failed: ${upd.error.message}`);
     }
+  }
+
+  /**
+   * Liest Compliance-Dokumente mandantenweit aus `products.extracted_attributes.sourceDocuments`.
+   * Nutzt einen konservativen Limit-Scan als Fallback, wenn Dokumente unter anderer Produkt-Entity liegen.
+   */
+  async fetchTenantSourceDocuments(
+    tenantId: string,
+    limit = 250,
+  ): Promise<readonly ComplianceSourceDocument[]> {
+    const clampedLimit = Math.max(1, Math.min(limit, 500));
+    const res = await this.client
+      .from('products')
+      .select('extracted_attributes')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(clampedLimit);
+
+    if (res.error) {
+      if (
+        isProductsEntitySchemaErrorMessage(res.error.message) ||
+        isExtractedAttributesSchemaErrorMessage(res.error.message)
+      ) {
+        return [];
+      }
+      throw new Error(`products tenant sourceDocuments lookup failed: ${res.error.message}`);
+    }
+
+    const merged: ComplianceSourceDocument[] = [];
+    for (const row of res.data ?? []) {
+      const attrs = (row as { extracted_attributes?: unknown } | null | undefined)?.extracted_attributes;
+      if (typeof attrs !== 'object' || attrs === null || Array.isArray(attrs)) {
+        continue;
+      }
+      merged.push(...parseComplianceSourceDocuments((attrs as Record<string, unknown>).sourceDocuments));
+    }
+    return dedupeComplianceSourceDocuments(merged);
   }
 }

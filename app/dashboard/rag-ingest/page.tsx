@@ -39,6 +39,7 @@ interface StatsResponse {
 
 export default function RagIngestDashboard() {
   const [tenantId, setTenantId] = useState('default');
+  const [productAnchor, setProductAnchor] = useState('');
   const [tab, setTab] = useState<RagTab>('ingest');
   const [stats, setStats] = useState<StatsResponse['indexStats'] | null>(null);
   const [lastResponse, setLastResponse] = useState<IngestResponse | null>(null);
@@ -95,6 +96,9 @@ export default function RagIngestDashboard() {
     const formData = new FormData();
     for (const f of pdfs) {
       formData.append('files', f);
+    }
+    if (productAnchor.trim().length > 0) {
+      formData.append('productAnchor', productAnchor.trim());
     }
 
     try {
@@ -223,6 +227,25 @@ export default function RagIngestDashboard() {
             <p className="text-xs text-gray-500 mt-1">
               Muss dem Mandanten entsprechen, den Sie später bei Abfragen verwenden. Zeichen: Buchstaben,
               Ziffern, <code className="text-gray-700">._-</code>, Länge 3–128.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="productAnchor" className="block text-sm font-medium text-gray-700 mb-1">
+              Produkt-Anker (optional, empfohlen)
+            </label>
+            <input
+              id="productAnchor"
+              type="text"
+              value={productAnchor}
+              onChange={(e) => setProductAnchor(e.target.value)}
+              className="w-full max-w-2xl border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              autoComplete="off"
+              placeholder="z. B. CI S1 Flex Express bag 20kg"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Wenn gesetzt, werden alle hochgeladenen PDFs derselben Produkt-Entity zugeordnet (wichtig für
+              gemeinsame Downloads im DPP).
             </p>
           </div>
 

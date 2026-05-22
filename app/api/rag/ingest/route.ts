@@ -35,6 +35,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Formular konnte nicht gelesen werden' }, { status: 400 });
   }
 
+  const productAnchorRaw = formData.get('productAnchor');
+  const productAnchor =
+    typeof productAnchorRaw === 'string' && productAnchorRaw.trim().length > 0
+      ? productAnchorRaw.trim().slice(0, 240)
+      : undefined;
+
   const rawFiles = [...formData.getAll('files'), ...formData.getAll('file')].filter(
     (entry): entry is File => entry instanceof File && entry.size > 0,
   );
@@ -87,6 +93,8 @@ export async function POST(request: NextRequest) {
         tenantId,
         fileName,
         pdf: buffer,
+        primaryProductNameHint: productAnchor,
+        documentTitleHint: productAnchor,
       });
 
       if (chunkCount === 0) {

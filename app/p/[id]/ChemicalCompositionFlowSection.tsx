@@ -32,7 +32,7 @@ export function ChemicalCompositionFlowSection({ graph }: ChemicalCompositionFlo
         <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={440} variant="chemical" />
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">
           Flussbreiten folgen dem Mittelwert jedes angegebenen Konzentrationsbereichs (z.&nbsp;B. 40–60&nbsp;% →
-          50&nbsp;%), proportional auf 100&nbsp;% skaliert. Detailtabelle mit CAS und Einstufung siehe unten.
+          50&nbsp;%), fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Detailtabelle mit CAS und Einstufung siehe unten.
         </p>
       </div>
     </section>

@@ -283,39 +283,83 @@ export function compositionGraphHasMeaningfulFlows(graph: CompositionGraphPayloa
   return total > 0.05;
 }
 
+/** **Sankey-Massenbilanz** — synthetische Lücke zu 100 % (SDB-typisch). */
+export const NON_DECLARABLE_FILLER_LABEL = 'Nicht deklarationspflichtige Stoffe';
+
+function isNonDeclarableFillerMaterialName(name: string): boolean {
+  const lower = name.trim().toLowerCase();
+  return /nicht\s+deklarationspflichtig/.test(lower)
+    || /^sonstige\s+bestandteile\b/.test(lower)
+    || /^restanteil\b/.test(lower)
+    || /\bf(ü|ue)llstoffe?\b/.test(lower);
+}
+
 /**
- * Skaliert Rohanteile (z. B. SDS-Band-Mittelwerte) proportional auf exakt 100 % für den Materialfluss.
+ * **Massenbilanz** — behält deklarierte Mittelwerte bei und füllt fehlende Anteile mit
+ * **Nicht deklarationspflichtige Stoffe** (Rest-%), statt proportional zu skalieren.
  */
-export function normalizeSankeySharesTo100Percent(
-  rawShares: readonly number[],
-): readonly number[] {
-  if (rawShares.length === 0) {
+export function closeSankeyRowsWithNonDeclarableFiller(
+  rows: readonly { readonly material: string; readonly percentage: number }[],
+): readonly { readonly material: string; readonly percentage: number }[] {
+  if (rows.length === 0) {
     return [];
   }
-  const clamped = rawShares.map((v) => Math.max(0, v));
-  const sum = clamped.reduce((a, v) => a + v, 0);
-  if (sum <= 0) {
-    const equal = 100 / rawShares.length;
-    return rawShares.map(() => equal);
+
+  const declared: { material: string; percentage: number }[] = [];
+  let existingFillerPct = 0;
+
+  for (const row of rows) {
+    const material = row.material.trim();
+    if (!material) {
+      continue;
+    }
+    const pct = Math.max(0, row.percentage);
+    if (isNonDeclarableFillerMaterialName(material)) {
+      existingFillerPct += pct;
+      continue;
+    }
+    if (pct > 0) {
+      declared.push({ material, percentage: pct });
+    }
   }
-  return clamped.map((v) => (v / sum) * 100);
+
+  if (declared.length === 0 && existingFillerPct <= 0) {
+    const valid = rows.map((r) => r.material.trim()).filter(Boolean);
+    if (valid.length === 0) {
+      return [];
+    }
+    return valid.map((material) => ({ material, percentage: 100 / valid.length }));
+  }
+
+  const declaredSum = declared.reduce((a, r) => a + r.percentage, 0);
+  const result = [...declared];
+  const gap = 100 - declaredSum - existingFillerPct;
+
+  if (existingFillerPct > 0.05) {
+    result.push({ material: NON_DECLARABLE_FILLER_LABEL, percentage: existingFillerPct });
+  } else if (gap > 0.05) {
+    result.push({ material: NON_DECLARABLE_FILLER_LABEL, percentage: gap });
+  }
+
+  return result;
 }
 
 function buildSankeyFromRows(
   rows: readonly { readonly material: string; readonly percentage: number }[],
   productLabel: string,
 ): CompositionGraphPayload | null {
-  if (rows.length === 0) {
+  const balancedRows = closeSankeyRowsWithNonDeclarableFiller(rows);
+  if (balancedRows.length === 0) {
     return null;
   }
 
-  const linkValues = normalizeSankeySharesTo100Percent(rows.map((r) => r.percentage));
+  const linkValues = balancedRows.map((r) => Math.max(0.01, r.percentage));
 
   const productId = 'end_product';
   const endLabel = productLabel.trim().length > 0 ? productLabel.trim() : 'Produkt';
 
   const nodes = [
-    ...rows.map((r, i) => ({
+    ...balancedRows.map((r, i) => ({
       id: `mat_${i}`,
       label: r.material.trim(),
       category: 'raw_material' as const,
@@ -327,7 +371,7 @@ function buildSankeyFromRows(
     },
   ];
 
-  const links = rows.map((_, i) => ({
+  const links = balancedRows.map((_, i) => ({
     source: `mat_${i}`,
     target: productId,
     value: linkValues[i] ?? 0.01,
@@ -389,7 +433,7 @@ export function extractChemicalCompositionRowsForSankey(
     }
     const o = item as Record<string, unknown>;
     const material = materialLabelFromRow(o);
-    if (!material) {
+    if (!material || isNonDeclarableFillerMaterialName(material)) {
       continue;
     }
 
@@ -483,11 +527,7 @@ function readConcentrationDisplayFromRow(o: Record<string, unknown>): string {
 }
 
 function isSyntheticFillerIngredientName(name: string): boolean {
-  const lower = name.trim().toLowerCase();
-  return /nicht\s+deklarationspflichtig/.test(lower)
-    || /^sonstige\s+bestandteile\b/.test(lower)
-    || /^restanteil\b/.test(lower)
-    || (/\bf(ü|ue)llstoffe?\b/.test(lower) && /\b100\s*%/.test(name));
+  return isNonDeclarableFillerMaterialName(name);
 }
 
 /** SDS Abschnitt 3 — Inhaltsstoffe für Tabellen in Herkunft / Traceability. */

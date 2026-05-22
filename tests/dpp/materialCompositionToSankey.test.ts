@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { compositionGraphSchema } from '@/app/domain/dpp/dppExtractionZodSchema';
 import {
+  closeSankeyRowsWithNonDeclarableFiller,
   collectChemicalCompositionIngredientRows,
   compositionGraphHasMeaningfulFlows,
   formatPassportCoreMaterialSummary,
-  normalizeSankeySharesTo100Percent,
+  NON_DECLARABLE_FILLER_LABEL,
   parseChemicalConcentrationBandMidpoint,
   tryChemicalCompositionToSankey,
   tryMaterialCompositionToSankey,
@@ -135,19 +136,36 @@ describe('tryChemicalCompositionToSankey', () => {
     );
     expect(graph).not.toBeNull();
     expect(graph!.nodes.some((n) => n.category === 'final_product')).toBe(true);
-    expect(graph!.links).toHaveLength(4);
+    expect(graph!.links).toHaveLength(5);
+    expect(graph!.nodes.some((n) => n.label === NON_DECLARABLE_FILLER_LABEL)).toBe(true);
     const linkSum = graph!.links.reduce((s, l) => s + l.value, 0);
     expect(linkSum).toBeCloseTo(100, 5);
+    expect(graph!.links.find((l) => l.source === 'mat_4')?.value).toBeCloseTo(9.5, 5);
     const parsed = compositionGraphSchema.safeParse(graph);
     expect(parsed.success).toBe(true);
   });
 });
 
-describe('normalizeSankeySharesTo100Percent', () => {
-  it('scales SDS band midpoints to exactly 100%', () => {
-    const normalized = normalizeSankeySharesTo100Percent([50, 30, 7.5, 3]);
-    expect(normalized.reduce((a, v) => a + v, 0)).toBeCloseTo(100, 8);
-    expect(normalized[0]).toBeCloseTo(55.248618784, 3);
+describe('closeSankeyRowsWithNonDeclarableFiller', () => {
+  it('adds non-declarable filler for remaining mass balance instead of scaling', () => {
+    const balanced = closeSankeyRowsWithNonDeclarableFiller([
+      { material: 'Quarz (SiO2)', percentage: 50 },
+      { material: 'Zement, Portland', percentage: 30 },
+      { material: 'Kalkhaltiges Sedimentgestein', percentage: 7.5 },
+      { material: 'Kaminstaub', percentage: 3 },
+    ]);
+    expect(balanced.reduce((a, r) => a + r.percentage, 0)).toBeCloseTo(100, 8);
+    expect(balanced[0]?.percentage).toBe(50);
+    expect(balanced.find((r) => r.material === NON_DECLARABLE_FILLER_LABEL)?.percentage).toBeCloseTo(9.5, 5);
+  });
+
+  it('keeps explicit filler percentage from source data', () => {
+    const balanced = closeSankeyRowsWithNonDeclarableFiller([
+      { material: 'Quarz (SiO2)', percentage: 88 },
+      { material: 'Nicht deklarationspflichtige Stoffe / Füllstoffe', percentage: 12 },
+    ]);
+    expect(balanced).toHaveLength(2);
+    expect(balanced.find((r) => r.material === NON_DECLARABLE_FILLER_LABEL)?.percentage).toBe(12);
   });
 });
 

@@ -68,16 +68,16 @@ describe('computeTraceabilityTieredLayout', () => {
     expect(model).not.toBeNull();
 
     const layout = computeTraceabilityTieredLayout(model!);
-    const tier1Height = layout.nodes
-      .filter((n) => n.tier === 1)
-      .reduce((sum, n) => sum + n.rect.height, 0);
-    const tier2Height = layout.nodes
-      .filter((n) => n.tier === 2)
-      .reduce((sum, n) => sum + n.rect.height, 0);
+    const stackGap = (count: number) => Math.max(0, count - 1) * 8;
+    const tier1Nodes = layout.nodes.filter((n) => n.tier === 1);
+    const tier2Nodes = layout.nodes.filter((n) => n.tier === 2);
+    const tier1Stack = tier1Nodes.reduce((sum, n) => sum + n.rect.height, 0) + stackGap(tier1Nodes.length);
+    const tier2Stack = tier2Nodes.reduce((sum, n) => sum + n.rect.height, 0) + stackGap(tier2Nodes.length);
     const productHeight = layout.nodes.find((n) => n.tier === 3)?.rect.height ?? 0;
 
-    expect(tier1Height).toBeCloseTo(tier2Height, 1);
-    expect(tier1Height).toBeCloseTo(productHeight, 1);
+    expect(Math.max(tier1Stack, tier2Stack)).toBeCloseTo(layout.stackHeight, 0);
+    expect(productHeight).toBeCloseTo(layout.stackHeight, 0);
     expect(layout.flows.length).toBe(model!.links.length);
+    expect(layout.nodes.every((node) => node.rect.height >= 32)).toBe(true);
   });
 });

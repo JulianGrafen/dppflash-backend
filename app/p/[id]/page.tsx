@@ -1744,6 +1744,20 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 
+  const hasRecycledContentSection =
+    p.recycledContent.cobaltPct !== undefined
+    || p.recycledContent.lithiumPct !== undefined
+    || p.recycledContent.nickelPct !== undefined
+    || p.recycledContent.leadPct !== undefined;
+  const hasLifecycleSection =
+    p.lifecycle.expectedCycles !== undefined
+    || p.lifecycle.repairabilityScore !== undefined
+    || p.lifecycle.sparePartsAvailableYears !== undefined
+    || p.lifecycle.warrantyYears !== undefined;
+  const hasEndOfLifeSection =
+    Boolean(p.endOfLife.recyclingInstructions)
+    || (p.endOfLife.hazardousSubstances?.length ?? 0) > 0;
+
   return (
     <div className="min-h-screen bg-[#eef1f8] pb-4">
       {/* Top bar — Circularise-Style App-Rahmen */}
@@ -1941,16 +1955,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderUnifiedHazardousIngredients(raw)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
-          <Field
-            label="End-of-Life-Hinweise"
-            value={
-              typeof raw.endOfLifeInstructions === 'string'
-                ? raw.endOfLifeInstructions
-                : typeof raw.entsorgungshinweise === 'string'
-                  ? raw.entsorgungshinweise
-                  : undefined
-            }
-          />
         </Section>
 
         <RagProvenanceSection
@@ -1958,30 +1962,32 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           attachments={raw.attachments ?? raw.downloadableDocuments ?? raw.sourceDocuments}
         />
 
-        {/* ── Recycled content (Art. 8) ── */}
-        <Section>
-          <Pct label="Kobalt"   value={p.recycledContent.cobaltPct} />
-          <Pct label="Lithium"  value={p.recycledContent.lithiumPct} />
-          <Pct label="Nickel"   value={p.recycledContent.nickelPct} />
-          <Pct label="Blei"     value={p.recycledContent.leadPct} />
-        </Section>
+        {hasRecycledContentSection ? (
+          <Section>
+            <Pct label="Kobalt"   value={p.recycledContent.cobaltPct} />
+            <Pct label="Lithium"  value={p.recycledContent.lithiumPct} />
+            <Pct label="Nickel"   value={p.recycledContent.nickelPct} />
+            <Pct label="Blei"     value={p.recycledContent.leadPct} />
+          </Section>
+        ) : null}
 
-        {/* ── Lifecycle (Art. 10) ── */}
-        <Section>
-          <Field label="Erwartete Ladezyklen"  value={p.lifecycle.expectedCycles} />
-          <Field label="Reparierbarkeitsindex" value={p.lifecycle.repairabilityScore !== undefined ? `${p.lifecycle.repairabilityScore} / 10` : undefined} />
-          <Field label="Ersatzteil-Verfügbarkeit" value={p.lifecycle.sparePartsAvailableYears !== undefined ? `${p.lifecycle.sparePartsAvailableYears} Jahre` : undefined} />
-          <Field label="Garantie"              value={p.lifecycle.warrantyYears !== undefined ? `${p.lifecycle.warrantyYears} Jahre` : undefined} />
-        </Section>
+        {hasLifecycleSection ? (
+          <Section>
+            <Field label="Erwartete Ladezyklen"  value={p.lifecycle.expectedCycles} />
+            <Field label="Reparierbarkeitsindex" value={p.lifecycle.repairabilityScore !== undefined ? `${p.lifecycle.repairabilityScore} / 10` : undefined} />
+            <Field label="Ersatzteil-Verfügbarkeit" value={p.lifecycle.sparePartsAvailableYears !== undefined ? `${p.lifecycle.sparePartsAvailableYears} Jahre` : undefined} />
+            <Field label="Garantie"              value={p.lifecycle.warrantyYears !== undefined ? `${p.lifecycle.warrantyYears} Jahre` : undefined} />
+          </Section>
+        ) : null}
 
-        {/* ── End-of-life (Art. 11) ── */}
-        <Section>
-          <Field label="Recyclinganweisungen"  value={p.endOfLife.recyclingInstructions} />
-          <Field label="Entsorgungshinweise"   value={p.endOfLife.disposalInstructions} />
-          {p.endOfLife.hazardousSubstances?.length ? (
-            <Field label="Gefahrstoffe" value={p.endOfLife.hazardousSubstances.join(', ')} />
-          ) : null}
-        </Section>
+        {hasEndOfLifeSection ? (
+          <Section>
+            <Field label="Recyclinganweisungen" value={p.endOfLife.recyclingInstructions} />
+            {p.endOfLife.hazardousSubstances?.length ? (
+              <Field label="Gefahrstoffe" value={p.endOfLife.hazardousSubstances.join(', ')} />
+            ) : null}
+          </Section>
+        ) : null}
 
         {(() => {
           const handlingText = pickHandlingInstructionsForDisplay(raw);

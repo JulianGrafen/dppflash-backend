@@ -22,6 +22,12 @@ const TRACEABILITY_NODE_COLORS = [
   '#d97706',
 ];
 
+const CATEGORY_LABELS: Record<CompositionGraphNodePayload['category'], string> = {
+  raw_material: 'Rohstoff / Material',
+  processing: 'Verarbeitung',
+  final_product: 'Endprodukt',
+};
+
 export type CompositionFlowchartVariant = 'default' | 'traceability' | 'chemical';
 
 export interface CompositionFlowchartProps {
@@ -35,6 +41,64 @@ export interface CompositionFlowchartProps {
 
 type SankeyNode = CompositionGraphNodePayload;
 type SankeyLink = CompositionGraphLinkPayload;
+
+const TOOLTIP_STYLE: React.CSSProperties = {
+  background: '#0f172a',
+  color: '#f8fafc',
+  fontSize: 12,
+  borderRadius: 8,
+  padding: '8px 12px',
+  maxWidth: 320,
+  lineHeight: 1.45,
+  wordBreak: 'break-word',
+};
+
+/** Schätzt benötigten Seitenrand aus der längsten Bezeichnung (ca. 7px pro Zeichen bei 12px). */
+function estimateSideMargin(labels: readonly string[], fontSize: number): number {
+  const maxLen = Math.max(8, ...labels.map((l) => l.length));
+  const cappedLen = Math.min(maxLen, 56);
+  return Math.min(380, Math.max(112, Math.ceil(cappedLen * fontSize * 0.62 + 40)));
+}
+
+function computeSankeyLayout(
+  nodes: readonly CompositionGraphNodePayload[],
+  baseHeight: number,
+  isTraceStyle: boolean,
+): {
+  readonly height: number;
+  readonly margin: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+  readonly minWidth: number;
+} {
+  const fontSize = isTraceStyle ? 12 : 11;
+  const labels = nodes.map((n) => n.label);
+  const side = estimateSideMargin(labels, fontSize);
+  const height = Math.max(baseHeight, nodes.length * (isTraceStyle ? 56 : 48) + 96);
+  const margin = {
+    top: 40,
+    right: side,
+    bottom: 40,
+    left: side,
+  };
+  return {
+    height,
+    margin,
+    minWidth: margin.left + margin.right + 280,
+  };
+}
+
+/** Kürzt nur am Wortende — voller Text bleibt im Tooltip. */
+function formatSankeyNodeLabel(label: string, maxChars = 44): string {
+  const trimmed = label.trim();
+  if (trimmed.length <= maxChars) {
+    return trimmed;
+  }
+  const slice = trimmed.slice(0, maxChars);
+  const lastSpace = slice.lastIndexOf(' ');
+  if (lastSpace >= Math.floor(maxChars * 0.45)) {
+    return `${trimmed.slice(0, lastSpace)} …`;
+  }
+  return `${slice.trimEnd()} …`;
+}
 
 /**
  * Responsive Sankey for material / process composition (ESPR-style compositionGraph).
@@ -57,6 +121,16 @@ export function CompositionFlowchart({
   /** Gleiche Sankey-Optik wie Rückverfolgbarkeit (Referenz-UI); inkl. chemische Zusammensetzung. */
   const isTraceStyle = variant === 'traceability' || variant === 'chemical';
 
+  const layout = useMemo(
+    () => computeSankeyLayout(nodes, height, isTraceStyle),
+    [nodes, height, isTraceStyle],
+  );
+
+  const labelById = useMemo(
+    () => new Map(data.nodes.map((n) => [n.id, n.label] as const)),
+    [data.nodes],
+  );
+
   const nodeColor = useMemo(() => {
     if (!isTraceStyle) {
       return (node: { id: string; category?: SankeyNode['category'] }) =>
@@ -78,91 +152,89 @@ export function CompositionFlowchart({
   }
 
   return (
+    <div className={`w-full min-w-0 overflow-x-auto ${className}`}>
       <div
-        className={`w-full overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-inner ${className}`}
-        style={{ height }}
+        className="rounded-xl border border-slate-200/90 bg-white shadow-inner"
+        style={{ height: layout.height, minWidth: layout.minWidth }}
       >
-      <ResponsiveSankey<SankeyNode, SankeyLink>
-        data={data}
-        label="label"
-        margin={
-          isTraceStyle
-            ? { top: 28, right: 200, bottom: 28, left: 64 }
-            : { top: 24, right: 160, bottom: 24, left: 48 }
-        }
-        align="justify"
-        sort="input"
-        layout="horizontal"
-        nodeOpacity={1}
-        nodeHoverOpacity={1}
-        nodeThickness={isTraceStyle ? 24 : 18}
-        nodeInnerPadding={isTraceStyle ? 4 : 3}
-        nodeSpacing={isTraceStyle ? 28 : 24}
-        nodeBorderWidth={0}
-        linkOpacity={isTraceStyle ? 0.5 : 0.45}
-        linkHoverOpacity={isTraceStyle ? 0.72 : 0.7}
-        linkContract={isTraceStyle ? 2 : 3}
-        enableLinkGradient
-        labelPosition="outside"
-        labelOrientation="horizontal"
-        labelPadding={isTraceStyle ? 14 : 12}
-        labelTextColor={{ from: 'color', modifiers: [['darker', isTraceStyle ? 1.9 : 1.6]] }}
-        colors={nodeColor}
-        theme={{
-          labels: { text: { fontSize: isTraceStyle ? 12 : 11, fontWeight: 600, fill: '#0f172a' } },
-          tooltip: {
-            container: {
-              background: '#0f172a',
-              color: '#f8fafc',
-              fontSize: 12,
-              borderRadius: 8,
-              padding: '8px 12px',
+        <ResponsiveSankey<SankeyNode, SankeyLink>
+          data={data}
+          label={(node) => formatSankeyNodeLabel(labelById.get(node.id) ?? node.id)}
+          margin={layout.margin}
+          align="justify"
+          sort="input"
+          layout="horizontal"
+          nodeOpacity={1}
+          nodeHoverOpacity={1}
+          nodeThickness={isTraceStyle ? 22 : 18}
+          nodeInnerPadding={isTraceStyle ? 5 : 3}
+          nodeSpacing={isTraceStyle ? 32 : 26}
+          nodeBorderWidth={0}
+          linkOpacity={isTraceStyle ? 0.5 : 0.45}
+          linkHoverOpacity={isTraceStyle ? 0.72 : 0.7}
+          linkContract={isTraceStyle ? 2 : 3}
+          enableLinkGradient
+          labelPosition="outside"
+          labelOrientation="horizontal"
+          labelPadding={isTraceStyle ? 18 : 14}
+          labelTextColor="#0f172a"
+          colors={nodeColor}
+          theme={{
+            labels: {
+              text: {
+                fontSize: isTraceStyle ? 12 : 11,
+                fontWeight: 600,
+                fill: '#0f172a',
+              },
             },
-          },
-        }}
-        motionConfig="gentle"
-        linkTooltip={
-          variant === 'traceability'
-            ? ({ link }) => (
-                <div
-                  style={{
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    fontSize: 12,
-                    borderRadius: 8,
-                    padding: '8px 12px',
-                    maxWidth: 280,
-                  }}
-                >
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
-                  <div>
-                    Anteil laut Produktpass:{' '}
-                    {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
-                  </div>
-                </div>
-              )
-            : variant === 'chemical'
+            tooltip: {
+              container: TOOLTIP_STYLE,
+            },
+          }}
+          motionConfig="gentle"
+          nodeTooltip={({ node }) => {
+            const fullLabel = labelById.get(node.id) ?? node.id;
+            const category = data.nodes.find((n) => n.id === node.id)?.category;
+            return (
+              <div style={TOOLTIP_STYLE}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>{fullLabel}</div>
+                {category ? (
+                  <div style={{ opacity: 0.85 }}>{CATEGORY_LABELS[category] ?? category}</div>
+                ) : null}
+              </div>
+            );
+          }}
+          linkTooltip={
+            variant === 'traceability'
               ? ({ link }) => (
-                  <div
-                    style={{
-                      background: '#0f172a',
-                      color: '#f8fafc',
-                      fontSize: 12,
-                      borderRadius: 8,
-                      padding: '8px 12px',
-                      maxWidth: 300,
-                    }}
-                  >
+                  <div style={TOOLTIP_STYLE}>
                     <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
                     <div>
-                      Gewichtung (Mittelwert des Konzentrationsbands, geschätzt):{' '}
+                      → {link.target.label}
+                    </div>
+                    <div style={{ marginTop: 4 }}>
+                      Anteil laut Produktpass:{' '}
                       {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
                     </div>
                   </div>
                 )
-              : undefined
-        }
-      />
+              : variant === 'chemical'
+                ? ({ link }) => (
+                    <div style={TOOLTIP_STYLE}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{link.source.label}</div>
+                      <div>
+                        → {link.target.label}
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        Gewichtung (Mittelwert des Konzentrationsbands):{' '}
+                        {Number.isInteger(link.value) ? `${link.value} %` : `${link.value.toFixed(1)} %`}
+                      </div>
+                    </div>
+                  )
+                : undefined
+          }
+        />
+      </div>
     </div>
   );
 }

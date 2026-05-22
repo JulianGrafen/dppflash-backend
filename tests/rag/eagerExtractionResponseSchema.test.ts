@@ -157,6 +157,25 @@ describe('eagerExtractionResponseSchema', () => {
         value: 'Temperatur 5–35 °C, Schutzhandschuhe DIN EN; Werkzeug sofort nach Gebrauch mit Wasser reinigen.',
         sourcePdf: 't.pdf',
         contextSnippet: 'Verarbeitungs-Hinweise und Reinigung',
+        confidence: 0.91,
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts per-field confidence on scalar rows', () => {
+    const r = eagerExtractionResponseSchema.safeParse({
+      hersteller: {
+        value: 'Henkel AG',
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'Henkel AG · Düsseldorf',
+        confidence: 0.97,
+      },
+      ewcCode: {
+        value: '17 09 04',
+        sourcePdf: 'sdb.pdf',
+        contextSnippet: 'EAK 17 09 04',
+        confidence: 0.84,
       },
     });
     expect(r.success).toBe(true);
@@ -197,5 +216,24 @@ describe('eagerExtractionResponseToRows', () => {
     });
     const rows = eagerExtractionResponseToRows(data, 'f.pdf');
     expect(rows.substancesOfConcern?.value).toEqual(['Toluol (SVHC candidate list)']);
+  });
+
+  it('persists LLM confidence per field and falls back when omitted', () => {
+    const data = eagerExtractionResponseSchema.parse({
+      hersteller: {
+        value: 'ACME GmbH',
+        sourcePdf: 'a.pdf',
+        contextSnippet: 'Hersteller: ACME GmbH',
+        confidence: 0.96,
+      },
+      gtin: {
+        value: '4012345678901',
+        sourcePdf: 'a.pdf',
+        contextSnippet: 'GTIN 4012345678901',
+      },
+    });
+    const rows = eagerExtractionResponseToRows(data, 'fallback.pdf');
+    expect(rows.hersteller?.confidence).toBeCloseTo(0.96, 5);
+    expect(rows.gtin?.confidence).toBeCloseTo(0.72, 5);
   });
 });

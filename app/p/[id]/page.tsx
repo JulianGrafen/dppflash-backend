@@ -165,24 +165,6 @@ function Pct({ label, value }: { label: string; value?: number }) {
   return <Field label={label} value={`${value} %`} />;
 }
 
-function CarbonFootprintField({ label, value }: { readonly label: string; readonly value?: number }) {
-  const hasMeasuredValue = typeof value === 'number' && Number.isFinite(value) && value > 0;
-  return (
-    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
-      <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
-        {hasMeasuredValue ? (
-          <span>{value} kg CO₂e</span>
-        ) : (
-          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
-            In Berechnung / Daten werden evaluiert
-          </span>
-        )}
-      </dd>
-    </div>
-  );
-}
-
 function formatPercentage(value: unknown): string | undefined {
   if (typeof value !== 'number') {
     return undefined;
@@ -458,7 +440,7 @@ function renderMaterialZusammensetzungKernfelder(
       }
       const row = item as Record<string, unknown>;
       const title = materialNameFromCompositionEntry(row);
-      if (!title) {
+      if (!title || isSyntheticFillerMaterialName(title)) {
         continue;
       }
       const pct = pickMaterialCompositionPercent(row);
@@ -480,14 +462,6 @@ function renderMaterialZusammensetzungKernfelder(
   const list = entries.length > 0 ? renderKeyValueList('Material-Zusammensetzung', entries) : null;
 
   if (tableEl || list) {
-    if (!tableEl && list && entries.length > 0 && looksLikeBulkFillerOnly(entries)) {
-      return (
-        <>
-          {renderBulkFillerFallbackList()}
-          {legacy ? <Field label="Material-Zusammensetzung (Text)" value={legacy} /> : null}
-        </>
-      );
-    }
     return (
       <>
         {tableEl}
@@ -506,28 +480,12 @@ function renderMaterialZusammensetzungKernfelder(
   return null;
 }
 
-/**
- * Erkennt die „pauschale 100 % Füllstoffe“-Anzeige (Einzeleintrag mit generischem
- * Füllstoff-Begriff, ohne echte SDB-Zeilen) und ersetzt sie durch eine
- * mineralisch-funktionale Schätzbeschreibung für typische Bauchemie-Produkte.
- */
-function looksLikeBulkFillerOnly(entries: readonly KeyValueEntry[]): boolean {
-  if (entries.length !== 1) {
-    return false;
-  }
-  const only = entries[0];
-  if (!only) {
-    return false;
-  }
-  const title = only.title.toLowerCase();
-  return /\bf(ü|ue)llstoff/.test(title);
-}
-
-function renderBulkFillerFallbackList() {
-  return renderKeyValueList('Material-Zusammensetzung', [
-    { title: 'Mineralische Bindemittel & Zuschläge', details: 'ca. 80 %' },
-    { title: 'Funktionale Füllstoffe', details: 'ca. 20 %' },
-  ]);
+/** Rechnerischer Platzhalter aus der Extraktion — nicht im DPP anzeigen. */
+function isSyntheticFillerMaterialName(name: string): boolean {
+  const lower = name.trim().toLowerCase();
+  return /nicht\s+deklarationspflichtig/.test(lower)
+    || /^sonstige\s+bestandteile\b/.test(lower)
+    || /^restanteil\b/.test(lower);
 }
 
 function renderRecycledContent(value: unknown) {
@@ -1889,8 +1847,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
         {/* ── Carbon footprint (Art. 7) ── */}
         <Section>
-          <CarbonFootprintField label="Gesamt" value={p.carbonFootprint.totalKg} />
-          <CarbonFootprintField label="Pro kWh" value={p.carbonFootprint.perKwhKg} />
           <Field label="Methodik"            value={p.carbonFootprint.methodology} />
           <Field label="Zertifizierer"       value={p.carbonFootprint.certificationBody} />
         </Section>

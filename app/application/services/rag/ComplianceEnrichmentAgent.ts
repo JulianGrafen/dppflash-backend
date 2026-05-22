@@ -5,6 +5,7 @@ import {
   buildGapLlmResponseSchema,
   type GapLlmFieldRow,
 } from '@/app/domain/rag/gapTargetedExtractionSchema';
+import { resolveEagerRowConfidence } from '@/app/domain/rag/eagerExtractionResponseSchema';
 import { safeParseAuditTrail, type AuditTrail, type AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import { validateAuditTrailCryptographically } from '@/app/domain/rag/auditTrailValidation';
 
@@ -80,8 +81,9 @@ function buildGapTargetedComplianceAuditorSystemPrompt(
 
 Ausgabe: genau EIN JSON-Objekt (ohne Markdown). Top-Level-Keys sind exakt diese camelCase-Feldnamen: ${keysJson}
 Jeder Eintrag MUSS dieses Objekt sein:
-{ "value": string | null, "sourcePdf": string, "contextSnippet": string }
-- Bei fehlendem Beleg: value=null, sourcePdf und contextSnippet leere Strings "" oder kurz "—".
+{ "value": string | null, "sourcePdf": string, "contextSnippet": string, "confidence": number }
+- confidence: 0.0–1.0 — wie eindeutig der Wert im Kontext belegt ist (0.95+ wörtlich, 0.80–0.94 klar, 0.60–0.79 indirekt, <0.60 unsicher → value null)
+- Bei fehlendem Beleg: value=null, sourcePdf und contextSnippet leere Strings "" oder kurz "—", confidence=0.
 - Keine zusätzlichen Top-Level-Keys. Numerische Kennwerte als String in "value".
 
 Hinweise:
@@ -339,10 +341,16 @@ export class ComplianceEnrichmentAgent {
         (row.sourcePdf.trim().length > 0 ? row.sourcePdf.trim() : topChunks[0]?.fileName) ??
         'unknown';
       const pageNumber = chunk?.pageNumber ?? topChunks[0]?.pageNumber ?? 1;
+      const llmConfidence = resolveEagerRowConfidence(row.confidence);
 
       out[key] = {
         value: normalizedValue,
-        confidence: normalizedValue === null ? 0 : snippetOk ? 0.88 : 0.35,
+        confidence:
+          normalizedValue === null
+            ? 0
+            : snippetOk
+              ? llmConfidence
+              : Math.min(llmConfidence, 0.35),
         source: {
           fileName,
           pageNumber,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveEagerRowConfidence } from '@/app/domain/rag/eagerExtractionResponseSchema';
 
 /** Muss im User-Prompt vorkommen, damit Offline-Mocks den Kontext parsen können. */
 export const GAP_TARGETED_CONTEXT_MARKER = '\n\n### KONTEXT_AUS_DATENBANK\n\n';
@@ -21,6 +22,7 @@ export const gapLlmFieldSchema = z.object({
     }),
   sourcePdf: z.coerce.string(),
   contextSnippet: z.coerce.string(),
+  confidence: z.coerce.number().min(0).max(1).optional(),
 });
 
 export type GapLlmFieldRow = z.infer<typeof gapLlmFieldSchema>;

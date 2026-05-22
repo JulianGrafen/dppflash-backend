@@ -7,12 +7,26 @@ import {
 } from '@/app/domain/rag/hazardStatementCodes';
 import { sdsCompositionEntrySchema } from '@/app/domain/rag/sdsCompositionSchema';
 
-/** Ein Feld aus der Eager-LLM-Antwort — nur `value` / `sourcePdf` / `contextSnippet` (keine weiteren Keys). */
+/** LLM-Konfidenz pro extrahiertem Feld (0–1); optional für Abwärtskompatibilität. */
+const eagerRowConfidenceSchema = z.coerce.number().min(0).max(1).optional();
+
+/** Fallback, wenn ältere JSONB-Zeilen oder das LLM keine Konfidenz liefern. */
+export const EAGER_FALLBACK_CONFIDENCE = 0.72;
+
+export function resolveEagerRowConfidence(confidence: unknown): number {
+  if (typeof confidence === 'number' && Number.isFinite(confidence)) {
+    return Math.min(1, Math.max(0, confidence));
+  }
+  return EAGER_FALLBACK_CONFIDENCE;
+}
+
+/** Ein Feld aus der Eager-LLM-Antwort — `value` / `sourcePdf` / `contextSnippet` / optional `confidence`. */
 const eagerExtractionFieldRowSchema = z
   .object({
     value: z.string().nullable(),
     sourcePdf: z.string(),
     contextSnippet: z.string(),
+    confidence: eagerRowConfidenceSchema,
   })
   .strict();
 
@@ -22,6 +36,7 @@ export const eagerChemicalCompositionFieldRowSchema = z
     value: z.array(sdsCompositionEntrySchema).nullable(),
     sourcePdf: z.string(),
     contextSnippet: z.string(),
+    confidence: eagerRowConfidenceSchema,
   })
   .strict();
 
@@ -31,6 +46,7 @@ export const eagerSubstancesConcernFieldRowSchema = z
     value: z.array(z.string()).nullable(),
     sourcePdf: z.string(),
     contextSnippet: z.string(),
+    confidence: eagerRowConfidenceSchema,
   })
   .strict();
 
@@ -64,6 +80,7 @@ function eagerRegulatoryCodesArrayRowSchema(field: 'h' | 'p' | 'ghs') {
       ),
       sourcePdf: z.string(),
       contextSnippet: z.string(),
+      confidence: eagerRowConfidenceSchema,
     })
     .strict();
 }
@@ -231,6 +248,7 @@ export function normalizeEagerExtractionRawObject(source: Record<string, unknown
   };
 
   const scoreRow = (canonical: EagerCanonicalFieldKey, row: Record<string, unknown>): number => {
+    let contentScore: number;
     if (
       canonical === 'chemicalComposition'
       || canonical === 'substancesOfConcern'
@@ -238,9 +256,12 @@ export function normalizeEagerExtractionRawObject(source: Record<string, unknown
       || canonical === 'pStatements'
       || canonical === 'ghsSymbols'
     ) {
-      return scoreArrayRow(row);
+      contentScore = scoreArrayRow(row);
+    } else {
+      contentScore = scoreScalarRow(row);
     }
-    return scoreScalarRow(row);
+    const confidenceTieBreak = resolveEagerRowConfidence(row.confidence);
+    return contentScore * 1_000 + confidenceTieBreak;
   };
 
   for (const [rawKey, v] of Object.entries(source)) {
@@ -301,9 +322,6 @@ export type EagerExtractionResponse = z.infer<typeof eagerExtractionResponseSche
 
 const EAGER_ROW_KEYS = EAGER_CANONICAL_FIELD_KEYS;
 
-/** Default-Konfidenz für Eager-Zeilen, wenn das LLM keine Confidence liefert. */
-const EAGER_DEFAULT_CONFIDENCE = 0.88;
-
 function eagerChunkHasExtractableValue(key: EagerCanonicalFieldKey, chunk: { value: unknown }): boolean {
   if (chunk.value === null) {
     return false;
@@ -339,7 +357,7 @@ export function eagerExtractionResponseToRows(
       sourcePdf,
       contextSnippet: chunk.contextSnippet,
       pageNumber: 1,
-      confidence: EAGER_DEFAULT_CONFIDENCE,
+      confidence: resolveEagerRowConfidence(chunk.confidence),
     };
   }
   return out;

@@ -15,30 +15,48 @@ const GHS_LABELS: Record<string, string> = {
   GHS09: 'Umwelt',
 };
 
-const GHS_DIAMOND: Record<string, string> = {
-  GHS01: 'bg-red-600 text-white',
-  GHS02: 'bg-orange-500 text-white',
-  GHS03: 'bg-yellow-400 text-black',
-  GHS04: 'bg-sky-500 text-white',
-  GHS05: 'bg-amber-500 text-black',
-  GHS06: 'bg-red-700 text-white',
-  GHS07: 'bg-amber-400 text-black',
-  GHS08: 'bg-red-600 text-white',
-  GHS09: 'bg-emerald-600 text-white',
+/** Kanonische GHS-Piktogramme unter `public/ghs/` (Dateiname = Code + Endung). */
+const GHS_ASSET_URLS: Readonly<Record<string, string>> = {
+  GHS01: '/ghs/GHS01.svg',
+  GHS02: '/ghs/GHS02.svg',
+  GHS03: '/ghs/GHS03.svg',
+  GHS04: '/ghs/GHS04.svg',
+  GHS05: '/ghs/GHS05.png',
+  GHS06: '/ghs/GHS06.svg',
+  GHS07: '/ghs/GHS07.svg',
+  GHS08: '/ghs/GHS08.png',
+  GHS09: '/ghs/GHS09.svg',
 };
 
-function GhsDiamond({ code }: { readonly code: string }) {
-  const num = code.replace(/^GHS0?/, '');
-  const palette = GHS_DIAMOND[code] ?? 'bg-slate-700 text-white';
+function ghsAssetUrl(code: string): string | undefined {
+  return GHS_ASSET_URLS[code];
+}
+
+function GhsPictogram({ code }: { readonly code: string }) {
   const label = GHS_LABELS[code] ?? code;
+  const assetUrl = ghsAssetUrl(code);
+
+  if (!assetUrl) {
+    return (
+      <div className="flex flex-col items-center gap-1" title={`${code} — ${label}`}>
+        <span className="flex h-11 w-11 items-center justify-center rounded border border-slate-200 bg-slate-50 text-[10px] font-bold text-slate-600">
+          {code.replace(/^GHS0?/, 'GHS0')}
+        </span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{code}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-1" title={`${code} — ${label}`}>
-      <div
-        className={`flex h-11 w-11 rotate-45 items-center justify-center rounded-sm border-2 border-slate-900/90 shadow-sm ${palette}`}
-        aria-hidden
-      >
-        <span className="-rotate-45 text-sm font-bold leading-none">{num}</span>
-      </div>
+      <img
+        src={assetUrl}
+        alt={`${code} — ${label}`}
+        width={44}
+        height={44}
+        className="h-11 w-11 object-contain"
+        loading="lazy"
+      />
       <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{code}</span>
     </div>
   );
@@ -60,9 +78,9 @@ export function GhsPictogramBadges({
   }
 
   return (
-    <div className="flex flex-wrap items-end justify-end gap-4">
+    <div className="flex flex-wrap items-end justify-start gap-3 sm:justify-end">
       {resolved.map((code) => (
-        <GhsDiamond key={code} code={code} />
+        <GhsPictogram key={code} code={code} />
       ))}
     </div>
   );

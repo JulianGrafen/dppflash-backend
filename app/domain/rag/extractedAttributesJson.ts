@@ -1,4 +1,5 @@
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
+import { resolveEagerRowConfidence } from '@/app/domain/rag/eagerExtractionResponseSchema';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
 import {
   normalizeHazardStatementCodeList,
@@ -311,7 +312,7 @@ function coerceRow(raw: unknown, fieldKey: string): ExtractedAttributeRow | null
 
   const sourcePdf = typeof raw.sourcePdf === 'string' ? raw.sourcePdf : '';
   const contextSnippet = typeof raw.contextSnippet === 'string' ? raw.contextSnippet : '';
-  const conf = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence) ? raw.confidence : 0;
+  const conf = resolveEagerRowConfidence(raw.confidence);
   const pageNumber =
     typeof raw.pageNumber === 'number' && Number.isFinite(raw.pageNumber) && raw.pageNumber >= 1
       ? Math.floor(raw.pageNumber)

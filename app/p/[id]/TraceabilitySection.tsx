@@ -63,7 +63,7 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
           </p>
         </div>
       </header>
-      <div className="space-y-3 bg-gradient-to-b from-slate-50/60 via-white to-white px-3 pb-5 pt-5 sm:px-5 sm:pb-6 sm:pt-5">
+      <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
         <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
       </div>

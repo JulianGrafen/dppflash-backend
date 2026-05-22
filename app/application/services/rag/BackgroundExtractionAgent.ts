@@ -101,10 +101,17 @@ Achte explizit auf Absätze mit Titeln wie 'HINWEISE', 'Verarbeitung' oder 'Rein
 {
   "value": string | null,
   "sourcePdf": string,
-  "contextSnippet": string
+  "contextSnippet": string,
+  "confidence": number
 }
 
-Für \`hStatements\`, \`pStatements\`, \`ghsSymbols\` und \`substancesOfConcern\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\` und \`contextSnippet\` bleiben pro Zeile Pflichtfelder wie oben.
+**Konfidenz (Pflicht pro ausgegebenem Feld):** \`confidence\` ist eine Zahl zwischen **0.0 und 1.0** — deine Einschätzung, wie eindeutig der Wert im Dokument belegt ist:
+- **0.95–1.0:** wörtlich/exakt im Text (Tabellenzeile, feste Kennzeichnung, eindeutiges Label)
+- **0.80–0.94:** klar erkennbar, geringe Formatierung oder leichte Zusammenfassung
+- **0.60–0.79:** indirekt oder aus Kontext ableitbar, aber plausibel
+- **< 0.60:** unsicher — Feld **weglassen**, nicht raten
+
+Für \`hStatements\`, \`pStatements\`, \`ghsSymbols\` und \`substancesOfConcern\` ist \`value\` jeweils \`string[] | null\`; \`sourcePdf\`, \`contextSnippet\` und \`confidence\` bleiben pro Zeile Pflichtfelder wie oben.
 
 Regeln:
 - Kennzahlen außer chemicalComposition/substancesOfConcern/\`hStatements\`/\`pStatements\`/\`ghsSymbols\`/\`handlingAndApplicationInstructions\` als String in "value".

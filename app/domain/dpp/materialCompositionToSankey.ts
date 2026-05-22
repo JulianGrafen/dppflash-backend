@@ -3,14 +3,6 @@ import {
   type CompositionGraphPayload,
 } from '@/app/domain/dpp/dppExtractionZodSchema';
 
-function clampLabel(s: string, max: number): string {
-  const t = s.trim();
-  if (t.length <= max) {
-    return t;
-  }
-  return `${t.slice(0, Math.max(0, max - 1))}…`;
-}
-
 function unwrapPassportValue(value: unknown): unknown {
   if (value && typeof value === 'object' && !Array.isArray(value) && 'value' in value) {
     return (value as Record<string, unknown>).value;
@@ -307,13 +299,12 @@ function buildSankeyFromRows(
       : rows.map(() => Math.max(0.01, 100 / rows.length));
 
   const productId = 'end_product';
-  const endLabel =
-    productLabel.trim().length > 0 ? clampLabel(productLabel.trim(), 44) : 'Produkt';
+  const endLabel = productLabel.trim().length > 0 ? productLabel.trim() : 'Produkt';
 
   const nodes = [
     ...rows.map((r, i) => ({
       id: `mat_${i}`,
-      label: clampLabel(r.material, 42),
+      label: r.material.trim(),
       category: 'raw_material' as const,
     })),
     {

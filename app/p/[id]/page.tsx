@@ -26,6 +26,7 @@ import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection
 import { IsccPlusSection } from './IsccPlusSection';
 import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
 import { HumanReviewStatusBar } from './HumanReviewStatusBar';
+import { ProductImageCard } from './ProductImageCard';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
@@ -1815,6 +1816,7 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   const manufacturerDisplayBlock = manufacturerPublication.displayText;
   const dataQualityWarnings = buildDataQualityWarnings(raw, p, manufacturerDisplayBlock);
   const hasWarnings = dataQualityWarnings.length > 0;
+  const productImageUrl = asString(raw.gtin) ? `/images/products/${asString(raw.gtin)}.png` : null;
 
   const chemicalCompositionSankey = tryChemicalCompositionToSankey(
     raw.chemicalComposition,
@@ -1880,35 +1882,40 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 via-[#0c1929] to-sky-500"
           aria-hidden
         />
-        <div className="mx-auto max-w-4xl px-6 pb-10 pt-10 text-center sm:px-8">
-          <div className="mb-4 flex justify-center">
-            <div className="inline-flex flex-wrap items-center justify-center gap-2">
-              <span
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset ${
-                  isReviewRequired
-                    ? 'bg-amber-50 text-amber-900 ring-amber-200/80'
-                    : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
-                }`}
-              >
-                <ShieldCheck size={14} strokeWidth={2} aria-hidden />
-                {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'}
-                <span className="text-[10px] font-semibold text-slate-500 normal-case tracking-normal">
-                  · ESPR 2024/1781
-                </span>
-              </span>
+        <div className="mx-auto max-w-4xl px-6 pb-10 pt-10 sm:px-8">
+          <div className="flex flex-col items-center gap-6 text-center md:flex-row md:items-center md:text-left">
+            <ProductImageCard imageUrl={productImageUrl} productName={displayProductName} />
+            <div className="min-w-0 flex-1">
+              <div className="mb-4 flex justify-center md:justify-start">
+                <div className="inline-flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset ${
+                      isReviewRequired
+                        ? 'bg-amber-50 text-amber-900 ring-amber-200/80'
+                        : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
+                    }`}
+                  >
+                    <ShieldCheck size={14} strokeWidth={2} aria-hidden />
+                    {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'}
+                    <span className="text-[10px] font-semibold text-slate-500 normal-case tracking-normal">
+                      · ESPR 2024/1781
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-[#0c1929] sm:text-3xl">
+                {displayProductName}
+              </h1>
+              <p className="mt-2 text-sm font-medium text-slate-500">Digitaler Produktpass</p>
+              <p className="mt-3">
+                <code className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600 ring-1 ring-slate-200/80">
+                  {p.id}
+                </code>
+              </p>
+              <div className="mt-4 flex justify-center md:justify-start">
+                <ConfidenceBadge score={p.extractionConfidence} />
+              </div>
             </div>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#0c1929] sm:text-3xl">
-            {displayProductName}
-          </h1>
-          <p className="mt-2 text-sm font-medium text-slate-500">Digitaler Produktpass</p>
-          <p className="mt-3">
-            <code className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600 ring-1 ring-slate-200/80">
-              {p.id}
-            </code>
-          </p>
-          <div className="mt-4 flex justify-center">
-            <ConfidenceBadge score={p.extractionConfidence} />
           </div>
         </div>
       </header>

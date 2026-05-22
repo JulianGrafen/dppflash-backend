@@ -24,6 +24,7 @@ import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
 import { IsccPlusSection } from './IsccPlusSection';
+import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
 import { HumanReviewStatusBar } from './HumanReviewStatusBar';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 
@@ -520,28 +521,6 @@ function renderRecycledContent(value: unknown) {
   return renderKeyValueList('Rezyklatanteil', entries);
 }
 
-function renderCarbonFootprint(value: unknown) {
-  if (!value || typeof value !== 'object') return null;
-
-  const valueKgCo2e =
-    'valueKgCo2e' in value && typeof value.valueKgCo2e === 'number'
-      ? value.valueKgCo2e
-      : undefined;
-  const entries = compactEntries([
-    valueKgCo2e !== undefined && valueKgCo2e > 0
-      ? { title: `${valueKgCo2e} kg CO₂e` }
-      : { title: 'In Berechnung / Daten werden evaluiert' },
-    'lifecycleStage' in value && typeof value.lifecycleStage === 'string' && value.lifecycleStage
-      ? { title: 'Lebenszyklusphase', details: value.lifecycleStage }
-      : null,
-    'calculationMethod' in value && typeof value.calculationMethod === 'string' && value.calculationMethod
-      ? { title: 'Berechnungsmethode', details: value.calculationMethod }
-      : null,
-  ]);
-
-  return renderKeyValueList('CO₂-Fußabdruck', entries);
-}
-
 type SubstanceOfConcernDisplayRow = {
   readonly name: string;
   readonly casDisplay: string;
@@ -983,21 +962,6 @@ function renderChemicalComposition(value: unknown) {
   });
 
   return renderKeyValueList('Chemische Zusammensetzung', entries);
-}
-
-function renderEnvironmentalImpact(value: unknown) {
-  if (!value || typeof value !== 'object') return null;
-
-  const entries = compactEntries([
-    'waterFootprintLiters' in value && typeof value.waterFootprintLiters === 'number'
-      ? { title: 'Wasserfußabdruck', details: `${value.waterFootprintLiters} l` }
-      : null,
-    'impactNotes' in value && typeof value.impactNotes === 'string' && value.impactNotes
-      ? { title: 'Umwelthinweise', details: value.impactNotes }
-      : null,
-  ]);
-
-  return renderKeyValueList('Umweltwirkung', entries);
 }
 
 function asString(value: unknown): string | undefined {
@@ -1953,6 +1917,8 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />
         ) : null}
 
+        <EnvironmentalFootprintSection raw={raw as Record<string, unknown>} carbonFootprint={p.carbonFootprint} />
+
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section>
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
@@ -1973,8 +1939,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
           {renderChemicalComposition(raw.chemicalComposition)}
           {renderRecycledContent(raw.recycledContent)}
-          {renderCarbonFootprint(raw.carbonFootprint)}
-          {renderEnvironmentalImpact(raw.environmentalImpact)}
           {renderUnifiedHazardousIngredients(raw)}
           {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
           {renderCareRepairDurability(raw.careRepairDurability)}
@@ -1994,12 +1958,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           ragEnrichment={raw.ragEnrichment}
           attachments={raw.attachments ?? raw.downloadableDocuments ?? raw.sourceDocuments}
         />
-
-        {/* ── Carbon footprint (Art. 7) ── */}
-        <Section>
-          <Field label="Methodik"            value={p.carbonFootprint.methodology} />
-          <Field label="Zertifizierer"       value={p.carbonFootprint.certificationBody} />
-        </Section>
 
         {/* ── Recycled content (Art. 8) ── */}
         <Section>

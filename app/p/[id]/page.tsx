@@ -1959,6 +1959,9 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           <div className="flex flex-col items-center gap-6 text-center md:flex-row md:items-center md:text-left">
             <ProductImageCard imageUrl={productImageUrl} productName={displayProductName} />
             <div className="min-w-0 flex-1">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-sky-700 sm:text-sm">
+                Digitaler Produktpass
+              </p>
               <div className="mb-4 flex justify-center md:justify-start">
                 <div className="inline-flex flex-wrap items-center justify-center gap-2 md:justify-start">
                   <span
@@ -1979,7 +1982,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               <h1 className="text-2xl font-bold tracking-tight text-[#0c1929] sm:text-3xl">
                 {displayProductName}
               </h1>
-              <p className="mt-2 text-sm font-medium text-slate-500">Digitaler Produktpass</p>
               <p className="mt-3">
                 <code className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs text-slate-600 ring-1 ring-slate-200/80">
                   {p.id}

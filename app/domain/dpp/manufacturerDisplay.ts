@@ -535,17 +535,34 @@ function appendStructuredManufacturerContacts(
   return mergeManufacturerDisplayTexts(displayText, contactLines.join('\n'));
 }
 
-function insertDefaultManufacturerPhone(displayText: string): string {
+/** Gleiche Zentrale/Henkel-Nummer wie `DEFAULT_MANUFACTURER_PHONE` — unabhängig von Schreibweise. */
+function lineMatchesDefaultManufacturerPhone(line: string): boolean {
+  if (normalizeManufacturerCompareLine(line) === normalizeManufacturerCompareLine(DEFAULT_MANUFACTURER_PHONE)) {
+    return true;
+  }
+  return isHenkelCentralPhone(line);
+}
+
+/**
+ * Fügt die feste Servicenummer immer ein (vor Fax/E-Mail/Web), sobald noch keine
+ * passende Zeile im Text steht — ohne die frühere „telefon‑irgendwas“‑Heuristik.
+ */
+function ensureDefaultManufacturerPhone(displayText: string): string {
   const trimmed = displayText.trim();
-  if (!trimmed || manufacturerTextIncludesPhone(trimmed)) {
-    return trimmed;
+  if (!trimmed) {
+    return DEFAULT_MANUFACTURER_PHONE;
   }
 
   const lines = trimmed.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.some(lineMatchesDefaultManufacturerPhone)) {
+    return lines.join('\n');
+  }
+
   const firstContactIndex = lines.findIndex((line) => isContactLine(line));
   const insertAt = firstContactIndex === -1 ? lines.length : firstContactIndex;
-  lines.splice(insertAt, 0, DEFAULT_MANUFACTURER_PHONE);
-  return lines.join('\n');
+  const next = [...lines];
+  next.splice(insertAt, 0, DEFAULT_MANUFACTURER_PHONE);
+  return next.join('\n');
 }
 
 function formatManufacturerRichText(
@@ -675,17 +692,17 @@ export function resolveManufacturerPublication(
     ? mergeManufacturerDisplayTexts(fromChunk, extractManufacturerContactLines(fromSynth))
     : fromSynth;
 
-  return {
-    displayText: dedupeManufacturerLines(
-      dedupeManufacturerPhoneLines(
-        coalesceManufacturerPhoneLines(
-          insertDefaultManufacturerPhone(
-            polishManufacturerDisplayText(
-              appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
-            ),
-          ),
+  const withoutDefault = dedupeManufacturerLines(
+    dedupeManufacturerPhoneLines(
+      coalesceManufacturerPhoneLines(
+        polishManufacturerDisplayText(
+          appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
         ),
       ),
     ),
+  );
+
+  return {
+    displayText: ensureDefaultManufacturerPhone(withoutDefault),
   };
 }

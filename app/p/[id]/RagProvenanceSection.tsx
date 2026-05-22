@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AuditedValue } from '@/app/domain/rag/auditTrailSchema';
 import {
+  enrichComplianceDocumentEntry,
   matchComplianceDocumentByFileName,
   parseComplianceSourceDocuments,
   type ComplianceSourceDocument,
@@ -193,7 +194,7 @@ export function RagProvenanceSection({
       applied: appliedFieldKeys,
       cryptoOk: cryptoValidationOk,
       cryptoErrors: validationErrors,
-      complianceDocs: parseComplianceSourceDocuments(attachments),
+      complianceDocs: parseComplianceSourceDocuments(attachments).map(enrichComplianceDocumentEntry),
     };
   }, [ragEnrichment, attachments]);
 

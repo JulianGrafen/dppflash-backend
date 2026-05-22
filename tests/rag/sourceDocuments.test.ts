@@ -198,6 +198,36 @@ describe('sourceDocuments', () => {
     }).title).toBe('Technisches Merkblatt');
   });
 
+  it('keeps fallback compliance PDFs in download list for preview matching', () => {
+    const raw = {
+      attachments: [
+        {
+          title: 'Technischer Anhang',
+          url: 'https://cdn.example.com/p1/uuid-anhang-01.pdf',
+          type: 'compliance_pdf',
+        },
+      ],
+      ragEnrichment: {
+        success: true,
+        auditTrail: {
+          fields: {
+            hStatements: {
+              value: ['H315'],
+              source: { fileName: 'anhang-01.pdf', contextSnippet: 'H315', pageNumber: 2 },
+              confidence: 0.8,
+              requiresManualReview: false,
+            },
+          },
+        },
+      },
+    };
+
+    const docs = resolveComplianceDocumentsForPassport(raw);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]?.url).toContain('anhang-01.pdf');
+    expect(matchComplianceDocumentByFileName('anhang-01.pdf', docs)?.url).toContain('anhang-01.pdf');
+  });
+
   it('collects documents from multiple attachment containers', () => {
     const docs = collectComplianceSourceDocuments(
       [{ title: 'A', url: 'https://x.com/1.pdf', type: 'compliance_pdf' }],

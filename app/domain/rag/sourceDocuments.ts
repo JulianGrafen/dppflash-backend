@@ -475,8 +475,7 @@ export function enrichComplianceDocumentEntry(doc: ComplianceSourceDocument): Co
 
 function isDisplayableComplianceDocument(doc: ComplianceSourceDocument): boolean {
   const fileName = stripStorageUuidPrefix(basenameFromDocumentUrl(doc.url)) || doc.title;
-  const inferredType = inferComplianceDocumentType(fileName, doc.title);
-  return inferredType !== 'compliance_pdf' || doc.type !== 'compliance_pdf';
+  return fileName.trim().length > 0 && doc.url.trim().length > 0;
 }
 
 function pushAuditSourceFileName(value: unknown, names: Set<string>): void {

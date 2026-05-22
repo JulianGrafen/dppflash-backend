@@ -105,6 +105,7 @@ const FIELD_KEY_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['declaredProductType', 'declaredproducttype', 'produkttyp'],
   ['endOfLifeInstructions', 'entsorgungshinweise', 'endoflifeinstructions'],
   ['gtin', 'ean'],
+  ['sku', 'artikelnummer', 'artnr', 'productCode', 'itemNumber', 'bestellnummer', 'SKU'],
   ['nachhaltigkeit', 'sustainability'],
   ['gewichtKg', 'gewicht', 'weightKg', 'weight'],
   ['kapazitaetKWh', 'kapazitaet', 'capacityKWh'],

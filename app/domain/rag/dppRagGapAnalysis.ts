@@ -10,7 +10,8 @@ const PENDING = 'PENDING_EXTERNAL_MATCH';
 export const RAG_GAP_SEMANTIC_FIELD_MAP: Readonly<Record<string, string>> = {
   materialComposition: 'Zusammensetzung, Rohstoffe, Material, Bestandteile',
   chemicalComposition: 'Chemische Eigenschaften, Rezeptur, Abschnitt 3, CAS-Nummern',
-  gtin: 'GTIN, EAN, Artikelnummer, Barcode',
+  gtin: 'GTIN, EAN, Barcode',
+  sku: 'SKU, Artikelnummer, Art.-Nr., Bestellnummer, Produktcode, Item number',
   manufacturer: 'Hersteller, Lieferant, Inverkehrbringer, Abschnitt 1',
   hersteller: 'Hersteller, Firma, Marke, Lieferant',
   modellname: 'Modell, Typenbezeichnung, Produktbezeichnung',

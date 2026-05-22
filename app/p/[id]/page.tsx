@@ -1030,6 +1030,28 @@ function pickFirstStringFromRecord(
   return undefined;
 }
 
+function resolvePassportSku(raw: Record<string, unknown>): string | undefined {
+  const direct =
+    asString(raw.sku)
+    ?? pickFirstStringFromRecord(raw, ['SKU', 'artikelnummer', 'Artikelnummer', 'productCode', 'itemNumber']);
+  if (direct) {
+    return direct;
+  }
+
+  const provenance = unwrapProvenanceInner(raw.sku);
+  if (typeof provenance === 'string' && provenance.trim()) {
+    return provenance.trim();
+  }
+
+  for (const value of readRagAuditTrailFieldValues(raw, ['sku'])) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return undefined;
+}
+
 function provenanceContextSnippet(envelopeValue: unknown): string | undefined {
   if (!isRagProvenanceEnvelope(envelopeValue)) {
     return undefined;
@@ -1963,6 +1985,12 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
             value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
             highlighted={enrichmentFields.includes('gtin')}
             sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
+          />
+          <ReviewField
+            label="SKU"
+            value={resolvePassportSku(raw)}
+            highlighted={enrichmentFields.includes('sku')}
+            sourceBadge={ragSuppliedFields.includes('sku') ? 'RAG' : undefined}
           />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
           {showAvv170106DisposalDetail ? <Avv170106DisposalDetailCard /> : null}

@@ -82,6 +82,7 @@ export interface DppProductPassport {
   readonly schemaVersion: typeof DPP_SCHEMA_VERSION;
   readonly declaredProductType?: string;
   readonly productName: string;
+  readonly sku?: string;
   readonly wasteCode?: string;
   readonly complianceStatus?: 'REVIEW_REQUIRED' | 'COMPLIANT';
   readonly enrichmentReview?: EnrichmentReview;
@@ -253,6 +254,10 @@ export function validateDppProductPassport(data: DppProductPassport): DppValidat
 
   if (data.wasteCode !== undefined && !isNonEmptyString(data.wasteCode)) {
     issues.push({ field: 'wasteCode', message: 'Waste code must not be empty when provided.' });
+  }
+
+  if (data.sku !== undefined && !isNonEmptyString(data.sku)) {
+    issues.push({ field: 'sku', message: 'SKU must not be empty when provided.' });
   }
 
   if (!GTIN_PATTERN.test(data.gtin) || !hasValidGtinChecksum(data.gtin)) {

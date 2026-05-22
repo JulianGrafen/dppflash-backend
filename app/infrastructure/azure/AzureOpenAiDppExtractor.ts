@@ -213,6 +213,7 @@ Return only JSON with this exact shape:
     },
     "upi": "string or PENDING_EXTERNAL_MATCH if not explicitly found",
     "gtin": "valid GTIN-8/12/13/14 string or PENDING_EXTERNAL_MATCH if not explicitly found",
+    "sku": "internal product SKU / Artikelnummer / Art.-Nr. / Bestellnummer / product code such as BLU-LG-2027 when printed in the document; empty string if none; never use GTIN digits here",
     "materialComposition": [{ "material": "string", "percentage": 0 }],
     "recycledContent": [{ "material": "string", "percentage": 0 }],
     "carbonFootprint": {
@@ -250,6 +251,7 @@ Extraction robustness rules:
 - productName should be the best human-readable title of the product sheet, product name, trade name, or model heading visible in the document.
 - wasteCode: always scan the full document for EWC/EAK/AVV/Abfallschlüssel (including section 12–15, Entsorgungshinweise, transport/environment tables, footnotes). Populate wasteCode whenever any such code appears; use empty string only if none exists in the source.
 - Never hallucinate identifiers. If UPI or GTIN are not explicit in document, set them to "${PENDING_EXTERNAL_MATCH}".
+- sku: extract alphanumeric internal article codes labeled SKU, Artikelnummer, Art.-Nr., Bestellnummer, product code, item number, or catalog number. Do not put GTIN/EAN values in sku. Use empty string if absent.
 - For UPI prioritization, scan the header first for SDB-Nr, Artikelnummer, product code, item number.
 - manufacturer must capture the SDS section 1 block when present: company legal name, physical address, country, telephone/fax, and contact email(s); keep wording as close to the document as possible (do not drop phone or email when printed under the manufacturer).
 - countryOfOrigin and countryOfManufacturing may differ; extract both separately when the document distinguishes them.
@@ -302,6 +304,7 @@ Example target output for an adhesive product sheet:
     },
     "upi": "DE-HEN-992834-UF5000-B2",
     "gtin": "4005800012345",
+    "sku": "BLU-LG-2027",
     "materialComposition": [
       { "material": "Epoxidharz (Bisphenol-A)", "percentage": 65 },
       { "material": "Aluminiumoxid (Füllstoff)", "percentage": 25 },
@@ -355,7 +358,8 @@ Map common synonyms:
 - substances of concern = SVHC, hazardous substances, besorgniserregende Stoffe
 - carbon footprint = CO2-Fußabdruck, carbon footprint, kg CO2e
 - UPI = Unique Product Identifier, Produktkennung, product identifier
-- GTIN = EAN, barcode number, Artikelnummer with 8/12/13/14 digits when clearly identified
+- GTIN = EAN, barcode number with 8/12/13/14 digits when clearly identified
+- SKU = Artikelnummer, Art.-Nr., Bestellnummer, product code, item number, catalog number (alphanumeric, not GTIN)
 - For UPI first inspect header labels such as "SDB-Nr", "Artikelnummer", "Produktnummer", "Item No."
 - If UPI/GTIN are absent, return "${PENDING_EXTERNAL_MATCH}" instead of fabricating numbers.
 - For materialComposition prioritize only section 3 (composition/information on ingredients).

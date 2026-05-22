@@ -65,6 +65,7 @@ const COMMON = [
   'hersteller',
   'modellname',
   'gtin',
+  'sku',
   'upi',
   'ewcCode',
   'wasteCode',

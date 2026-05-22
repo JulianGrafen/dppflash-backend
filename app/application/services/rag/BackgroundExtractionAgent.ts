@@ -91,6 +91,7 @@ Achte explizit auf Absätze mit Titeln wie 'HINWEISE', 'Verarbeitung' oder 'Rein
 - Kennzeichnung UPI / UFI im Text → \`upi\` (Skalarfeld mit value/sourcePdf/contextSnippet)
 - EWC / AVV → ewcCode
 - GTIN / EAN → gtin
+- SKU / Artikelnummer / Art.-Nr. / Bestellnummer / Produktcode (alphanumerisch, **keine** GTIN) → sku
 - Gemischbezogene **Gefahrenhinweis-Codes** (Summe/Zeilen aus Abschnitt 2 ohne einzelnen Stoffzuordnung) → \`hStatements.value\` als **Array von Strings**, z.B. ["H302","EUH208"]
 - Gemischbezogene **Sicherheitshinweis-Codes** → \`pStatements.value\` als **Array von Strings**, z.B. ["P102","P280"]
 - **GHS-Kennzeichnungscode** für das Produktgemisch → \`ghsSymbols.value\` als **Array**, z.B. ["GHS05"]

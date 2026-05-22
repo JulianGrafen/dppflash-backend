@@ -220,6 +220,19 @@ describe('extractedAttributesToAuditTrailFields', () => {
     expect(keyResolution[0]?.usedStoredKey).toBe('wasteCode');
   });
 
+  it('maps artikelnummer stored key to sku gap field', () => {
+    const stored = {
+      artikelnummer: {
+        value: 'BLU-LG-2027',
+        sourcePdf: 'merkblatt.pdf',
+        contextSnippet: 'SKU: BLU-LG-2027',
+        confidence: 0.88,
+      },
+    };
+    const { fields } = extractedAttributesToAuditTrailFields(stored, ['sku']);
+    expect(fields.sku?.value).toBe('BLU-LG-2027');
+  });
+
   it('maps zusammensetzung gap to chemicalComposition in stored JSON', () => {
     const stored = {
       chemicalComposition: {

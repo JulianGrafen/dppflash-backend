@@ -1161,10 +1161,17 @@ function docReferencesProductHints(
   if (!docKey) {
     return false;
   }
-  return productHints.some((hint) => {
+  const docTokens = docKey.match(/[a-z]{4,}|\d{4,}/g) ?? [];
+  if (docTokens.length === 0) {
+    return false;
+  }
+  const hintTokens = productHints.flatMap((hint) => {
     const key = normalizeDocumentMatchKey(hint);
-    return key.length >= 6 && (docKey.includes(key) || key.includes(docKey));
+    return key.match(/[a-z]{4,}|\d{4,}/g) ?? [];
   });
+  return hintTokens.some((hintToken) =>
+    docTokens.some((docToken) => docToken === hintToken || docToken.includes(hintToken) || hintToken.includes(docToken)),
+  );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -1362,12 +1369,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     }
     liveSourceDocuments = collected;
   }
-  if (liveSourceDocuments.length === 0 && productIdHints.length > 0) {
+  if (productIdHints.length > 0) {
     try {
       const pe = getProductEntityService();
       if (pe) {
         const tenantDocs = await pe.fetchTenantSourceDocuments(tenantId);
-        liveSourceDocuments = tenantDocs.filter((doc) => docReferencesProductHints(doc, productIdHints));
+        const tenantMatches = tenantDocs.filter((doc) => docReferencesProductHints(doc, productIdHints));
+        liveSourceDocuments = collectComplianceSourceDocuments(liveSourceDocuments, tenantMatches);
       }
     } catch (err) {
       console.warn('[ProductPage] tenant sourceDocuments fallback failed', err);

@@ -1,14 +1,11 @@
 import {
   Award,
   Building2,
-  Drum,
   FileText,
-  Globe,
   Package,
   Scale,
   Truck,
 } from 'lucide-react';
-import { formatPassportCoreMaterialSummary } from '@/app/domain/dpp/materialCompositionToSankey';
 
 type IsccPlusSectionProps = {
   readonly raw: Record<string, unknown>;
@@ -86,30 +83,6 @@ function deriveRecycledSummary(raw: Record<string, unknown>): string | undefined
   return pairs.length > 0 ? pairs.join(' · ') : undefined;
 }
 
-function deriveCarbonSummary(raw: Record<string, unknown>): string | undefined {
-  const fromFlatTotal = asNumber(raw.co2FussabdruckKgGesamt);
-  const fromFlatPer = asNumber(raw.co2FussabdruckKgProKwh);
-  const cf = asRecord(raw.carbonFootprint);
-  const cfTotal =
-    cf
-      ? asNumber(cf.totalKg) ?? asNumber(cf.valueKgCo2e)
-      : undefined;
-  const cfPer = cf ? asNumber(cf.perKwhKg) : undefined;
-
-  const total = fromFlatTotal ?? cfTotal;
-  const per = fromFlatPer ?? cfPer;
-
-  const parts: string[] = [];
-  if (total !== undefined) {
-    parts.push(`Gesamt ${total.toLocaleString('de-DE', { maximumFractionDigits: 2 })} kg CO₂e`);
-  }
-  if (per !== undefined) {
-    parts.push(`pro kWh ${per.toLocaleString('de-DE', { maximumFractionDigits: 3 })} kg CO₂e`);
-  }
-
-  return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
 function brandCorner(raw: Record<string, unknown>, block: Record<string, unknown> | undefined): string | undefined {
   const explicit =
     block ? asString(block.brandLine) ?? asString(block.brand) : undefined;
@@ -169,20 +142,15 @@ function parseCustody(rawList: unknown): CustodyEntry[] {
 }
 
 /**
- * Zertifikats-/Nachweiskarte wie Referenz-ISCC UI, befüllt mit:
- * - Optional `raw.isccPlus` (Overrides, Custody).
- * - Denselben **Kernfeldern** wie Material-Sankey / „Material‑Zusammensetzung“ (`formatPassportCoreMaterialSummary`, Gewicht,
- *   Standort, Zertifikatsstellen, CO₂-Kernfelder, Rezyklatanteile).
+ * Zertifikats-/Nachweiskarte wie Referenz-ISCC UI, befüllt mit optional `raw.isccPlus` (Overrides, Custody).
  */
 export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlusSectionProps) {
   const block = asRecord(raw.isccPlus);
 
-  const materialFromPassport = formatPassportCoreMaterialSummary(raw);
   const derivedSite = deriveManufacturingSite(raw);
   const derivedCert =
     unwrapString(raw.zertifizierungsstelle) ?? unwrapString(raw.certificationBody);
   const derivedWeight = asNumber(raw.gewichtKg) ?? asNumber(raw.weightKg);
-  const derivedGhg = deriveCarbonSummary(raw);
   const derivedRecycle = deriveRecycledSummary(raw);
   const derivedChem = unwrapString(raw.chemischesSystem) ?? unwrapString(raw.chemistry);
 
@@ -201,17 +169,10 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
         : undefined
     ) ?? derivedCert;
 
-  const rawMaterialCategory =
-    (block ? asString(block.rawMaterialCategory) ?? asString(block.rawMaterial) : undefined)
-    ?? materialFromPassport;
-
   const feedstockType =
     (block ? asString(block.feedstockType) ?? asString(block.feedstock) : undefined)
     ?? derivedRecycle
     ?? derivedChem;
-
-  const ghgEmissions =
-    (block ? asString(block.ghgEmissions) : undefined) ?? derivedGhg;
 
   const headline = block ? asString(block.headline) ?? asString(block.title) : undefined;
   const brandText = brandCorner(raw, block);
@@ -225,38 +186,28 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
       ?? asString(block.certificateId)
     ));
 
-  const tracedRows = [
-    {
-      key: 'site',
-      label: 'Standort / Produktion',
-      icon: Building2,
-      value: manufacturingSite,
-    },
-    {
-      key: 'cert',
-      label: isccContext ? 'ISCC PLUS Zertifikat' : 'Zertifizierung / Zertifikat',
-      icon: FileText,
-      value: certificate,
-    },
-    {
-      key: 'raw',
-      label: 'Material-Zusammensetzung',
-      icon: Drum,
-      value: rawMaterialCategory,
-    },
-    {
-      key: 'feed',
-      label: 'Rezyklat / Produktbezug',
-      icon: Package,
-      value: feedstockType,
-    },
-    {
-      key: 'ghg',
-      label: 'THG / CO₂ (Kernfeld)',
-      icon: Globe,
-      value: ghgEmissions,
-    },
-  ].filter((row) => typeof row.value === 'string' && row.value.trim().length > 0);
+  const tracedRows = isccContext
+    ? [
+        {
+          key: 'site',
+          label: 'Standort / Produktion',
+          icon: Building2,
+          value: manufacturingSite,
+        },
+        {
+          key: 'cert',
+          label: 'ISCC PLUS Zertifikat',
+          icon: FileText,
+          value: certificate,
+        },
+        {
+          key: 'feed',
+          label: 'Rezyklat / Produktbezug',
+          icon: Package,
+          value: feedstockType,
+        },
+      ].filter((row) => typeof row.value === 'string' && row.value.trim().length > 0)
+    : [];
 
   const hasHeroPills = scheme !== undefined || quantityKg !== undefined;
   const hasTraced = tracedRows.length > 0;
@@ -266,9 +217,7 @@ export function IsccPlusSection({ raw, productId, displayProductName }: IsccPlus
     return null;
   }
 
-  const tracedSectionTitle = scheme
-    ? 'ISCC PLUS — nachvollziehbare Datenpunkte'
-    : 'Material & Herkunft (DPP-Kernfelder)';
+  const tracedSectionTitle = 'ISCC PLUS — nachvollziehbare Datenpunkte';
 
   const titleMain = headline ?? displayProductName;
 

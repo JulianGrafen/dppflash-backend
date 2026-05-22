@@ -1108,6 +1108,78 @@ function splitInlineManufacturerContacts(text: string): string[] {
     .filter(Boolean);
 }
 
+function isOrphanHouseNumberLine(line: string): boolean {
+  return /^\d+[a-zA-Z0-9/-]*$/.test(line.trim());
+}
+
+function isContactLine(line: string): boolean {
+  return /^(?:tel\.?|telefon|telefax|fax|e-mail|email|mail:|internet:|notruf:|www\.|https?:\/\/|\+?\d)/i.test(line.trim());
+}
+
+/** Verhindert isolierte Hausnummern in eigener Zeile (Straße + Nr. zusammenhalten). */
+function normalizeManufacturerLineBreaks(lines: readonly string[]): string[] {
+  const normalized: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (isOrphanHouseNumberLine(trimmed) && normalized.length > 0) {
+      normalized[normalized.length - 1] = `${normalized[normalized.length - 1]} ${trimmed}`;
+      continue;
+    }
+
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+function splitCompanyAndStreetLine(beforePlz: string): { readonly company: string; readonly streetLine: string } | null {
+  const patterns = [
+    /^(.*\S)\s+((?:[A-Za-zäöüÄÖÜß][\wäöüÄÖÜß.\-/]*\s+)+[A-Za-zäöüÄÖÜß][\wäöüÄÖÜß.\-/]*\s+\d+[a-zA-Z0-9/-]*)$/,
+    /^(.*\S)\s+([A-Za-zäöüÄÖÜß][\wäöüÄÖÜß.\-/]*\s+\d+[a-zA-Z0-9/-]*)$/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = beforePlz.match(pattern);
+    if (match?.[1] && match[2]) {
+      return {
+        company: match[1].trim(),
+        streetLine: match[2].trim(),
+      };
+    }
+  }
+
+  return null;
+}
+
+function polishManufacturerDisplayText(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const lines = normalizeManufacturerLineBreaks(
+    trimmed.split(/\n+/).map((line) => line.trim()).filter(Boolean),
+  );
+
+  const polished = lines.flatMap((line) => {
+    if (isContactLine(line) || line.includes('\n')) {
+      return [line];
+    }
+    if (/\d{5}/.test(line) && !line.includes('\n')) {
+      const formatted = formatFlatManufacturerBlock(line);
+      return formatted.split('\n').map((entry) => entry.trim()).filter(Boolean);
+    }
+    return [line];
+  });
+
+  return normalizeManufacturerLineBreaks(polished).join('\n');
+}
+
 /** Voller Dokument-Chunk: mehrzeilig belassen, Kontaktdaten nicht abschneiden. */
 function formatManufacturerDocumentChunk(text: string): string {
   const normalized = text.trim().replace(/\r\n/g, '\n');
@@ -1115,11 +1187,13 @@ function formatManufacturerDocumentChunk(text: string): string {
     return normalized;
   }
   if (normalized.includes('\n')) {
-    return normalized
-      .split(/\n+/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .join('\n');
+    return polishManufacturerDisplayText(
+      normalized
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join('\n'),
+    );
   }
 
   const segments = splitInlineManufacturerContacts(normalized);
@@ -1129,7 +1203,7 @@ function formatManufacturerDocumentChunk(text: string): string {
 
   const [head, ...contacts] = segments;
   const formattedHead = head ? formatFlatManufacturerBlock(head) : '';
-  return [formattedHead, ...contacts].filter(Boolean).join('\n');
+  return polishManufacturerDisplayText([formattedHead, ...contacts].filter(Boolean).join('\n'));
 }
 
 function normalizeManufacturerCompareLine(line: string): string {
@@ -1187,13 +1261,13 @@ function formatFlatManufacturerBlock(text: string): string {
   const plz = plzTail[2];
   const afterPlz = plzTail[3].trim();
 
-  const streetMatch = beforePlz.match(/^(.+?)\s+([A-Za-zäöüÄÖÜß.\-/]+\s+\d+[a-zA-Z0-9/-]*)$/);
+  const streetSplit = splitCompanyAndStreetLine(beforePlz);
   const countryMatch = afterPlz.match(
     /^(.+?)\s+(Deutschland|Germany|Österreich|Austria|Schweiz|Switzerland|France|Frankreich|Italy|Italien|Spain|Spanien|Nederland|Netherlands|België|Belgium|Polska|Poland)$/i,
   );
 
-  if (streetMatch?.[1] && streetMatch[2]) {
-    const lines = [streetMatch[1].trim(), streetMatch[2].trim()];
+  if (streetSplit) {
+    const lines = [streetSplit.company, streetSplit.streetLine];
     if (countryMatch?.[1] && countryMatch[2]) {
       lines.push(`${plz} ${countryMatch[1].trim()}`, countryMatch[2]);
     } else {
@@ -1209,6 +1283,68 @@ function formatFlatManufacturerBlock(text: string): string {
   return [beforePlz, `${plz} ${afterPlz}`].join('\n');
 }
 
+/** Ergänzt Tel./E-Mail aus strukturierten Passport-Feldern, falls im Chunk noch nicht enthalten. */
+function appendStructuredManufacturerContacts(
+  displayText: string,
+  raw: Record<string, unknown>,
+  manufacturerView: EsprProductData['manufacturer'],
+): string {
+  const rec = asRecord(raw.manufacturer);
+  const contactLines: string[] = [];
+
+  const tel = formatTelDisplay(
+    manufacturerView.phone
+    ?? pickFirstStringFromRecord(rec, [
+      'phone',
+      'telephone',
+      'tel',
+      'Telefon',
+      'telefon',
+      'phoneNumber',
+    ])
+    ?? pickFirstStringFromRecord(raw, ['telefon', 'Telefon', 'phone', 'manufacturerPhone']),
+  );
+  if (tel) {
+    contactLines.push(tel);
+  }
+
+  const fax = pickFirstStringFromRecord(rec, ['fax', 'Fax', 'Telefax']);
+  if (fax && !/^(?:fax|telefax):/i.test(fax)) {
+    contactLines.push(`Fax: ${fax}`);
+  } else if (fax) {
+    contactLines.push(fax);
+  }
+
+  const email =
+    manufacturerView.email?.trim()
+    ?? pickFirstStringFromRecord(rec, [
+      'email',
+      'eMail',
+      'mail',
+      'e-mail',
+      'E-Mail',
+      'contactEmail',
+      'kontaktEmail',
+    ])
+    ?? pickFirstStringFromRecord(raw, ['email', 'E-Mail', 'eMail']);
+  if (email) {
+    contactLines.push(email);
+  }
+
+  const website =
+    manufacturerView.website?.trim()
+    ?? pickFirstStringFromRecord(rec, ['website', 'url', 'web', 'homepage', 'Homepage', 'internet']);
+  if (website) {
+    contactLines.push(website);
+  }
+
+  if (contactLines.length === 0) {
+    return displayText;
+  }
+
+  return mergeManufacturerDisplayTexts(displayText, contactLines.join('\n'));
+}
+
 /** Priorisiert den vollständigen Dokument-Chunk (Abschnitt 1) inkl. Tel./E-Mail. */
 function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprProductData): {
   readonly displayText: string;
@@ -1222,14 +1358,14 @@ function resolveManufacturerPublication(raw: Record<string, unknown>, p: EsprPro
   const fromChunk = chunk ? formatManufacturerDocumentChunk(chunk) : '';
   const fromSynth = synthesized ? formatManufacturerDocumentChunk(synthesized) : '';
 
-  if (fromChunk) {
-    return {
-      displayText: mergeManufacturerDisplayTexts(fromChunk, fromSynth),
-    };
-  }
+  const merged = fromChunk
+    ? mergeManufacturerDisplayTexts(fromChunk, fromSynth)
+    : fromSynth;
 
   return {
-    displayText: fromSynth,
+    displayText: polishManufacturerDisplayText(
+      appendStructuredManufacturerContacts(merged, raw, p.manufacturer),
+    ),
   };
 }
 

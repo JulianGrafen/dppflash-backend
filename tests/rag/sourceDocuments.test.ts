@@ -122,6 +122,25 @@ describe('sourceDocuments', () => {
     ).toBe('Regulatorisches Datenblatt');
   });
 
+  it('prefers direct filename match over field hint fallback', () => {
+    const docs = [
+      {
+        title: 'Sicherheitsdatenblatt',
+        url: 'https://cdn.example.com/p1/uuid-Produkt_A_SDB.pdf',
+        type: 'safety_data_sheet',
+      },
+      {
+        title: 'Technisches Merkblatt',
+        url: 'https://cdn.example.com/p1/uuid-Dokument_B_Merkblatt.pdf',
+        type: 'technical_brief',
+      },
+    ];
+
+    expect(
+      matchComplianceDocumentByFileName('Dokument_B_Merkblatt.pdf', docs, { fieldName: 'hStatements' })?.url,
+    ).toContain('Dokument_B_Merkblatt.pdf');
+  });
+
   it('matches numeric SDB filenames against storage basenames', () => {
     const docs = [
       {

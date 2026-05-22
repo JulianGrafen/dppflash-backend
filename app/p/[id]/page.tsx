@@ -12,6 +12,7 @@ import {
   tryChemicalCompositionToSankey,
 } from '@/app/domain/dpp/materialCompositionToSankey';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
+import { getRagComplianceOrchestrator } from '@/app/infrastructure/rag/ragServerSingleton';
 import {
   extractHazardStatementCodesFromTexts,
   extractPrecautionaryStatementCodesFromTexts,
@@ -20,7 +21,10 @@ import {
 } from '@/app/domain/rag/hazardStatementCodes';
 import { ComplianceDocumentsSection } from './ComplianceDocumentsSection';
 import { GhsPictogramBadges } from './GhsPictogramBadges';
-import { resolveComplianceDocumentsForPassport } from '@/app/domain/rag/sourceDocuments';
+import {
+  collectComplianceSourceDocuments,
+  resolveComplianceDocumentsForPassport,
+} from '@/app/domain/rag/sourceDocuments';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
@@ -32,6 +36,7 @@ import { Avv170106DisposalDetailCard } from './Avv170106DisposalDetailCard';
 import { shouldShowAvv170106DisposalDetail } from '@/app/domain/dpp/waste/avv170106DisposalGuidance';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import { resolveManufacturerPublication } from '@/app/domain/dpp/manufacturerDisplay';
+import { resolvePrimaryProductNameAnchor } from '@/app/domain/rag/dppRagGapAnalysis';
 
 // ─── Page contract ────────────────────────────────────────────────────────────
 
@@ -1278,7 +1283,36 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
   );
   const hazardFromRagAudit = (key: string) =>
     readRagAuditTrailFieldValues(raw, [key]).length > 0 && !ragSuppliedFields.includes(key);
-  const complianceAttachments = resolveComplianceDocumentsForPassport(raw);
+  const tenantId =
+    typeof raw.tenantId === 'string' && raw.tenantId.trim().length > 0
+      ? raw.tenantId.trim()
+      : 'default';
+  const anchorProductName = resolvePrimaryProductNameAnchor(raw);
+  let liveSourceDocuments: readonly unknown[] = [];
+  if (anchorProductName) {
+    try {
+      const rag = getRagComplianceOrchestrator();
+      const snapshot = await rag.resolveAgentKnowledgeSnapshot({
+        tenantId,
+        anchorProductName,
+      });
+      liveSourceDocuments = snapshot.sourceDocuments;
+    } catch (err) {
+      console.warn('[ProductPage] live compliance docs lookup failed', err);
+    }
+  }
+  const mergedComplianceDocuments = collectComplianceSourceDocuments(
+    raw.attachments,
+    raw.downloadableDocuments,
+    raw.sourceDocuments,
+    liveSourceDocuments,
+  );
+  const complianceAttachments = resolveComplianceDocumentsForPassport({
+    ...raw,
+    attachments: mergedComplianceDocuments,
+    downloadableDocuments: mergedComplianceDocuments,
+    sourceDocuments: mergedComplianceDocuments,
+  });
   const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
     || asString(enrichmentReview?.status) === 'PENDING';
 

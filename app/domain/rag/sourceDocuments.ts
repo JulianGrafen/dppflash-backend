@@ -389,14 +389,9 @@ export function matchComplianceDocumentByFileName(
     return undefined;
   }
 
-  const fieldHintDoc = resolveFieldHintDocument(options?.fieldName, docs);
-  if (fieldHintDoc) {
-    return fieldHintDoc;
-  }
-
   const trimmed = fileName.trim();
   if (!trimmed || trimmed === 'unknown') {
-    return undefined;
+    return resolveFieldHintDocument(options?.fieldName, docs);
   }
 
   const fileStemKey = normalizeDocumentMatchKey(trimmed.replace(/\.[^.]+$/i, ''));
@@ -424,6 +419,11 @@ export function matchComplianceDocumentByFileName(
     if (uniqueByType) {
       return uniqueByType;
     }
+  }
+
+  const fieldHintDoc = resolveFieldHintDocument(options?.fieldName, docs);
+  if (fieldHintDoc) {
+    return fieldHintDoc;
   }
 
   const uniqueSdb = findUniqueComplianceDocumentByType(docs, 'safety_data_sheet');

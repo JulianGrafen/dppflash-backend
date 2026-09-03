@@ -1,0 +1,30 @@
+[project]
+name = "dpp-flash-etl"
+version = "0.1.0"
+description = "LangGraph-based DPP extraction pipeline for EU ESPR compliance"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115.0",
+  "langgraph>=0.2.60",
+  "openai>=1.50.0",
+  "pydantic>=2.9.0",
+  "pypdf>=4.3.0",
+  "python-multipart>=0.0.12",
+  "typing-extensions>=4.12.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "langgraph-cli[inmem]>=0.1.55",
+  "pytest>=8.3.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["etl*"]

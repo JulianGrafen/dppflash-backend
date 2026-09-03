@@ -1,0 +1,12 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "python_version": "3.11",
+  "dependencies": ["."],
+  "graphs": {
+    "dpp_extraction": {
+      "path": "./etl/graph/graph.py:graph",
+      "description": "DPP-Flash ESPR extraction pipeline with validation and gap management"
+    }
+  },
+  "env": ".env"
+}

@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 import pypdf
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
-from etl.models.dpp_schemas import DPPAnalysisResult, ExtractionMetadata
+from etl.models.dpp_schemas import DPPAnalysisResult, DPPExtractionOutput, ExtractionMetadata
 from etl.services.env_loader import load_project_env, resolve_openai_api_key
 from etl.services.prompts import STRUCTURED_OUTPUT_SYSTEM_PROMPT, build_structured_user_prompt
 
@@ -224,10 +224,7 @@ class DPPExtractor:
         """
         Call OpenAI with Structured Outputs and return a DPPAnalysisResult.
 
-        `client.beta.chat.completions.parse` with `response_format=DPPAnalysisResult`
-        guarantees the response matches the Pydantic schema — no manual JSON parsing.
-        If the model cannot satisfy the schema it returns a refusal (parsed=None),
-        which we surface as LLMExtractionError.
+        Uses flat `DPPExtractionOutput` schema (OpenAI rejects nested oneOf unions).
         """
         user_message = self._build_user_message(document_text, filename, correction_hints=correction_hints)
 
@@ -239,7 +236,7 @@ class DPPExtractor:
                     {"role": "system", "content": STRUCTURED_OUTPUT_SYSTEM_PROMPT},
                     {"role": "user", "content": user_message},
                 ],
-                response_format=DPPAnalysisResult,
+                response_format=DPPExtractionOutput,
             )
         except APITimeoutError as exc:
             raise LLMExtractionError(
@@ -256,15 +253,16 @@ class DPPExtractor:
                 f"{exc.message}"
             ) from exc
 
-        parsed = completion.choices[0].message.parsed
+        parsed_output = completion.choices[0].message.parsed
 
-        if parsed is None:
+        if parsed_output is None:
             refusal = getattr(completion.choices[0].message, "refusal", None)
             raise LLMExtractionError(
                 f"OpenAI returned a refusal or empty structured output for '{filename}'. "
                 f"Refusal reason: {refusal or 'not provided'}"
             )
 
+        parsed = parsed_output.to_analysis_result()
         parsed.metadata.source_filename = filename
         return parsed
 

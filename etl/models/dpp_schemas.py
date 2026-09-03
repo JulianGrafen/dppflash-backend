@@ -351,9 +351,6 @@ SustainabilityModel = Annotated[
 ]
 
 
-# ── Metadata (not part of the 44 ESPR fields) ────────────────────────────────
-
-
 class ExtractionMetadata(BaseModel):
     """Extraction provenance — populated by DPPExtractor, not the LLM."""
 
@@ -363,6 +360,74 @@ class ExtractionMetadata(BaseModel):
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     warnings: list[str] = Field(default_factory=list)
     schema_version: str = Field(default="ESPR_ETL_V2")
+
+
+class ExtractProductDetails(BaseProductDetails):
+    """Flat product-details block — OpenAI Structured Outputs compatible (no oneOf)."""
+
+    recycled_content_by_material: Optional[str] = Field(
+        default=None,
+        description="Recycled content by material/fibre when stated (textiles).",
+    )
+
+
+class ExtractSustainability(BaseSustainabilityCircularity):
+    """Flat sustainability block — OpenAI Structured Outputs compatible (no oneOf)."""
+
+    energy_use: Optional[str] = Field(default=None, description="Energy-use information if stated.")
+    energy_efficiency: Optional[str] = Field(default=None, description="Energy-efficiency class if stated.")
+    disassembly_instructions: Optional[str] = Field(default=None, description="Disassembly instructions.")
+    repair_instructions: Optional[str] = Field(default=None, description="Repair instructions.")
+    spare_parts_availability: Optional[str] = Field(default=None, description="Spare-parts availability.")
+
+
+class DPPExtractionOutput(BaseModel):
+    """
+    LLM structured-output schema (flat, no discriminated unions).
+
+    OpenAI rejects oneOf/anyOf in nested response_format schemas.
+    Convert to `DPPAnalysisResult` via `.to_analysis_result()` after parsing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    product_category: ProductCategory = Field(
+        description=(
+            "Detected ESPR product category. Choose TEXTILES_APPAREL, ELECTRONICS, "
+            "BATTERIES, or GENERIC when no delegated act clearly applies."
+        ),
+    )
+    identification: Optional[DPPIdentification] = None
+    economic_operator: Optional[DPPEconomicOperator] = None
+    product_details: Optional[ExtractProductDetails] = None
+    sustainability: Optional[ExtractSustainability] = None
+    system_requirements: Optional[DPPSystemRequirements] = None
+    metadata: ExtractionMetadata = Field(default_factory=ExtractionMetadata)
+
+    def to_analysis_result(self) -> "DPPAnalysisResult":
+        product_details: BaseProductDetails | None = None
+        if self.product_details is not None:
+            product_details = _coerce_product_details(
+                self.product_category,
+                self.product_details,
+            )
+
+        sustainability: BaseSustainabilityCircularity | None = None
+        if self.sustainability is not None:
+            sustainability = _coerce_sustainability(
+                self.product_category,
+                self.sustainability,
+            )
+
+        return DPPAnalysisResult(
+            product_category=self.product_category,
+            identification=self.identification,
+            economic_operator=self.economic_operator,
+            product_details=product_details,  # type: ignore[arg-type]
+            sustainability=sustainability,  # type: ignore[arg-type]
+            system_requirements=self.system_requirements,
+            metadata=self.metadata,
+        )
 
 
 # ── Gap-analysis helpers ───────────────────────────────────────────────────────
@@ -575,7 +640,12 @@ def _coerce_product_details(
     details: BaseProductDetails,
 ) -> BaseProductDetails:
     target = _CATEGORY_PRODUCT_DETAILS[category]
-    payload = details.model_dump(exclude={"category"})
+    allowed = set(target.model_fields.keys())
+    payload = {
+        key: value
+        for key, value in details.model_dump(exclude={"category"}).items()
+        if key in allowed
+    }
     return target(category=category, **payload)  # type: ignore[call-arg, arg-type]
 
 
@@ -584,5 +654,10 @@ def _coerce_sustainability(
     sustainability: BaseSustainabilityCircularity,
 ) -> BaseSustainabilityCircularity:
     target = _CATEGORY_SUSTAINABILITY[category]
-    payload = sustainability.model_dump(exclude={"category"})
+    allowed = set(target.model_fields.keys())
+    payload = {
+        key: value
+        for key, value in sustainability.model_dump(exclude={"category"}).items()
+        if key in allowed
+    }
     return target(category=category, **payload)  # type: ignore[call-arg, arg-type]

@@ -29,7 +29,10 @@ import pypdf
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from etl.models.dpp_schemas import DPPAnalysisResult, ExtractionMetadata
+from etl.services.env_loader import load_project_env, resolve_openai_api_key
 from etl.services.prompts import STRUCTURED_OUTPUT_SYSTEM_PROMPT, build_structured_user_prompt
+
+load_project_env()
 
 logger = logging.getLogger(__name__)
 

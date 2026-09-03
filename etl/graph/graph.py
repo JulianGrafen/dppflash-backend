@@ -4,6 +4,10 @@ LangGraph assembly for the DPP-Flash extraction pipeline.
 
 from __future__ import annotations
 
+from etl.services.env_loader import load_project_env
+
+load_project_env()
+
 from langgraph.graph import END, START, StateGraph
 
 from etl.graph.nodes import (

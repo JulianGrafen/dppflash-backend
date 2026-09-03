@@ -8,5 +8,5 @@
       "description": "DPP-Flash ESPR extraction pipeline with validation and gap management"
     }
   },
-  "env": ".env"
+  "env": ".env.local"
 }

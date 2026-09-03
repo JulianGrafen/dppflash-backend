@@ -26,16 +26,17 @@ from etl.services.enrichment import (
     send_supplier_outreach,
 )
 from etl.services.espr_auditor import run_espr_audit
-from etl.services.gap_management import build_gap_remediation_plan
+from etl.services.env_loader import describe_missing_llm_config, load_project_env, resolve_openai_api_key
 from etl.services.validation import build_mass_balance_retry_feedback, validate_extracted_data
 
 logger = logging.getLogger(__name__)
 
 
 def _build_extractor() -> DPPExtractor:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+    load_project_env()
+    api_key = resolve_openai_api_key()
     if not api_key:
-        raise LLMExtractionError("OPENAI_API_KEY is not configured.")
+        raise LLMExtractionError(describe_missing_llm_config())
 
     config = ExtractorConfig(
         openai_api_key=api_key,

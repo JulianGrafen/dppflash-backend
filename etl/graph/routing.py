@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from etl.graph.coerce_state import coerce_espr_audit_report, coerce_validation_report
 from etl.graph.state import DEFAULT_MAX_EXTRACTION_ATTEMPTS, DppGraphState
 
 AfterValidationRoute = Literal["extractor", "espr_auditor", "api_enrichment"]
@@ -22,7 +23,7 @@ def route_after_validation(state: DppGraphState) -> AfterValidationRoute:
     - JA                    → espr_auditor
     - NEIN + Retries erschöpft → api_enrichment (Gap-Fill Stufe 1)
     """
-    validation_report = state.get("validation_report")
+    validation_report = coerce_validation_report(state.get("validation_report"))
     if validation_report is None or not validation_report.mass_balance_ok:
         attempt = state.get("extraction_attempt", 0)
         max_attempts = state.get("max_extraction_attempts", DEFAULT_MAX_EXTRACTION_ATTEMPTS)
@@ -40,7 +41,7 @@ def route_after_espr_audit(state: DppGraphState) -> AfterEspAuditRoute:
     - JA, 100% konform → load_to_db
     - NEIN             → api_enrichment (Stufe 1)
     """
-    audit_report = state.get("espr_audit_report")
+    audit_report = coerce_espr_audit_report(state.get("espr_audit_report"))
     if audit_report is not None and audit_report.is_fully_compliant:
         return "load_to_db"
     return "api_enrichment"

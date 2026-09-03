@@ -10,6 +10,14 @@ import logging
 import os
 from typing import Any
 
+from etl.graph.coerce_state import (
+    coerce_espr_audit_report,
+    coerce_extracted_data,
+    coerce_gaps,
+    coerce_raw_document,
+    coerce_sku_master_data,
+    coerce_validation_report,
+)
 from etl.graph.state import (
     DEFAULT_MAX_EXTRACTION_ATTEMPTS,
     ComplianceStatus,
@@ -75,7 +83,7 @@ def _run_extraction(
 
 
 def _resolve_product_identifier(state: DppGraphState) -> str | None:
-    extracted = state.get("extracted_data")
+    extracted = coerce_extracted_data(state.get("extracted_data"))
     if extracted and extracted.identification:
         for value in (
             extracted.identification.unique_product_identifier,
@@ -83,14 +91,14 @@ def _resolve_product_identifier(state: DppGraphState) -> str | None:
         ):
             if isinstance(value, str) and value.strip():
                 return value.strip()
-    master = state.get("sku_master_data")
+    master = coerce_sku_master_data(state.get("sku_master_data"))
     if master and master.product_name:
         return master.product_name
     return None
 
 
 async def extractor_node(state: DppGraphState) -> dict[str, Any]:
-    raw_document = state.get("raw_document")
+    raw_document = coerce_raw_document(state.get("raw_document"))
     if raw_document is None:
         return {"errors": ["extractor_node: raw_document is missing from state."]}
 
@@ -129,7 +137,7 @@ async def extractor_node(state: DppGraphState) -> dict[str, Any]:
 
 
 async def validator_node(state: DppGraphState) -> dict[str, Any]:
-    extracted_data = state.get("extracted_data")
+    extracted_data = coerce_extracted_data(state.get("extracted_data"))
     if extracted_data is None:
         return {
             "validation_status": ValidationStatus.INVALID,
@@ -155,7 +163,7 @@ async def validator_node(state: DppGraphState) -> dict[str, Any]:
 
 
 async def espr_auditor_node(state: DppGraphState) -> dict[str, Any]:
-    extracted_data = state.get("extracted_data")
+    extracted_data = coerce_extracted_data(state.get("extracted_data"))
     if extracted_data is None:
         return {"errors": ["espr_auditor_node: extracted_data is missing."]}
 
@@ -175,8 +183,8 @@ async def espr_auditor_node(state: DppGraphState) -> dict[str, Any]:
 
 
 async def api_enrichment_node(state: DppGraphState) -> dict[str, Any]:
-    extracted_data = state.get("extracted_data")
-    gaps = state.get("gaps") or []
+    extracted_data = coerce_extracted_data(state.get("extracted_data"))
+    gaps = coerce_gaps(state.get("gaps"))
 
     if extracted_data is None:
         return {"errors": ["api_enrichment_node: extracted_data is missing."]}
@@ -184,7 +192,7 @@ async def api_enrichment_node(state: DppGraphState) -> dict[str, Any]:
     result = lookup_sphier_eprm_api(
         extracted_data=extracted_data,
         gaps=gaps,
-        sku_master_data=state.get("sku_master_data"),
+        sku_master_data=coerce_sku_master_data(state.get("sku_master_data")),
     )
 
     return {
@@ -196,8 +204,8 @@ async def api_enrichment_node(state: DppGraphState) -> dict[str, Any]:
 
 
 async def supplier_outreach_node(state: DppGraphState) -> dict[str, Any]:
-    extracted_data = state.get("extracted_data")
-    gaps = state.get("gaps") or []
+    extracted_data = coerce_extracted_data(state.get("extracted_data"))
+    gaps = coerce_gaps(state.get("gaps"))
 
     if extracted_data is None:
         return {"errors": ["supplier_outreach_node: extracted_data is missing."]}
@@ -217,16 +225,16 @@ async def supplier_outreach_node(state: DppGraphState) -> dict[str, Any]:
 
 
 async def escalate_node(state: DppGraphState) -> dict[str, Any]:
-    gaps = state.get("gaps") or []
+    gaps = coerce_gaps(state.get("gaps"))
     return {
         "enrichment_stage": EnrichmentStage.ESCALATED,
         "compliance_status": ComplianceStatus.PENDING_REVIEW,
-        "gap_remediation": build_gap_remediation_plan(gaps, state.get("extracted_data")),
+        "gap_remediation": build_gap_remediation_plan(gaps, coerce_extracted_data(state.get("extracted_data"))),
     }
 
 
 async def load_to_db_node(state: DppGraphState) -> dict[str, Any]:
-    audit = state.get("espr_audit_report")
+    audit = coerce_espr_audit_report(state.get("espr_audit_report"))
     compliance_status = state.get("compliance_status", ComplianceStatus.DRAFT)
 
     if audit is not None and audit.is_fully_compliant:
@@ -235,7 +243,7 @@ async def load_to_db_node(state: DppGraphState) -> dict[str, Any]:
         compliance_status = ComplianceStatus.DRAFT
 
     persist_result = persist_to_central_db(
-        extracted_data=state.get("extracted_data"),
+        extracted_data=coerce_extracted_data(state.get("extracted_data")),
         compliance_status=compliance_status,
         metadata=state.get("metadata"),
     )

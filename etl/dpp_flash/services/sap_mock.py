@@ -42,6 +42,7 @@ _SAP_PO_CONTACTS: Final[dict[str, str]] = {
 _SAP_VENDOR_MASTER: Final[dict[str, str]] = {
     "VENDOR-HIT-003": "info@vendor-master.example",
     "muster-gmbh": "info@muster-gmbh.example",
+    "muster-klebstoff-gmbh": "kontakt@muster-klebstoff.de",
 }
 
 _SRM_ERROR_IDS: Final[frozenset[str]] = frozenset({"SRM-ERROR-500"})

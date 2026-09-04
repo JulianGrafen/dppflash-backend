@@ -35,7 +35,8 @@ def test_technical_sales_beats_default_info() -> None:
     assert result.value == "anna.schmidt@supplier.example"
     assert result.source_system == SourceSystem.SAP_VENDOR_MASTER.value
     assert result.source_detail is not None
-    assert "to_ContactPerson / Technical Sales" in result.source_detail
+    assert "Anna Schmidt" in result.source_detail
+    assert "Technical Sales" in result.source_detail
     assert "score=50" in result.source_detail
 
 

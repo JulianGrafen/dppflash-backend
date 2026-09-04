@@ -21,6 +21,7 @@ import {
   formatDisplayValue,
   groupFieldRowsByBlock,
   SAMPLE_SAP_DATA,
+  SAMPLE_SAP_PRODUCT_ODATA,
   SAMPLE_SDS_TEXT,
   SAP_FIELD_LABELS,
   type PipelineResult,
@@ -110,6 +111,25 @@ function DppResultPanel({ result }: { readonly result: PipelineResult }) {
             DB: {result.db_persist_result.record_id}
           </p>
         ) : null}
+
+        {result.email_found && result.supplier_email ? (
+          <p className="mt-4 rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+            SAP-Ansprechpartner:{' '}
+            <span className="font-semibold">{formatDisplayValue(result.supplier_email)}</span>
+            {result.supplier_email.source_detail ? (
+              <span className="mt-1 block text-xs text-sky-800">
+                {result.supplier_email.source_detail}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+
+        {result.enrichment_stage === 'supplier_outreach' && result.enrichment_result?.notes ? (
+          <SupplierOutreachMailBlock
+            notes={result.enrichment_result.notes}
+            recipient={result.metadata?.outreach_recipient as string | undefined}
+          />
+        ) : null}
       </div>
 
       {result.errors.length > 0 ? (
@@ -191,8 +211,60 @@ function LegendItem({ color, label }: { readonly color: string; readonly label: 
   );
 }
 
+function parseOutreachNotes(notes: string): {
+  mode: 'SMTP' | 'Dry-Run' | null;
+  magicLink: string | null;
+} {
+  const modeMatch = notes.match(/\[(SMTP|Dry-Run)\]/);
+  const linkMatch = notes.match(/Magic link:\s*(https?:\/\/\S+)/);
+  return {
+    mode: modeMatch?.[1] === 'SMTP' ? 'SMTP' : modeMatch?.[1] === 'Dry-Run' ? 'Dry-Run' : null,
+    magicLink: linkMatch?.[1] ?? null,
+  };
+}
+
+function SupplierOutreachMailBlock({
+  notes,
+  recipient,
+}: {
+  readonly notes: string;
+  readonly recipient?: string;
+}) {
+  const { mode, magicLink } = parseOutreachNotes(notes);
+
+  return (
+    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+      <p className="font-semibold">Lieferanten-Mail</p>
+      <dl className="mt-2 space-y-1 text-xs">
+        {mode ? (
+          <div className="flex gap-2">
+            <dt className="font-medium text-emerald-800">Modus:</dt>
+            <dd>{mode}</dd>
+          </div>
+        ) : null}
+        {recipient ? (
+          <div className="flex gap-2">
+            <dt className="font-medium text-emerald-800">Empfänger:</dt>
+            <dd className="font-mono">{recipient}</dd>
+          </div>
+        ) : null}
+        {magicLink ? (
+          <div>
+            <dt className="font-medium text-emerald-800">Magic Link:</dt>
+            <dd className="mt-1 break-all font-mono text-[11px]">{magicLink}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <p className="mt-2 text-xs text-emerald-800/80">{notes}</p>
+    </div>
+  );
+}
+
 export default function SapSimulationPage() {
   const [sapData, setSapData] = useState<SapMasterDataInput>(SAMPLE_SAP_DATA);
+  const [sapProductJson, setSapProductJson] = useState(() =>
+    JSON.stringify(SAMPLE_SAP_PRODUCT_ODATA, null, 2),
+  );
   const [documentText, setDocumentText] = useState(SAMPLE_SDS_TEXT);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -203,12 +275,22 @@ export default function SapSimulationPage() {
     setError(null);
     setResult(null);
 
+    let sapExport: unknown;
+    try {
+      sapExport = JSON.parse(sapProductJson);
+    } catch {
+      setError('SAP OData JSON ist ungültig — bitte Syntax prüfen.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/etl/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sku_master_data: sapData,
+          sap_export: sapExport,
           raw_document: {
             filename: 'sds.pdf',
             document_text: documentText,
@@ -231,6 +313,7 @@ export default function SapSimulationPage() {
 
   function loadSampleData() {
     setSapData(SAMPLE_SAP_DATA);
+    setSapProductJson(JSON.stringify(SAMPLE_SAP_PRODUCT_ODATA, null, 2));
     setDocumentText(SAMPLE_SDS_TEXT);
     setResult(null);
     setError(null);
@@ -272,13 +355,31 @@ export default function SapSimulationPage() {
             SAP-Stammdaten → DPP
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-600">
-            Simuliert den ERP/SAP-Handoff (SKU, GTIN, TARIC) plus SDS-Text. Die LangGraph-Pipeline extrahiert,
-            validiert, reichert über SAP an und zeigt den DPP — nur mit den Feldern, die verfügbar sind.
+            SAP OData JSON + SDS-Text. Kontakt-E-Mail und Lieferanten-Mail kommen immer aus dem aktuellen JSON —
+            nicht aus Stammdaten-Feldern oder dem SDS.
           </p>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-4">
+            <section className={`${CARD_CLASS} p-5`}>
+              <div className="mb-4 flex items-center gap-2">
+                <Database className="h-5 w-5 text-sky-700" aria-hidden />
+                <h2 className="text-base font-bold text-[#0c1929]">SAP OData JSON (A_Product)</h2>
+              </div>
+              <p className="mb-4 text-xs text-slate-500">
+                Kontakte für den Mailversand werden bei jedem Lauf frisch aus diesem JSON gelesen (
+                <code className="rounded bg-slate-100 px-1">to_BillOfMaterial → … → to_ContactPerson</code>
+                ).
+              </p>
+              <textarea
+                className={`${INPUT_CLASS} min-h-[280px] font-mono text-xs leading-relaxed`}
+                value={sapProductJson}
+                onChange={(event) => setSapProductJson(event.target.value)}
+                spellCheck={false}
+              />
+            </section>
+
             <section className={`${CARD_CLASS} p-5`}>
               <div className="mb-4 flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-sky-700" aria-hidden />

@@ -69,6 +69,8 @@ export interface PipelineResult {
   } | null;
   enrichment_stage: string;
   enrichment_result: PipelineEnrichmentResult | null;
+  supplier_email?: AuditFieldPayload | null;
+  email_found?: boolean;
   compliance_status: string;
   db_persist_result: PipelineDbPersistResult | null;
   extraction_attempt: number;
@@ -147,7 +149,6 @@ export const SAMPLE_SDS_TEXT = `Sicherheitsdatenblatt
 Produktname: Cimsec Fliesen Kleber S1 Flex Schnell
 Hersteller: Muster Klebstoff GmbH
 Adresse: Industriestr. 12, 12345 Musterstadt, Deutschland
-E-Mail: info@muster-klebstoff.de
 
 Abschnitt 3 — Zusammensetzung:
 Quarz 50%, Portlandzement 30%, Wasser 20%
@@ -158,6 +159,73 @@ Abfallschlüssel: 08 04 09*
 
 Abschnitt 2 — Warnhinweise:
 Enthält Zement. Verursacht Hautreizungen. P280, P302+P352.`;
+
+/** SAP S/4 A_Product OData sample — contacts live under BOM → Purchasing → SupplierDetails. */
+export const SAMPLE_SAP_PRODUCT_ODATA: Record<string, unknown> = {
+  d: {
+    Product: '000000000010048921',
+    NetWeight: '25.000',
+    WeightUnit: 'KG',
+    CountryOfOrigin: 'DE',
+    CommodityCode: '35069190',
+    StandardIdentifier: {
+      ProductStandardID: '04001234987654',
+      InternationalArticleNumberCat: 'EAN',
+    },
+    to_Description: {
+      results: [
+        {
+          Language: 'DE',
+          ProductDescription: 'LOCTITE IND-SEAL 400 - Gebinde 25KG',
+        },
+      ],
+    },
+    to_BillOfMaterial: {
+      results: [
+        {
+          BillOfMaterial: '00012844',
+          to_BOMItems: {
+            results: [
+              {
+                BOMItemNumber: '0010',
+                ComponentDescription: 'Vorpolymer Polyol Type P-40',
+                to_PurchasingInfo: {
+                  Supplier: '0000100452',
+                  SupplierName: 'Covestro Deutschland AG',
+                  to_SupplierDetails: {
+                    DefaultEmailAddress: 'rechnungseingang@covestro.corp',
+                    to_ContactPerson: {
+                      results: [
+                        {
+                          FirstName: 'Stefan',
+                          LastName: 'Meier',
+                          Department: 'Technical Sales Coatings & Adhesives',
+                          EmailAddress: 'stefan.meier@covestro.corp',
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+              {
+                BOMItemNumber: '0020',
+                ComponentDescription: 'Kreide-Füllstoff Calcit Micron',
+                to_PurchasingInfo: {
+                  Supplier: '0000103891',
+                  SupplierName: 'Omya GmbH',
+                  to_SupplierDetails: {
+                    DefaultEmailAddress: 'info.germany@omya.corp',
+                    to_ContactPerson: { results: [] },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  },
+};
 
 
 export function isAuditField(value: unknown): value is AuditFieldPayload {
@@ -249,6 +317,7 @@ export function buildDppFieldRows(result: PipelineResult): DppFieldRow[] {
   for (const missing of result.validation_report?.missing_field_paths ?? []) {
     paths.add(missing);
   }
+  paths.add('economic_operator.electronic_contact_details');
 
   const sortedPaths = [...paths].sort((a, b) => a.localeCompare(b, 'de'));
 

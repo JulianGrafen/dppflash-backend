@@ -40,12 +40,14 @@ def main() -> int:
     raw_document = payload.get("raw_document") or {}
     sku_master_data = payload.get("sku_master_data")
     sap_export = payload.get("sap_export")
+    supplier_odata = payload.get("supplier_odata")
     max_attempts = payload.get("max_extraction_attempts", 3)
 
     try:
         state = initial_state(
             raw_document,
             sku_master_data=sku_master_data,
+            supplier_odata=supplier_odata,
             max_extraction_attempts=max_attempts,
         )
         if sap_export:

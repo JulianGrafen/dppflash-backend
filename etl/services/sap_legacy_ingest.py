@@ -97,6 +97,15 @@ def sap_legacy_to_sku_master_data(payload: dict[str, Any]) -> SkuMasterData:
     )
 
 
+def sap_legacy_to_supplier_odata(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract SAP business-partner OData contact payload when embedded in legacy export."""
+    for key in ("supplier_odata", "SUPPLIER_BP", "SUPPLIER_ODATA", "VENDOR_BP"):
+        candidate = payload.get(key)
+        if isinstance(candidate, dict) and candidate:
+            return candidate
+    return None
+
+
 def sap_legacy_to_raw_document(payload: dict[str, Any]) -> RawDocumentInput:
     material = payload.get("MATERIAL_BASE") if isinstance(payload.get("MATERIAL_BASE"), dict) else {}
     matnr = str(material.get("matnr") or "sap-export").strip()

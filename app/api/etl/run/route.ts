@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
         product_type_hint: rawDocument.product_type_hint?.trim() || null,
       },
       sap_export: sapExport ?? null,
+      supplier_odata: body.supplier_odata ?? null,
       max_extraction_attempts: body.max_extraction_attempts ?? 3,
     };
 

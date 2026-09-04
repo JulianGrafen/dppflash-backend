@@ -8,10 +8,13 @@ import re
 from typing import Any
 
 from etl.dpp_flash.services.sap_enrichment import resolve_supplier_email
-from etl.graph.coerce_state import coerce_extracted_data, coerce_sku_master_data
-from etl.graph.state import DppGraphState, EnrichmentStage
-from etl.models.audit_field import audit_text
+from etl.graph.coerce_state import coerce_extracted_data, coerce_gaps, coerce_sku_master_data
+from etl.graph.state import DppGraphState, EnrichmentAttemptResult, EnrichmentStage
+from etl.models.audit_field import AuditField, audit_text
 from etl.services.contact_scorer import ContactScorer
+from etl.services.enrichment import apply_supplier_contact_to_dpp
+from etl.services.outreach_recipient import resolve_bom_contact_from_sap_export
+from etl.services.sap_product_odata_ingest import coerce_sap_product_payload
 
 logger = logging.getLogger(__name__)
 
@@ -20,14 +23,55 @@ async def sap_enrichment_node(state: DppGraphState) -> dict[str, Any]:
     """
     Resolve supplier e-mail via SAP cascade before supplier outreach.
 
-    When ``supplier_odata`` is present, ``ContactScorer`` runs first. A miss
-    (blacklist / no usable address) escalates to HITL without falling through
-    to the mock cascade. Without OData, mock SRM → PO → vendor lookups apply.
+    When ``sap_export`` contains S/4 ``A_Product`` OData, contacts are taken
+    **only** from BOM supplier details in that JSON (no mock cascade).
+
+    Flat ``supplier_odata`` uses ``ContactScorer`` when no product export is present.
     """
     product_id = _resolve_product_id(state)
     supplier_id = _resolve_supplier_id(state)
 
     try:
+        sap_export = state.get("sap_export")
+        if coerce_sap_product_payload(sap_export) is not None:
+            block, scored = await asyncio.to_thread(
+                resolve_bom_contact_from_sap_export,
+                sap_export if isinstance(sap_export, dict) else None,
+            )
+            if scored is not None:
+                logger.info(
+                    "sap_enrichment_node: A_Product JSON contact product_id=%s email=%s",
+                    product_id,
+                    audit_text(scored),
+                )
+                if block is not None:
+                    metadata = dict(state.get("metadata") or {})
+                    metadata.update(
+                        {
+                            "supplier_id": block.supplier_id,
+                            "supplier_name": block.supplier_name,
+                            "bom_component": block.component_description,
+                        }
+                    )
+                    state = {**state, "metadata": metadata}
+                return _build_success_update(state, scored)
+
+            logger.warning(
+                "sap_enrichment_node: A_Product JSON has no acceptable contact — HITL "
+                "product_id=%s",
+                product_id,
+            )
+            return {
+                "supplier_email": None,
+                "email_source": None,
+                "email_found": False,
+                "enrichment_stage": EnrichmentStage.SAP_EMAIL_LOOKUP,
+                "errors": [
+                    "sap_enrichment_node: no acceptable contact in SAP A_Product JSON "
+                    "(blacklist or empty) — buyer intervention required.",
+                ],
+            }
+
         supplier_odata = state.get("supplier_odata")
         if isinstance(supplier_odata, dict):
             scored = await asyncio.to_thread(
@@ -40,12 +84,7 @@ async def sap_enrichment_node(state: DppGraphState) -> dict[str, Any]:
                     product_id,
                     scored.source_detail,
                 )
-                return {
-                    "supplier_email": scored,
-                    "email_source": scored.source_system,
-                    "email_found": True,
-                    "enrichment_stage": EnrichmentStage.SAP_EMAIL_LOOKUP,
-                }
+                return _build_success_update(state, scored)
 
             logger.warning(
                 "sap_enrichment_node: ContactScorer rejected OData contacts — HITL "
@@ -77,12 +116,7 @@ async def sap_enrichment_node(state: DppGraphState) -> dict[str, Any]:
                 supplier_id,
                 lookup.email.source_system,
             )
-            return {
-                "supplier_email": lookup.email,
-                "email_source": lookup.email.source_system,
-                "email_found": True,
-                "enrichment_stage": EnrichmentStage.SAP_EMAIL_LOOKUP,
-            }
+            return _build_success_update(state, lookup.email)
 
         logger.warning(
             "sap_enrichment_node: no e-mail — escalate product_id=%s supplier_id=%s",
@@ -107,6 +141,65 @@ async def sap_enrichment_node(state: DppGraphState) -> dict[str, Any]:
             "enrichment_stage": EnrichmentStage.SAP_EMAIL_LOOKUP,
             "errors": [f"sap_enrichment_node: {exc}"],
         }
+
+
+def _build_success_update(state: DppGraphState, supplier_email: AuditField) -> dict[str, Any]:
+    update: dict[str, Any] = {
+        "supplier_email": supplier_email,
+        "email_source": supplier_email.source_system,
+        "email_found": True,
+        "enrichment_stage": EnrichmentStage.SAP_EMAIL_LOOKUP,
+    }
+
+    metadata = state.get("metadata")
+    if isinstance(metadata, dict) and metadata:
+        update["metadata"] = metadata
+
+    extracted_data = coerce_extracted_data(state.get("extracted_data"))
+    gaps = coerce_gaps(state.get("gaps"))
+    if extracted_data is None:
+        return update
+
+    filled_paths, remaining_gaps = apply_supplier_contact_to_dpp(
+        extracted_data,
+        _enrich_contact_provenance(supplier_email, state),
+        gaps,
+    )
+    if filled_paths:
+        update["extracted_data"] = extracted_data
+        update["gaps"] = remaining_gaps
+        update["enrichment_result"] = EnrichmentAttemptResult(
+            stage=EnrichmentStage.SAP_EMAIL_LOOKUP,
+            success=True,
+            filled_field_paths=filled_paths,
+            remaining_gaps=remaining_gaps,
+            notes=(
+                f"SAP contact applied to DPP: {audit_text(supplier_email)} "
+                f"({supplier_email.source_detail or 'no detail'})"
+            ),
+        )
+
+    return update
+
+
+def _enrich_contact_provenance(supplier_email: AuditField, state: DppGraphState) -> AuditField:
+    metadata = state.get("metadata") or {}
+    supplier_name = metadata.get("supplier_name")
+    bom_component = metadata.get("bom_component")
+    if not supplier_name and not bom_component:
+        return supplier_email
+
+    context = " / ".join(part for part in (supplier_name, bom_component) if isinstance(part, str) and part.strip())
+    if not context:
+        return supplier_email
+
+    existing = supplier_email.source_detail or ""
+    if context in existing:
+        return supplier_email
+
+    return supplier_email.model_copy(
+        update={"source_detail": f"{context} · {existing}".strip(" ·")},
+    )
 
 
 def _resolve_product_id(state: DppGraphState) -> str:
@@ -145,5 +238,11 @@ def _resolve_supplier_id(state: DppGraphState) -> str:
             slug = re.sub(r"[^a-z0-9]+", "-", manufacturer.lower()).strip("-")
             if slug:
                 return slug
+
+    master = coerce_sku_master_data(state.get("sku_master_data"))
+    if master and master.manufacturer_name:
+        slug = re.sub(r"[^a-z0-9]+", "-", master.manufacturer_name.lower()).strip("-")
+        if slug:
+            return slug
 
     return f"UNKNOWN-{_resolve_product_id(state)}"

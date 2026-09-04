@@ -157,12 +157,12 @@ class ContactScorer:
             if email is None:
                 continue
             score = self._score_contact_person(email, person)
-            dept_label = (person.department or "unspecified").strip() or "unspecified"
+            source_path = f"to_ContactPerson / {self._contact_person_label(person)}"
             candidates.append(
                 _ScoredCandidate(
                     email=email,
                     score=score,
-                    source_path=f"to_ContactPerson / {dept_label}",
+                    source_path=source_path,
                     origin="contact_person",
                 )
             )
@@ -180,6 +180,17 @@ class ContactScorer:
             )
 
         return candidates
+
+    def _contact_person_label(self, person: ContactPerson) -> str:
+        name = " ".join(
+            part.strip()
+            for part in (person.first_name, person.last_name)
+            if part and part.strip()
+        )
+        dept_label = (person.department or "unspecified").strip() or "unspecified"
+        if name:
+            return f"{name} ({dept_label})"
+        return dept_label
 
     def _score_contact_person(self, email: str, person: ContactPerson) -> int:
         if self._is_blacklisted(email):

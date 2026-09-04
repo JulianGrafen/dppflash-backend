@@ -122,11 +122,12 @@ def initial_state(
     raw_document: dict,
     *,
     sku_master_data: dict | None = None,
+    supplier_odata: dict | None = None,
     max_extraction_attempts: int | None = None,
 ) -> DppGraphState:
     from etl.graph.state import RawDocumentInput, SkuMasterData
 
-    return {
+    state: DppGraphState = {
         "raw_document": RawDocumentInput.model_validate(raw_document),
         "sku_master_data": SkuMasterData.model_validate(sku_master_data or {}),
         "extracted_data": None,
@@ -148,3 +149,6 @@ def initial_state(
         "errors": [],
         "metadata": {},
     }
+    if supplier_odata:
+        state["supplier_odata"] = supplier_odata
+    return state

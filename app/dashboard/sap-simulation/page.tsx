@@ -124,11 +124,16 @@ function DppResultPanel({ result }: { readonly result: PipelineResult }) {
           </p>
         ) : null}
 
-        {result.enrichment_stage === 'supplier_outreach' && result.enrichment_result?.notes ? (
+        {resolveOutreachNotes(result) ? (
           <SupplierOutreachMailBlock
-            notes={result.enrichment_result.notes}
+            notes={resolveOutreachNotes(result)!}
             recipient={result.metadata?.outreach_recipient as string | undefined}
+            enrichmentStage={result.enrichment_stage}
           />
+        ) : null}
+
+        {!resolveOutreachNotes(result) && result.enrichment_stage === 'escalated' ? (
+          <OutreachSkippedHint result={result} />
         ) : null}
       </div>
 
@@ -211,51 +216,116 @@ function LegendItem({ color, label }: { readonly color: string; readonly label: 
   );
 }
 
+function resolveOutreachNotes(result: PipelineResult): string | null {
+  const fromMetadata = result.metadata?.last_supplier_outreach;
+  if (typeof fromMetadata === 'string' && fromMetadata.trim()) {
+    return fromMetadata;
+  }
+  const fromEnrichment = result.enrichment_result?.notes;
+  if (
+    typeof fromEnrichment === 'string' &&
+    fromEnrichment.trim() &&
+    /supplier outreach|magic link|lieferanten/i.test(fromEnrichment)
+  ) {
+    return fromEnrichment;
+  }
+  return null;
+}
+
 function parseOutreachNotes(notes: string): {
   mode: 'SMTP' | 'Dry-Run' | null;
   magicLink: string | null;
+  failed: boolean;
 } {
   const modeMatch = notes.match(/\[(SMTP|Dry-Run)\]/);
   const linkMatch = notes.match(/Magic link:\s*(https?:\/\/\S+)/);
   return {
     mode: modeMatch?.[1] === 'SMTP' ? 'SMTP' : modeMatch?.[1] === 'Dry-Run' ? 'Dry-Run' : null,
     magicLink: linkMatch?.[1] ?? null,
+    failed: /failed|fehlgeschlagen|not configured|skipped/i.test(notes),
   };
+}
+
+function OutreachSkippedHint({ result }: { readonly result: PipelineResult }) {
+  const hasSapExport = Boolean(result.metadata?.input_format === 'sap_product_odata');
+  const contactError = result.errors.find((error) =>
+    /sap_enrichment|contact|sap_export|Lieferanten-E-Mail/i.test(error),
+  );
+
+  return (
+    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+      <p className="font-semibold">Keine Lieferanten-Mail ausgelöst</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+        {!hasSapExport ? (
+          <li>
+            Kein SAP OData JSON im Request — Mailversand braucht{' '}
+            <code className="rounded bg-amber-100 px-1">sap_export</code> mit Kontakt unter{' '}
+            <code className="rounded bg-amber-100 px-1">to_ContactPerson</code>.
+          </li>
+        ) : null}
+        {contactError ? <li>{contactError}</li> : null}
+        <li>
+          Auf Render:{' '}
+          <code className="rounded bg-amber-100 px-1">SUPPLIER_OUTREACH_SECRET</code> setzen
+          (Magic Link). Für echten Versand zusätzlich{' '}
+          <code className="rounded bg-amber-100 px-1">SUPPLIER_OUTREACH_ENABLED=true</code> und
+          SMTP-Variablen.
+        </li>
+      </ul>
+    </div>
+  );
 }
 
 function SupplierOutreachMailBlock({
   notes,
   recipient,
+  enrichmentStage,
 }: {
   readonly notes: string;
   readonly recipient?: string;
+  readonly enrichmentStage: string;
 }) {
-  const { mode, magicLink } = parseOutreachNotes(notes);
+  const { mode, magicLink, failed } = parseOutreachNotes(notes);
+  const tone = failed
+    ? 'border-red-200 bg-red-50 text-red-900'
+    : 'border-emerald-100 bg-emerald-50 text-emerald-900';
 
   return (
-    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
-      <p className="font-semibold">Lieferanten-Mail</p>
+    <div className={`mt-4 rounded-lg px-3 py-3 text-sm ${tone}`}>
+      <p className="font-semibold">
+        Lieferanten-Mail{enrichmentStage === 'escalated' ? ' (Pipeline eskaliert)' : ''}
+      </p>
       <dl className="mt-2 space-y-1 text-xs">
         {mode ? (
           <div className="flex gap-2">
-            <dt className="font-medium text-emerald-800">Modus:</dt>
+            <dt className="font-medium opacity-80">Modus:</dt>
             <dd>{mode}</dd>
           </div>
         ) : null}
         {recipient ? (
           <div className="flex gap-2">
-            <dt className="font-medium text-emerald-800">Empfänger:</dt>
+            <dt className="font-medium opacity-80">Empfänger:</dt>
             <dd className="font-mono">{recipient}</dd>
           </div>
         ) : null}
         {magicLink ? (
           <div>
-            <dt className="font-medium text-emerald-800">Magic Link:</dt>
+            <dt className="font-medium opacity-80">Magic Link:</dt>
             <dd className="mt-1 break-all font-mono text-[11px]">{magicLink}</dd>
           </div>
         ) : null}
+        {failed && !magicLink ? (
+          <div>
+            <dt className="font-medium opacity-80">Hinweis:</dt>
+            <dd className="mt-1 text-xs">
+              Secret oder SMTP auf dem Server prüfen — ohne{' '}
+              <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_SECRET</code> wird kein
+              Magic Link erzeugt.
+            </dd>
+          </div>
+        ) : null}
       </dl>
-      <p className="mt-2 text-xs text-emerald-800/80">{notes}</p>
+      <p className="mt-2 text-xs opacity-80">{notes}</p>
     </div>
   );
 }

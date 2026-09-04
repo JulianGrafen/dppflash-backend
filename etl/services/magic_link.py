@@ -119,12 +119,17 @@ def token_hash(token: str) -> str:
 
 
 def resolve_app_base_url() -> str:
-    for key in ("NEXT_PUBLIC_DPP_URL", "NEXT_PUBLIC_APP_URL", "VERCEL_URL"):
+    for key in (
+        "NEXT_PUBLIC_DPP_URL",
+        "NEXT_PUBLIC_APP_URL",
+        "RENDER_EXTERNAL_URL",
+        "VERCEL_URL",
+    ):
         value = os.environ.get(key, "").strip()
         if not value:
             continue
-        if key == "VERCEL_URL" and not value.startswith("http"):
-            return f"https://{value}"
+        if not value.startswith("http"):
+            return f"https://{value.rstrip('/')}"
         return value.rstrip("/")
     return "http://localhost:3000"
 

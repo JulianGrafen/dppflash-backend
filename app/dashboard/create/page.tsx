@@ -60,12 +60,20 @@ function CreateDashboardShell({
               flash <span className="font-normal text-slate-400">· Dashboard</span>
             </span>
           </div>
-          <Link
-            href="/dashboard/rag-ingest"
-            className="text-xs font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
-          >
-            RAG-Wissensbasis
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/sap-simulation"
+              className="text-xs font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
+            >
+              SAP Simulation
+            </Link>
+            <Link
+              href="/dashboard/rag-ingest"
+              className="text-xs font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
+            >
+              RAG-Wissensbasis
+            </Link>
+          </div>
         </div>
       </nav>
 

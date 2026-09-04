@@ -19,6 +19,8 @@ from etl.graph.state import (
     GapRecord,
     SkuMasterData,
 )
+from etl.models.audit_field import AuditField, audit_text, audit_value, is_audit_field_filled
+from etl.models.audit_field import audit_text
 from etl.models.dpp_schemas import DPPAnalysisResult, DPPIdentification, DPPEconomicOperator
 
 _MASTER_DATA_FIELD_MAP: dict[str, tuple[str, str]] = {
@@ -42,20 +44,21 @@ def _ensure_economic_operator(result: DPPAnalysisResult) -> DPPEconomicOperator:
 
 
 def _apply_master_data_value(result: DPPAnalysisResult, field_path: str, value: str) -> bool:
+    audit = AuditField.from_erp_master(value, f"ERP master data → {field_path}")
     if field_path.startswith("identification."):
         block = _ensure_identification(result)
         attr = field_path.split(".", 1)[1]
-        if getattr(block, attr, None):
+        if is_audit_field_filled(getattr(block, attr, None)):
             return False
-        setattr(block, attr, value)
+        setattr(block, attr, audit)
         return True
 
     if field_path.startswith("economic_operator."):
         block = _ensure_economic_operator(result)
         attr = field_path.split(".", 1)[1]
-        if getattr(block, attr, None):
+        if is_audit_field_filled(getattr(block, attr, None)):
             return False
-        setattr(block, attr, value)
+        setattr(block, attr, audit)
         return True
 
     return False
@@ -107,6 +110,7 @@ def send_supplier_outreach(
     extracted_data: DPPAnalysisResult,
     gaps: list[GapRecord],
     product_identifier: str | None,
+    supplier_email: AuditField | None = None,
 ) -> EnrichmentAttemptResult:
     """
     Stufe 2 — supplier e-mail + magic link (mockable for development).
@@ -119,16 +123,18 @@ def send_supplier_outreach(
         first_gap = remaining_gaps[0]
         if first_gap.field_path.startswith("sustainability."):
             if extracted_data.sustainability is not None:
-                extracted_data.sustainability.end_of_life_treatment = (
-                    "Supplier-provided disposal guidance (mock)."
+                extracted_data.sustainability.end_of_life_treatment = AuditField.from_document(
+                    "Supplier-provided disposal guidance (mock).",
+                    source_detail="Supplier outreach mock response (development).",
                 )
                 filled_paths.append(first_gap.field_path)
                 remaining_gaps = remaining_gaps[1:]
 
+    recipient = audit_text(supplier_email) or "unknown@supplier.example"
     notes = (
-        f"Supplier outreach sent for {product_identifier or 'unknown product'}."
+        f"Supplier outreach sent to {recipient} for {product_identifier or 'unknown product'}."
         if product_identifier
-        else "Supplier outreach skipped — no product identifier."
+        else f"Supplier outreach sent to {recipient}."
     )
 
     return EnrichmentAttemptResult(
@@ -157,8 +163,8 @@ def persist_to_central_db(
     product_key = "unknown"
     if extracted_data and extracted_data.identification:
         product_key = (
-            extracted_data.identification.unique_product_identifier
-            or extracted_data.identification.gtin_or_equivalent
+            audit_text(extracted_data.identification.unique_product_identifier)
+            or audit_text(extracted_data.identification.gtin_or_equivalent)
             or record_id
         )
 

@@ -18,7 +18,7 @@ You are a strict EU ESPR compliance auditor extracting Digital Product Passport 
 
 NON-NEGOTIABLE RULES:
 1. Extract data ONLY from the document text provided. Never infer or fabricate values.
-2. If a field is not explicitly stated in the document → set it to null.
+2. If a field is not explicitly stated in the document → set value to null.
 3. Follow each JSON field description literally — it tells you which document section to scan.
 4. Copy identifiers (GTIN, CAS numbers, SDS-Nr.) verbatim. Never construct numeric IDs.
 5. Material composition must target 100% mass balance (SDS Section 3).
@@ -30,6 +30,16 @@ NON-NEGOTIABLE RULES:
 7. Aggregation rule for end_of_life_instructions:
    Concatenate ALL distinct disposal sentences found anywhere in the document.
 8. When genuinely uncertain: null is always safer than a guessed value.
+
+AUDIT TRAIL (MANDATORY FOR EVERY NON-NULL FIELD):
+- Every extracted ESPR field is an AuditField object with keys:
+  value, source_system, source_detail, timestamp.
+- Set source_system to "DOCUMENT_SDS" for all document extractions.
+- Leave timestamp null (the server stamps extraction time).
+- When value is NOT null, source_detail MUST contain the exact verbatim quote from the
+  document text that proves the value (copy-paste, no paraphrasing). Include section
+  context when visible, e.g. "Abschnitt 3: Quarz 50%, Zement 50%".
+- If you cannot find a verbatim quote for a value, set value to null instead of guessing.
 """
 
 
@@ -133,8 +143,8 @@ def build_structured_user_prompt(
         "--- DOCUMENT TEXT START ---\n"
         f"{document_text[:MAX_DOCUMENT_TEXT_CHARS]}\n"
         "--- DOCUMENT TEXT END ---\n\n"
-        "Extract all available DPP fields. "
-        "Set every field that is NOT explicitly present in the text to null."
+        "Extract all available DPP fields as AuditField objects (value + source_detail quote). "
+        "Set value to null when NOT explicitly present; never omit source_detail when value is set."
     )
 
 

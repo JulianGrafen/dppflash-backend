@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 
 from etl.graph.state import GapRecord, ValidationReport, ValidationStatus
+from etl.models.audit_field import AuditField, audit_text, audit_value
 from etl.models.dpp_schemas import DPPAnalysisResult
 
 _COMPOSITION_PERCENT_PATTERN = re.compile(
@@ -45,7 +46,7 @@ def _extract_percentages_from_composition_text(text: str | None) -> list[float]:
 def _evaluate_mass_balance(result: DPPAnalysisResult) -> tuple[bool, float | None, list[str]]:
     composition_text = None
     if result.sustainability is not None:
-        composition_text = result.sustainability.material_composition
+        composition_text = audit_text(result.sustainability.material_composition)
 
     percentages = _extract_percentages_from_composition_text(composition_text)
     if not percentages:

@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from etl.graph.state import EspAuditReport, GapRecord
+from etl.models.audit_field import AuditField, audit_text, audit_value
 from etl.models.dpp_schemas import DPPAnalysisResult
 
 _FULL_COMPLIANCE_THRESHOLD = 100.0
@@ -27,8 +28,8 @@ def _apply_co2_proxy_mapping(result: DPPAnalysisResult) -> tuple[bool, str | Non
     if result.sustainability is None:
         return False, None
 
-    footprint = result.sustainability.environmental_footprint
-    if footprint and footprint.strip():
+    footprint = audit_text(result.sustainability.environmental_footprint)
+    if footprint:
         return False, "Explicit environmental footprint already present — no proxy applied."
 
     category = result.product_category.value
@@ -36,8 +37,9 @@ def _apply_co2_proxy_mapping(result: DPPAnalysisResult) -> tuple[bool, str | Non
         f"CO₂ proxy placeholder applied for category {category}. "
         "Replace with delegated-act emission factors in production."
     )
-    result.sustainability.environmental_footprint = (
-        f"Estimated proxy — pending verified LCA ({proxy_note})"
+    result.sustainability.environmental_footprint = AuditField.from_inference(
+        f"Estimated proxy — pending verified LCA ({proxy_note})",
+        source_detail="No explicit LCA footprint in source document — EU delegated-act proxy applied.",
     )
     return True, proxy_note
 

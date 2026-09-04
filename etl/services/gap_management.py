@@ -5,6 +5,7 @@ Gap management — auditable ESPR gap report for compliance workflows.
 from __future__ import annotations
 
 from etl.graph.state import GapRecord, GapRemediationPlan
+from etl.models.audit_field import audit_text
 from etl.models.dpp_schemas import DPPAnalysisResult
 
 
@@ -13,14 +14,14 @@ def _resolve_product_identifier(result: DPPAnalysisResult | None) -> str | None:
         return None
 
     if result.identification is not None:
-        upi = result.identification.unique_product_identifier
-        if isinstance(upi, str) and upi.strip():
-            return upi.strip()
+        upi = audit_text(result.identification.unique_product_identifier)
+        if upi:
+            return upi
 
     if result.economic_operator is not None:
-        manufacturer = result.economic_operator.manufacturer_name
-        if isinstance(manufacturer, str) and manufacturer.strip():
-            return manufacturer.strip()
+        manufacturer = audit_text(result.economic_operator.manufacturer_name)
+        if manufacturer:
+            return manufacturer
 
     return None
 

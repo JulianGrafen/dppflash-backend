@@ -7,11 +7,12 @@ from __future__ import annotations
 from typing import Literal
 
 from etl.graph.coerce_state import coerce_espr_audit_report, coerce_validation_report
-from etl.graph.state import DEFAULT_MAX_EXTRACTION_ATTEMPTS, DppGraphState
+from etl.graph.state import DppGraphState
 
-AfterValidationRoute = Literal["extractor", "espr_auditor", "api_enrichment"]
+AfterValidationRoute = Literal["espr_auditor", "api_enrichment"]
 AfterEspAuditRoute = Literal["load_to_db", "api_enrichment"]
-AfterApiEnrichmentRoute = Literal["load_to_db", "supplier_outreach"]
+AfterApiEnrichmentRoute = Literal["load_to_db", "sap_enrichment"]
+AfterSapEnrichmentRoute = Literal["supplier_outreach", "escalate"]
 AfterSupplierOutreachRoute = Literal["load_to_db", "escalate"]
 
 
@@ -19,19 +20,15 @@ def route_after_validation(state: DppGraphState) -> AfterValidationRoute:
     """
     Decision 1 — Massenbilanz = 100%?
 
-    - NEIN + Retries übrig  → extractor (Self-reflection Loop)
-    - JA                    → espr_auditor
-    - NEIN + Retries erschöpft → api_enrichment (Gap-Fill Stufe 1)
+    Retries are handled inside ``extraction_phase_node`` (no graph back-edge).
+
+    - JA  → espr_auditor
+    - NEIN → api_enrichment (Gap-Fill Stufe 1)
     """
     validation_report = coerce_validation_report(state.get("validation_report"))
-    if validation_report is None or not validation_report.mass_balance_ok:
-        attempt = state.get("extraction_attempt", 0)
-        max_attempts = state.get("max_extraction_attempts", DEFAULT_MAX_EXTRACTION_ATTEMPTS)
-        if attempt < max_attempts:
-            return "extractor"
-        return "api_enrichment"
-
-    return "espr_auditor"
+    if validation_report is not None and validation_report.mass_balance_ok:
+        return "espr_auditor"
+    return "api_enrichment"
 
 
 def route_after_espr_audit(state: DppGraphState) -> AfterEspAuditRoute:
@@ -63,7 +60,19 @@ def route_after_api_enrichment(state: DppGraphState) -> AfterApiEnrichmentRoute:
     if not gaps:
         return "load_to_db"
 
-    return "supplier_outreach"
+    return "sap_enrichment"
+
+
+def route_after_sap_enrichment(state: DppGraphState) -> AfterSapEnrichmentRoute:
+    """
+    Decision 3b — Supplier e-mail resolved via SAP cascade?
+
+    - JA  → supplier_outreach (Stufe 2)
+    - NEIN → escalate (HITL — buyer must contact supplier manually)
+    """
+    if state.get("email_found"):
+        return "supplier_outreach"
+    return "escalate"
 
 
 def route_after_supplier_outreach(state: DppGraphState) -> AfterSupplierOutreachRoute:

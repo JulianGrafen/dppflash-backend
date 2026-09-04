@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
+from etl.models.audit_field import AuditField
 from etl.models.dpp_schemas import DPPAnalysisResult
 
 
@@ -33,6 +34,7 @@ class EnrichmentStage(str, Enum):
 
     NONE = "none"
     API_LOOKUP = "api_lookup"
+    SAP_EMAIL_LOOKUP = "sap_email_lookup"
     SUPPLIER_OUTREACH = "supplier_outreach"
     ESCALATED = "escalated"
 
@@ -74,6 +76,20 @@ class GapRemediationPlan(BaseModel):
 
 
 DEFAULT_MAX_EXTRACTION_ATTEMPTS = 3
+HARD_MAX_EXTRACTION_ATTEMPTS = 5
+
+
+def clamp_max_extraction_attempts(value: int | None) -> int:
+    """Prevent Studio misconfiguration from looping extractor↔validator thousands of times."""
+    if value is None:
+        return DEFAULT_MAX_EXTRACTION_ATTEMPTS
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_EXTRACTION_ATTEMPTS
+    if normalized < 1:
+        return DEFAULT_MAX_EXTRACTION_ATTEMPTS
+    return min(normalized, HARD_MAX_EXTRACTION_ATTEMPTS)
 
 
 class ValidationReport(BaseModel):
@@ -132,6 +148,8 @@ class DppGraphState(TypedDict, total=False):
     """Central LangGraph state — maps 1:1 to the enterprise flowchart."""
 
     raw_document: RawDocumentInput
+    sap_export: dict[str, Any]
+    supplier_odata: dict[str, Any]
     sku_master_data: SkuMasterData | None
     extracted_data: DPPAnalysisResult | None
     validation_status: ValidationStatus
@@ -141,6 +159,9 @@ class DppGraphState(TypedDict, total=False):
     gap_remediation: GapRemediationPlan | None
     enrichment_stage: EnrichmentStage
     enrichment_result: EnrichmentAttemptResult | None
+    supplier_email: AuditField | None
+    email_source: str | None
+    email_found: bool
     compliance_status: ComplianceStatus
     db_persist_result: DbPersistResult | None
     extraction_attempt: int

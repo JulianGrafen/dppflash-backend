@@ -3,6 +3,11 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  buildPipelineRuntimeEnvRecord,
+  buildPipelineSubprocessEnv,
+} from '@/app/lib/etl/pipelineRuntimeEnv';
+
 const PIPELINE_TIMEOUT_MS = 180_000;
 
 function getProjectRoot(): string {
@@ -58,10 +63,7 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
   return new Promise((resolve, reject) => {
     const child = spawn(python, [cliScript], {
       cwd: projectRoot,
-      env: {
-        ...process.env,
-        PYTHONPATH: projectRoot,
-      },
+      env: buildPipelineSubprocessEnv(projectRoot),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -101,7 +103,12 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
       }
     });
 
-    child.stdin.write(JSON.stringify(payload));
+    child.stdin.write(
+      JSON.stringify({
+        ...(typeof payload === 'object' && payload !== null ? payload : {}),
+        _runtime_env: buildPipelineRuntimeEnvRecord(),
+      }),
+    );
     child.stdin.end();
   });
 }

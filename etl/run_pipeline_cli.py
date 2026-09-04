@@ -9,11 +9,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from enum import Enum
 from typing import Any
 
 from etl.graph.graph import graph, initial_state
+
+
+def _apply_runtime_env(payload: dict[str, Any]) -> None:
+    """Apply server-side env forwarded from Next.js (Render runtime secrets)."""
+    runtime = payload.get("_runtime_env")
+    if not isinstance(runtime, dict):
+        return
+    for key, value in runtime.items():
+        if isinstance(key, str) and isinstance(value, str) and value.strip():
+            os.environ[key] = value.strip()
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -36,6 +47,9 @@ def main() -> int:
     except json.JSONDecodeError as exc:
         print(json.dumps({"error": f"Invalid JSON input: {exc}"}), file=sys.stderr)
         return 1
+
+    _apply_runtime_env(payload)
+    payload.pop("_runtime_env", None)
 
     raw_document = payload.get("raw_document") or {}
     sku_master_data = payload.get("sku_master_data")

@@ -1,0 +1,19 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# If you created the service manually, set in Dashboard → Settings → Build & Deploy:
+#   Root Directory: (leave empty)
+#   Dockerfile Path: Dockerfile
+
+services:
+  - type: web
+    name: dppflash-backend
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENAI_API_KEY
+        sync: false

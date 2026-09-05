@@ -234,16 +234,26 @@ function resolveOutreachNotes(result: PipelineResult): string | null {
 }
 
 function parseOutreachNotes(notes: string): {
-  mode: 'SMTP' | 'Dry-Run' | null;
+  mode: 'SMTP' | 'Dry-Run' | 'SMTP failed' | null;
   magicLink: string | null;
   failed: boolean;
+  smtpError: boolean;
 } {
-  const modeMatch = notes.match(/\[(SMTP|Dry-Run)\]/);
-  const linkMatch = notes.match(/Magic link:\s*(https?:\/\/\S+)/);
+  const modeMatch = notes.match(/\[(SMTP|Dry-Run|SMTP failed)\]/);
+  const linkMatch = notes.match(/Magic link(?::|\s*\(copy manually\):)\s*(https?:\/\/\S+)/);
+  const smtpError = /\[SMTP failed\]|Connection unexpectedly closed|SMTP/i.test(notes);
   return {
-    mode: modeMatch?.[1] === 'SMTP' ? 'SMTP' : modeMatch?.[1] === 'Dry-Run' ? 'Dry-Run' : null,
+    mode:
+      modeMatch?.[1] === 'SMTP'
+        ? 'SMTP'
+        : modeMatch?.[1] === 'Dry-Run'
+          ? 'Dry-Run'
+          : modeMatch?.[1] === 'SMTP failed'
+            ? 'SMTP failed'
+            : null,
     magicLink: linkMatch?.[1] ?? null,
-    failed: /failed|fehlgeschlagen|not configured|skipped/i.test(notes),
+    failed: /failed|fehlgeschlagen|not configured|skipped/i.test(notes) && !linkMatch,
+    smtpError,
   };
 }
 
@@ -288,10 +298,12 @@ function SupplierOutreachMailBlock({
   readonly enrichmentStage: string;
   readonly metadata?: Record<string, unknown>;
 }) {
-  const { mode, magicLink, failed } = parseOutreachNotes(notes);
+  const { mode, magicLink, failed, smtpError } = parseOutreachNotes(notes);
   const tone = failed
     ? 'border-red-200 bg-red-50 text-red-900'
-    : 'border-emerald-100 bg-emerald-50 text-emerald-900';
+    : smtpError && magicLink
+      ? 'border-amber-200 bg-amber-50 text-amber-950'
+      : 'border-emerald-100 bg-emerald-50 text-emerald-900';
 
   return (
     <div className={`mt-4 rounded-lg px-3 py-3 text-sm ${tone}`}>
@@ -324,13 +336,23 @@ function SupplierOutreachMailBlock({
               {notes.includes('not configured') ? (
                 <>
                   Node/Python sehen das Secret nicht — prüfe Render Env{' '}
-                  <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_SECRET</code> und
-                  rufe <code className="rounded bg-white/60 px-1">GET /api/etl/diagnostics</code>{' '}
-                  auf.
+                  <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_SECRET</code>.
                 </>
               ) : (
-                'SMTP-Konfiguration auf dem Server prüfen.'
+                'Konfiguration auf dem Server prüfen.'
               )}
+            </dd>
+          </div>
+        ) : null}
+        {smtpError && magicLink ? (
+          <div>
+            <dt className="font-medium opacity-80">SMTP:</dt>
+            <dd className="mt-1 text-xs">
+              E-Mail-Versand fehlgeschlagen — Magic Link unten manuell teilen. Häufige Ursachen:
+              Port 465 braucht <code className="rounded bg-white/60 px-1">SMTP_USE_SSL=true</code>,
+              Gmail blockiert Cloud-Server (SendGrid/Brevo nutzen), oder{' '}
+              <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_ENABLED=false</code>{' '}
+              für Dry-Run ohne SMTP.
             </dd>
           </div>
         ) : null}

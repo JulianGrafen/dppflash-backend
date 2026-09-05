@@ -22,6 +22,7 @@ const PIPELINE_ENV_KEYS = [
   'SMTP_PASSWORD',
   'SMTP_FROM',
   'SMTP_USE_TLS',
+  'SMTP_USE_SSL',
   'SPHIER_API_ENABLED',
 ] as const;
 

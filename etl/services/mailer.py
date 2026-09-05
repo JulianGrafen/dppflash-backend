@@ -37,7 +37,7 @@ def _env_bool(key: str, default: bool = False) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _smtp_settings() -> dict[str, str | int] | None:
+def _smtp_settings() -> dict[str, str | int | bool] | None:
     host = os.environ.get("SMTP_HOST", "").strip()
     if not host:
         return None
@@ -55,13 +55,43 @@ def _smtp_settings() -> dict[str, str | int] | None:
     )
     if not from_addr:
         return None
+    use_ssl = _env_bool("SMTP_USE_SSL", default=port == 465)
+    use_tls = _env_bool("SMTP_USE_TLS", default=not use_ssl)
     return {
         "host": host,
         "port": port,
         "user": user,
         "password": password,
         "from_addr": from_addr,
+        "use_ssl": use_ssl,
+        "use_tls": use_tls,
     }
+
+
+def _send_via_smtp(msg: EmailMessage, smtp: dict[str, str | int | bool]) -> None:
+    host = str(smtp["host"])
+    port = int(smtp["port"])
+    user = str(smtp["user"])
+    password = str(smtp["password"])
+    use_ssl = bool(smtp.get("use_ssl"))
+    use_tls = bool(smtp.get("use_tls"))
+
+    if use_ssl:
+        with smtplib.SMTP_SSL(host, port, timeout=30) as server:
+            server.ehlo()
+            if user and password:
+                server.login(user, password)
+            server.send_message(msg)
+        return
+
+    with smtplib.SMTP(host, port, timeout=30) as server:
+        server.ehlo()
+        if use_tls:
+            server.starttls()
+            server.ehlo()
+        if user and password:
+            server.login(user, password)
+        server.send_message(msg)
 
 
 def build_supplier_gap_request_subject(product_identifier: str | None) -> str:
@@ -214,16 +244,7 @@ def send_supplier_gap_request_email(
     msg.add_alternative(html, subtype="html")
 
     try:
-        with smtplib.SMTP(str(smtp["host"]), int(smtp["port"]), timeout=30) as server:
-            server.ehlo()
-            if _env_bool("SMTP_USE_TLS", default=True):
-                server.starttls()
-                server.ehlo()
-            user = str(smtp["user"])
-            password = str(smtp["password"])
-            if user and password:
-                server.login(user, password)
-            server.send_message(msg)
+        _send_via_smtp(msg, smtp)
         logger.info("Supplier outreach e-mail sent to %s (id=%s)", recipient, message_id)
         return EmailSendResult(
             success=True,

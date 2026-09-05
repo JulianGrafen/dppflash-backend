@@ -219,11 +219,15 @@ def send_supplier_outreach(
             notes += f" Magic link: {mail_result.magic_link}"
     else:
         notes = (
-            f"Supplier outreach failed for {mail_result.recipient}: "
+            f"[SMTP failed] Supplier outreach for {mail_result.recipient}: "
             f"{mail_result.error or 'unknown error'}"
         )
+        if mail_result.magic_link:
+            notes += f" Magic link: {mail_result.magic_link}"
 
-    outreach_success = mail_result.success or (mock_success and len(filled_paths) > 0)
+    outreach_success = mail_result.success or mail_result.magic_link is not None or (
+        mock_success and len(filled_paths) > 0
+    )
 
     return EnrichmentAttemptResult(
         stage=EnrichmentStage.SUPPLIER_OUTREACH,

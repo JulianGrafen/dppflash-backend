@@ -29,10 +29,16 @@ services:
         value: "false"
       - key: SUPPLIER_OUTREACH_FROM
         sync: false
+      # IONOS Mail: smtp.ionos.de, Port 465 SSL/TLS (or 587 + STARTTLS).
+      # SUPPLIER_OUTREACH_FROM must use the SAME domain as SMTP_USER (IONOS policy).
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
-        value: "587"
+        value: "465"
+      - key: SMTP_USE_SSL
+        value: "true"
+      - key: SMTP_USE_TLS
+        value: "false"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASSWORD

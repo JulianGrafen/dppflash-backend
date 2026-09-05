@@ -17,14 +17,20 @@ from typing import Any
 from etl.graph.graph import graph, initial_state
 
 
-def _apply_runtime_env(payload: dict[str, Any]) -> None:
+def _apply_runtime_env(payload: dict[str, Any]) -> dict[str, bool]:
     """Apply server-side env forwarded from Next.js (Render runtime secrets)."""
     runtime = payload.get("_runtime_env")
-    if not isinstance(runtime, dict):
-        return
-    for key, value in runtime.items():
-        if isinstance(key, str) and isinstance(value, str) and value.strip():
-            os.environ[key] = value.strip()
+    applied = False
+    if isinstance(runtime, dict):
+        for key, value in runtime.items():
+            if isinstance(key, str) and isinstance(value, str) and value.strip():
+                os.environ[key] = value.strip()
+                applied = True
+    return {
+        "secret_in_environ": bool(os.environ.get("SUPPLIER_OUTREACH_SECRET", "").strip()),
+        "runtime_env_applied": applied,
+        "runtime_env_key_count": len(runtime) if isinstance(runtime, dict) else 0,
+    }
 
 
 def _to_jsonable(value: Any) -> Any:
@@ -48,7 +54,7 @@ def main() -> int:
         print(json.dumps({"error": f"Invalid JSON input: {exc}"}), file=sys.stderr)
         return 1
 
-    _apply_runtime_env(payload)
+    env_debug = _apply_runtime_env(payload)
     payload.pop("_runtime_env", None)
 
     raw_document = payload.get("raw_document") or {}
@@ -66,6 +72,9 @@ def main() -> int:
         )
         if sap_export:
             state["sap_export"] = sap_export
+        metadata = dict(state.get("metadata") or {})
+        metadata["_pipeline_env_debug"] = env_debug
+        state["metadata"] = metadata
         result = asyncio.run(graph.ainvoke(state, config={"recursion_limit": 50}))
         print(json.dumps(_to_jsonable(result), ensure_ascii=False))
         return 0

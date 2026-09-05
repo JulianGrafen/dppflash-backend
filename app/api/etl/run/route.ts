@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { buildPipelineEnvDiagnostics, buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
+
+/**
+ * GET /api/etl/diagnostics — safe runtime env checks (no secret values).
+ */
+export async function GET() {
+  const diagnostics = buildPipelineEnvDiagnostics();
+  return NextResponse.json(diagnostics);
+}
+
 /**
  * POST /api/etl/run
  *
@@ -48,6 +58,7 @@ export async function POST(request: NextRequest) {
     };
 
     const { runPipeline } = await import('@/app/lib/etl/runPipelineServer');
+    const runtimeEnv = buildPipelineRuntimeEnvRecord();
     const { stdout, stderr, exitCode } = await runPipeline(payload);
 
     if (exitCode !== 0) {
@@ -64,6 +75,13 @@ export async function POST(request: NextRequest) {
     }
 
     const result = JSON.parse(stdout);
+    const nodeDiagnostics = buildPipelineEnvDiagnostics();
+    if (result.metadata && typeof result.metadata === 'object') {
+      result.metadata._node_env_debug = {
+        ...nodeDiagnostics,
+        forwardedOutreachSecret: Boolean(runtimeEnv.SUPPLIER_OUTREACH_SECRET),
+      };
+    }
     return NextResponse.json({ result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unbekannter Fehler';

@@ -129,6 +129,7 @@ function DppResultPanel({ result }: { readonly result: PipelineResult }) {
             notes={resolveOutreachNotes(result)!}
             recipient={result.metadata?.outreach_recipient as string | undefined}
             enrichmentStage={result.enrichment_stage}
+            metadata={result.metadata}
           />
         ) : null}
 
@@ -280,10 +281,12 @@ function SupplierOutreachMailBlock({
   notes,
   recipient,
   enrichmentStage,
+  metadata,
 }: {
   readonly notes: string;
   readonly recipient?: string;
   readonly enrichmentStage: string;
+  readonly metadata?: Record<string, unknown>;
 }) {
   const { mode, magicLink, failed } = parseOutreachNotes(notes);
   const tone = failed
@@ -318,10 +321,23 @@ function SupplierOutreachMailBlock({
           <div>
             <dt className="font-medium opacity-80">Hinweis:</dt>
             <dd className="mt-1 text-xs">
-              Secret oder SMTP auf dem Server prüfen — ohne{' '}
-              <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_SECRET</code> wird kein
-              Magic Link erzeugt.
+              {notes.includes('not configured') ? (
+                <>
+                  Node/Python sehen das Secret nicht — prüfe Render Env{' '}
+                  <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_SECRET</code> und
+                  rufe <code className="rounded bg-white/60 px-1">GET /api/etl/diagnostics</code>{' '}
+                  auf.
+                </>
+              ) : (
+                'SMTP-Konfiguration auf dem Server prüfen.'
+              )}
             </dd>
+          </div>
+        ) : null}
+        {metadata?._node_env_debug || metadata?._pipeline_env_debug ? (
+          <div className="mt-2 rounded bg-white/50 px-2 py-1 font-mono text-[10px]">
+            Debug: {JSON.stringify(metadata._node_env_debug ?? null)} /{' '}
+            {JSON.stringify(metadata._pipeline_env_debug ?? null)}
           </div>
         ) : null}
       </dl>

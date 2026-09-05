@@ -1,8 +1,10 @@
+import process from 'node:process';
+
 /**
  * Runtime env for the Python LangGraph subprocess.
  *
- * Use dynamic `process.env[key]` lookups so Next.js does not inline undefined
- * values from the Docker build stage into the production bundle.
+ * Always read via `node:process` — bundled Next.js shims may not expose Render
+ * secrets through a spread of `process.env`.
  */
 const PIPELINE_ENV_KEYS = [
   'OPENAI_API_KEY',
@@ -44,16 +46,20 @@ export function buildPipelineRuntimeEnvRecord(): Record<string, string> {
 }
 
 export function buildPipelineSubprocessEnv(projectRoot: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, PYTHONPATH: projectRoot };
-  for (const key of PIPELINE_ENV_KEYS) {
-    const value = readPipelineRuntimeEnv(key);
-    if (value !== undefined) {
-      env[key] = value;
-    }
-  }
-  return env;
+  return Object.assign({}, process.env, { PYTHONPATH: projectRoot });
 }
 
 export function isSupplierOutreachSecretConfigured(): boolean {
   return readPipelineRuntimeEnv('SUPPLIER_OUTREACH_SECRET') !== undefined;
+}
+
+export function buildPipelineEnvDiagnostics(): {
+  readonly nodeHasOutreachSecret: boolean;
+  readonly forwardedKeys: readonly string[];
+} {
+  const runtime = buildPipelineRuntimeEnvRecord();
+  return {
+    nodeHasOutreachSecret: isSupplierOutreachSecretConfigured(),
+    forwardedKeys: Object.keys(runtime),
+  };
 }

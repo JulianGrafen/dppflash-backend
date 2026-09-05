@@ -1,12 +1,10 @@
+import process from 'node:process';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  buildPipelineRuntimeEnvRecord,
-  buildPipelineSubprocessEnv,
-} from '@/app/lib/etl/pipelineRuntimeEnv';
+import { buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
 
 const PIPELINE_TIMEOUT_MS = 180_000;
 
@@ -61,9 +59,11 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
   const cliScript = path.join(projectRoot, 'etl', 'run_pipeline_cli.py');
 
   return new Promise((resolve, reject) => {
+    // Omit `env` so the child inherits the full Render/container environment.
+    // Dockerfile sets PYTHONPATH=/app; custom env objects lose runtime secrets
+    // when Next.js webpack shims process.env at build time.
     const child = spawn(python, [cliScript], {
       cwd: projectRoot,
-      env: buildPipelineSubprocessEnv(projectRoot),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

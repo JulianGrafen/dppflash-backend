@@ -126,6 +126,24 @@ def test_send_supplier_gap_request_email_smtp_ssl_port_465(monkeypatch) -> None:
     mock_server.login.assert_called_once_with("user", "pass")
 
 
+def test_validate_smtp_sender_policy_rejects_domain_mismatch(monkeypatch) -> None:
+    from etl.services.mailer import validate_smtp_sender_policy
+
+    error = validate_smtp_sender_policy(
+        {
+            "host": "smtp.ionos.de",
+            "port": 465,
+            "user": "info@meinefirma.de",
+            "password": "x",
+            "from_addr": "dpp@other.com",
+            "use_ssl": True,
+            "use_tls": False,
+        }
+    )
+    assert error is not None
+    assert "same domain" in error
+
+
 def test_send_supplier_outreach_keeps_magic_link_when_smtp_fails(monkeypatch) -> None:
     monkeypatch.setenv("SUPPLIER_OUTREACH_ENABLED", "true")
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")

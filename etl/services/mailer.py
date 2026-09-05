@@ -7,10 +7,11 @@ from __future__ import annotations
 import logging
 import os
 import smtplib
+import ssl
 import uuid
 from dataclasses import dataclass
 from email.message import EmailMessage
-from typing import Literal
+from typing import Any, Literal
 
 from etl.graph.state import GapRecord
 
@@ -68,6 +69,61 @@ def _smtp_settings() -> dict[str, str | int | bool] | None:
     }
 
 
+def _ssl_context() -> ssl.SSLContext:
+    return ssl.create_default_context()
+
+
+def _email_domain(address: str) -> str | None:
+    parts = address.strip().lower().split("@", 1)
+    return parts[1] if len(parts) == 2 and parts[1] else None
+
+
+def describe_smtp_config() -> dict[str, Any]:
+    """Safe SMTP diagnostics (no secrets)."""
+    smtp = _smtp_settings()
+    outreach_enabled = _env_bool("SUPPLIER_OUTREACH_ENABLED", default=False)
+    if smtp is None:
+        return {
+            "outreach_enabled": outreach_enabled,
+            "smtp_configured": False,
+            "from_domain_matches_user": None,
+        }
+
+    from_addr = str(smtp["from_addr"])
+    user = str(smtp["user"])
+    from_domain = _email_domain(from_addr)
+    user_domain = _email_domain(user)
+    return {
+        "outreach_enabled": outreach_enabled,
+        "smtp_configured": True,
+        "host": str(smtp["host"]),
+        "port": int(smtp["port"]),
+        "use_ssl": bool(smtp.get("use_ssl")),
+        "use_tls": bool(smtp.get("use_tls")),
+        "from_address": from_addr,
+        "smtp_user": user,
+        "from_domain_matches_user": (
+            from_domain == user_domain if from_domain and user_domain else None
+        ),
+    }
+
+
+def validate_smtp_sender_policy(smtp: dict[str, str | int | bool]) -> str | None:
+    """
+    IONOS (and many providers) reject mail when From domain != login domain.
+    """
+    from_addr = str(smtp["from_addr"])
+    user = str(smtp["user"])
+    from_domain = _email_domain(from_addr)
+    user_domain = _email_domain(user)
+    if from_domain and user_domain and from_domain != user_domain:
+        return (
+            f"SUPPLIER_OUTREACH_FROM ({from_addr}) must use the same domain as "
+            f"SMTP_USER ({user}) — required by IONOS Mail."
+        )
+    return None
+
+
 def _send_via_smtp(msg: EmailMessage, smtp: dict[str, str | int | bool]) -> None:
     host = str(smtp["host"])
     port = int(smtp["port"])
@@ -75,9 +131,10 @@ def _send_via_smtp(msg: EmailMessage, smtp: dict[str, str | int | bool]) -> None
     password = str(smtp["password"])
     use_ssl = bool(smtp.get("use_ssl"))
     use_tls = bool(smtp.get("use_tls"))
+    context = _ssl_context()
 
     if use_ssl:
-        with smtplib.SMTP_SSL(host, port, timeout=30) as server:
+        with smtplib.SMTP_SSL(host, port, timeout=30, context=context) as server:
             server.ehlo()
             if user and password:
                 server.login(user, password)
@@ -87,7 +144,7 @@ def _send_via_smtp(msg: EmailMessage, smtp: dict[str, str | int | bool]) -> None
     with smtplib.SMTP(host, port, timeout=30) as server:
         server.ehlo()
         if use_tls:
-            server.starttls()
+            server.starttls(context=context)
             server.ehlo()
         if user and password:
             server.login(user, password)
@@ -235,6 +292,19 @@ def send_supplier_gap_request_email(
             magic_link=magic_link,
         )
 
+    policy_error = validate_smtp_sender_policy(smtp)
+    if policy_error:
+        logger.error("Supplier outreach SMTP policy error: %s", policy_error)
+        return EmailSendResult(
+            success=False,
+            recipient=recipient,
+            subject=subject,
+            mode="smtp",
+            message_id=message_id,
+            error=policy_error,
+            magic_link=magic_link,
+        )
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = str(smtp["from_addr"])
@@ -265,3 +335,64 @@ def send_supplier_gap_request_email(
             error=str(exc),
             magic_link=magic_link,
         )
+
+
+def send_smtp_test_email(to_address: str) -> dict[str, Any]:
+    """
+    Send a minimal test message — used by /api/supplier-outreach/test-smtp.
+    """
+    recipient = to_address.strip().lower()
+    if not recipient:
+        return {"success": False, "error": "Recipient is required."}
+
+    outreach_enabled = _env_bool("SUPPLIER_OUTREACH_ENABLED", default=False)
+    smtp = _smtp_settings()
+    config = describe_smtp_config()
+
+    if not outreach_enabled:
+        return {
+            "success": False,
+            "mode": "dry_run",
+            "error": "SUPPLIER_OUTREACH_ENABLED is not true — no mail is sent.",
+            "config": config,
+        }
+
+    if smtp is None:
+        return {
+            "success": False,
+            "error": "SMTP is not fully configured (host, user, password, from).",
+            "config": config,
+        }
+
+    policy_error = validate_smtp_sender_policy(smtp)
+    if policy_error:
+        return {"success": False, "error": policy_error, "config": config}
+
+    message_id = f"dpp-smtp-test-{uuid.uuid4().hex[:12]}"
+    msg = EmailMessage()
+    msg["Subject"] = "DPP-Flash SMTP Test"
+    msg["From"] = str(smtp["from_addr"])
+    msg["To"] = recipient
+    msg["Message-ID"] = f"<{message_id}@dpp-flash>"
+    msg.set_content(
+        "DPP-Flash SMTP test successful.\n\nIf you received this, outbound mail works."
+    )
+
+    try:
+        _send_via_smtp(msg, smtp)
+        return {
+            "success": True,
+            "mode": "smtp",
+            "recipient": recipient,
+            "message_id": message_id,
+            "config": config,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("SMTP test failed for %s", recipient)
+        return {
+            "success": False,
+            "mode": "smtp",
+            "recipient": recipient,
+            "error": str(exc),
+            "config": config,
+        }

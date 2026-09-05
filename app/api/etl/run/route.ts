@@ -1,13 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { buildPipelineEnvDiagnostics, buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
+import process from 'node:process';
+
+import {
+  buildPipelineEnvDiagnostics,
+  buildPipelineRuntimeEnvRecord,
+} from '@/app/lib/etl/pipelineRuntimeEnv';
+
+function readEnv(name: string): string | undefined {
+  const value = process.env[name];
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
 
 /**
  * GET /api/etl/diagnostics — safe runtime env checks (no secret values).
  */
 export async function GET() {
-  const diagnostics = buildPipelineEnvDiagnostics();
-  return NextResponse.json(diagnostics);
+  const fromAddr = readEnv('SUPPLIER_OUTREACH_FROM') ?? readEnv('SMTP_USER');
+  const smtpUser = readEnv('SMTP_USER');
+  const fromDomain = fromAddr?.split('@')[1]?.toLowerCase();
+  const userDomain = smtpUser?.split('@')[1]?.toLowerCase();
+
+  return NextResponse.json({
+    ...buildPipelineEnvDiagnostics(),
+    outreachEnabled: readEnv('SUPPLIER_OUTREACH_ENABLED') === 'true',
+    smtpConfigured: Boolean(readEnv('SMTP_HOST') && smtpUser && readEnv('SMTP_PASSWORD')),
+    smtpHost: readEnv('SMTP_HOST') ?? null,
+    smtpPort: readEnv('SMTP_PORT') ?? null,
+    smtpUseSsl: readEnv('SMTP_USE_SSL') ?? null,
+    smtpUseTls: readEnv('SMTP_USE_TLS') ?? null,
+    fromAddress: fromAddr ?? null,
+    fromDomainMatchesUser:
+      fromDomain && userDomain ? fromDomain === userDomain : null,
+  });
 }
 
 /**

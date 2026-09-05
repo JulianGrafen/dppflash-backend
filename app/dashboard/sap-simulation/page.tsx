@@ -240,8 +240,12 @@ function parseOutreachNotes(notes: string): {
   smtpError: boolean;
 } {
   const modeMatch = notes.match(/\[(SMTP|Dry-Run|SMTP failed)\]/);
-  const linkMatch = notes.match(/Magic link(?::|\s*\(copy manually\):)\s*(https?:\/\/\S+)/);
-  const smtpError = /\[SMTP failed\]|Connection unexpectedly closed|SMTP/i.test(notes);
+  const linkMatch = notes.match(/Magic link:\s*(https?:\/\/\S+)/);
+  const smtpError =
+    /\[SMTP failed\]|Connection unexpectedly closed|SMTP|must use the same domain/i.test(
+      notes,
+    );
+  const secretError = /not configured|SUPPLIER_OUTREACH_SECRET/i.test(notes);
   return {
     mode:
       modeMatch?.[1] === 'SMTP'
@@ -252,8 +256,8 @@ function parseOutreachNotes(notes: string): {
             ? 'SMTP failed'
             : null,
     magicLink: linkMatch?.[1] ?? null,
-    failed: /failed|fehlgeschlagen|not configured|skipped/i.test(notes) && !linkMatch,
-    smtpError,
+    failed: secretError && !linkMatch,
+    smtpError: smtpError || (/failed for .+@/i.test(notes) && !secretError),
   };
 }
 
@@ -344,15 +348,16 @@ function SupplierOutreachMailBlock({
             </dd>
           </div>
         ) : null}
-        {smtpError && magicLink ? (
+        {smtpError ? (
           <div>
             <dt className="font-medium opacity-80">SMTP:</dt>
             <dd className="mt-1 text-xs">
-              E-Mail-Versand fehlgeschlagen — Magic Link unten manuell teilen. Häufige Ursachen:
-              Port 465 braucht <code className="rounded bg-white/60 px-1">SMTP_USE_SSL=true</code>,
-              Gmail blockiert Cloud-Server (SendGrid/Brevo nutzen), oder{' '}
-              <code className="rounded bg-white/60 px-1">SUPPLIER_OUTREACH_ENABLED=false</code>{' '}
-              für Dry-Run ohne SMTP.
+              E-Mail-Versand fehlgeschlagen. Test:{' '}
+              <code className="rounded bg-white/60 px-1">
+                POST /api/supplier-outreach/test-smtp
+              </code>{' '}
+              mit Bearer Secret. IONOS: Port 465 + SSL, From-Domain = SMTP_USER-Domain.
+              {magicLink ? ' Magic Link unten manuell teilen.' : null}
             </dd>
           </div>
         ) : null}

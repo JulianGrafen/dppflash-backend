@@ -95,6 +95,7 @@ export default function InboundDashboardPage() {
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [validatingUpi, setValidatingUpi] = useState<string | null>(null);
   const [expandedGapsUpi, setExpandedGapsUpi] = useState<string | null>(null);
+  const [storageHint, setStorageHint] = useState<string | null>(null);
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -106,9 +107,11 @@ export default function InboundDashboardPage() {
         throw new Error(body.error ?? `HTTP ${response.status}`);
       }
       setRows(body.items ?? []);
+      setStorageHint(typeof body.hint === 'string' ? body.hint : null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Laden fehlgeschlagen');
       setRows([]);
+      setStorageHint(null);
     } finally {
       setLoading(false);
     }
@@ -188,7 +191,15 @@ export default function InboundDashboardPage() {
         : body.match_status === 'unmatched'
           ? ' (kein Match — manuell zuordnen)'
           : '';
-      setLastMessage(`${count} Datensatz${count === 1 ? '' : 'e'} importiert${matchInfo}.`);
+      const items = Array.isArray(body.items) ? body.items as Array<Record<string, unknown>> : [];
+      const scores = items
+        .map((item) => item.readiness_score_percent)
+        .filter((value): value is number => typeof value === 'number');
+      const scoreHint =
+        scores.length > 0
+          ? ` — ESPR-Score Ø ${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}%`
+          : '';
+      setLastMessage(`${count} Datensatz${count === 1 ? '' : 'e'} importiert${matchInfo}${scoreHint}.`);
       await loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload fehlgeschlagen');
@@ -308,6 +319,11 @@ export default function InboundDashboardPage() {
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {error}
+          </div>
+        )}
+        {storageHint && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {storageHint}
           </div>
         )}
 

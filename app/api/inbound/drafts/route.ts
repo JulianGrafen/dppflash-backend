@@ -13,6 +13,12 @@ function isPlaceholderSupabaseUrl(url: string | undefined): boolean {
   );
 }
 
+const DRAFTS_SELECT_FULL =
+  'id, tenant_id, upi, source, payload, is_draft, match_status, master_upi, matched_by, validation_status, readiness_score_percent, validation_report, gaps, validated_at, created_at, updated_at';
+
+const DRAFTS_SELECT_LEGACY =
+  'id, tenant_id, upi, source, payload, is_draft, match_status, master_upi, matched_by, created_at, updated_at';
+
 async function fetchDraftsFromEtl(tenantId: string) {
   const { ok, status, body } = await fetchEtl(
     `/api/v1/dpp/drafts?tenant_id=${encodeURIComponent(tenantId)}`,
@@ -25,6 +31,16 @@ async function fetchDraftsFromEtl(tenantId: string) {
     );
   }
   return body;
+}
+
+function isMissingValidationColumnError(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes('validation_status') ||
+    lowered.includes('readiness_score_percent') ||
+    lowered.includes('validation_report') ||
+    (lowered.includes('column') && lowered.includes('does not exist'))
+  );
 }
 
 export async function GET(request: Request) {
@@ -71,14 +87,25 @@ export async function GET(request: Request) {
     }
   }
 
-  const { data, error } = await supabase
+  let selectColumns = DRAFTS_SELECT_FULL;
+  let result = await supabase
     .from('product_passports')
-    .select(
-      'id, tenant_id, upi, source, payload, is_draft, match_status, master_upi, matched_by, validation_status, readiness_score_percent, validation_report, gaps, validated_at, created_at, updated_at',
-    )
+    .select(selectColumns)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .limit(200);
+
+  if (result.error && isMissingValidationColumnError(result.error.message ?? '')) {
+    selectColumns = DRAFTS_SELECT_LEGACY;
+    result = await supabase
+      .from('product_passports')
+      .select(selectColumns)
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+  }
+
+  const { data, error } = result;
 
   if (error) {
     const message = error.message ?? 'Supabase-Abfrage fehlgeschlagen';
@@ -104,10 +131,43 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  const items = data ?? [];
+  if (items.length > 0) {
+    return NextResponse.json({
+      tenant_id: tenantId,
+      count: items.length,
+      items,
+      storage: 'supabase',
+      hint:
+        selectColumns === DRAFTS_SELECT_LEGACY
+          ? 'Validation-Migration fehlt — führe supabase/migrations/20260908120000_product_passports_validation.sql aus.'
+          : undefined,
+    });
+  }
+
+  // Upload goes through ETL; if ETL uses in-memory repo, Supabase stays empty.
+  try {
+    const etlBody = await fetchDraftsFromEtl(tenantId);
+    const etlItems = Array.isArray(etlBody.items) ? etlBody.items : [];
+    if (etlItems.length > 0) {
+      return NextResponse.json({
+        tenant_id: tenantId,
+        count: etlItems.length,
+        items: etlItems,
+        storage: 'etl_memory',
+        hint:
+          'Daten liegen im ETL (In-Memory), nicht in Supabase. ' +
+          'Setze auf dppflash-etl: DPP_INBOUND_REPOSITORY=supabase + SUPABASE_SERVICE_ROLE_KEY.',
+      });
+    }
+  } catch {
+    // ETL unreachable — return empty Supabase result below.
+  }
+
   return NextResponse.json({
     tenant_id: tenantId,
-    count: data?.length ?? 0,
-    items: data ?? [],
+    count: 0,
+    items: [],
     storage: 'supabase',
   });
 }

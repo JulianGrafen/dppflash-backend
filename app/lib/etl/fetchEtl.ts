@@ -71,8 +71,9 @@ export function readEtlDiagnostics(): Record<string, unknown> {
     process.env.ETL_SERVICE_URL?.trim() || process.env.ETL_REMOTE_URL?.trim() || null;
   const ownUrl = process.env.RENDER_EXTERNAL_URL?.trim() || null;
   const pointsToSelf =
-    Boolean(configured && ownUrl) &&
-    configured!.replace(/\/$/, '') === ownUrl.replace(/\/$/, '');
+    configured !== null &&
+    ownUrl !== null &&
+    configured.replace(/\/$/, '') === ownUrl.replace(/\/$/, '');
 
   return {
     etl_service_url: configured,

@@ -1,0 +1,81 @@
+"""
+HTTP ETL service for serverless Next.js frontends.
+
+Deploy as separate Render web service (Dockerfile.etl). Set ETL_SERVICE_URL on the
+Next.js app to this service's public URL.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel
+
+from etl.pipeline_runner import run_pipeline_payload
+from etl.services.mailer import describe_smtp_config, send_smtp_test_email
+
+app = FastAPI(title="DPP-Flash ETL Service", version="0.1.0")
+
+
+class SmtpTestRequest(BaseModel):
+    to: str
+    _runtime_env: dict[str, str] | None = None
+
+
+def _authorize(authorization: str | None) -> None:
+    secret = os.environ.get("ETL_SERVICE_SECRET", "").strip()
+    if not secret:
+        return
+    expected = f"Bearer {secret}"
+    if authorization != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized.")
+
+
+@app.get("/health")
+async def health() -> dict[str, bool]:
+    return {"ok": True}
+
+
+@app.get("/diagnostics")
+async def diagnostics() -> dict[str, Any]:
+    from etl.services.env_loader import resolve_openai_api_key
+
+    return {
+        "ok": True,
+        "openai_configured": resolve_openai_api_key() is not None,
+        "smtp": describe_smtp_config(),
+        "supplier_outreach_secret": bool(
+            os.environ.get("SUPPLIER_OUTREACH_SECRET", "").strip()
+        ),
+    }
+
+
+@app.post("/run")
+async def run_pipeline(
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _authorize(authorization)
+    payload = await request.json()
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="JSON object required.")
+    try:
+        result = await run_pipeline_payload(payload)
+        return {"result": result}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/test-smtp")
+async def test_smtp(
+    body: SmtpTestRequest,
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    _authorize(authorization)
+    if body._runtime_env:
+        for key, value in body._runtime_env.items():
+            if value.strip():
+                os.environ[key] = value.strip()
+    return send_smtp_test_email(body.to)

@@ -17,6 +17,11 @@ services:
         value: production
       - key: ETL_PYTHON
         value: /app/.venv/bin/python
+      # Required when Next.js runs serverless (/var/task). Point to dppflash-etl service URL.
+      - key: ETL_SERVICE_URL
+        sync: false
+      - key: ETL_SERVICE_SECRET
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: NEXT_PUBLIC_DPP_URL
@@ -33,6 +38,38 @@ services:
         sync: false
       # IONOS Mail: smtp.ionos.de, Port 465 SSL/TLS (or 587 + STARTTLS).
       # SUPPLIER_OUTREACH_FROM must use the SAME domain as SMTP_USER (IONOS policy).
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USE_SSL
+        value: "true"
+      - key: SMTP_USE_TLS
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+
+  - type: web
+    name: dppflash-etl
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./Dockerfile.etl
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ETL_SERVICE_SECRET
+        sync: false
+      - key: SUPPLIER_OUTREACH_SECRET
+        sync: false
+      - key: SUPPLIER_OUTREACH_ENABLED
+        value: "false"
+      - key: SUPPLIER_OUTREACH_FROM
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

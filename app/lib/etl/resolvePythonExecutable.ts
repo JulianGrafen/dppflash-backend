@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { isServerlessRuntime } from '@/app/lib/etl/runPipelineRemote';
+
 /** Render/Docker production layout (see Dockerfile runner stage). */
 export const DOCKER_ETL_ROOT = '/app';
 export const DOCKER_ETL_PYTHON = '/app/.venv/bin/python';
@@ -113,12 +115,15 @@ export function resolvePythonExecutable(projectRoot: string): string {
 export function describePythonResolution(): {
   readonly nodeEnv: string | undefined;
   readonly etlPythonEnv: string | undefined;
+  readonly cwd: string;
+  readonly serverless: boolean;
   readonly projectRoot: string;
   readonly resolvedPython: string | null;
   readonly pythonExists: boolean;
   readonly etlCliExists: boolean;
   readonly error: string | null;
 } {
+  const serverless = isServerlessRuntime();
   const projectRoot = getEtlProjectRoot();
   const etlCli = path.join(projectRoot, 'etl', 'run_pipeline_cli.py');
   let resolvedPython: string | null = null;
@@ -133,6 +138,8 @@ export function describePythonResolution(): {
   return {
     nodeEnv: readEnv('NODE_ENV'),
     etlPythonEnv: readEnv('ETL_PYTHON'),
+    cwd: process.cwd(),
+    serverless,
     projectRoot,
     resolvedPython,
     pythonExists: resolvedPython ? existsSync(resolvedPython) : false,

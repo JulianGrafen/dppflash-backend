@@ -4,6 +4,12 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 import { buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
+import {
+  describeEtlTransport,
+  isServerlessRuntime,
+  readEtlServiceUrl,
+  runPipelineRemote,
+} from '@/app/lib/etl/runPipelineRemote';
 import { getEtlProjectRoot, resolvePythonExecutable } from '@/app/lib/etl/resolvePythonExecutable';
 
 const PIPELINE_TIMEOUT_MS = 180_000;
@@ -32,7 +38,7 @@ function formatPipelineError(stderr: string, exitCode: number, python: string): 
   return `Pipeline failed (exit ${exitCode}).`;
 }
 
-export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+function runPipelineLocal(payload: unknown): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const projectRoot = getEtlProjectRoot();
   const python = resolvePythonExecutable(projectRoot);
   const cliScript = path.join(projectRoot, 'etl', 'run_pipeline_cli.py');
@@ -44,9 +50,6 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
   }
 
   return new Promise((resolve, reject) => {
-    // Omit `env` so the child inherits the full Render/container environment.
-    // Dockerfile sets PYTHONPATH=/app; custom env objects lose runtime secrets
-    // when Next.js webpack shims process.env at build time.
     const child = spawn(python, [cliScript], {
       cwd: projectRoot,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -103,3 +106,24 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
     child.stdin.end();
   });
 }
+
+export async function runPipeline(
+  payload: unknown,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const remoteUrl = readEtlServiceUrl();
+  const serverless = isServerlessRuntime();
+
+  if (remoteUrl || serverless) {
+    if (!remoteUrl) {
+      throw new Error(
+        `Next.js läuft serverless (cwd=${process.cwd()}) ohne Python. ` +
+          'Deploye den ETL-Service (Dockerfile.etl auf Render) und setze ETL_SERVICE_URL + ETL_SERVICE_SECRET.',
+      );
+    }
+    return runPipelineRemote(payload);
+  }
+
+  return runPipelineLocal(payload);
+}
+
+export { describeEtlTransport };

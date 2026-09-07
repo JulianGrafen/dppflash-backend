@@ -78,7 +78,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile.etl
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /api/v1/health
     buildFilter:
       paths:
         - etl/**

@@ -44,6 +44,7 @@ def _authorize(authorization: str | None) -> None:
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health() -> dict[str, bool]:
     return {"ok": True}
 

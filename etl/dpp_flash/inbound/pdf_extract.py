@@ -12,6 +12,7 @@ from etl.dpp_flash.inbound.fusion_service import try_auto_match_and_fuse
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.product_matcher import MatchReason
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
+from etl.dpp_flash.inbound.validation_service import persist_with_validation
 from etl.graph.nodes.extractor import _build_extractor
 from etl.services.dpp_extractor import LLMExtractionError, PDFReadError
 
@@ -30,6 +31,8 @@ class PdfExtractResponse(BaseModel):
     match_status: Literal["enriched", "unmatched"]
     matched_master_upi: str | None = None
     matched_by: MatchReason | None = None
+    readiness_score_percent: float | None = None
+    gap_count: int | None = None
 
 
 @router.post("/pdf", response_model=PdfExtractResponse, status_code=status.HTTP_201_CREATED)
@@ -68,6 +71,9 @@ async def extract_pdf(
     matched_master_upi: str | None = None
     matched_by: MatchReason | None = None
 
+    readiness_score_percent: float | None = None
+    gap_count: int | None = None
+
     if persist:
         existing = repository.list_dpp_drafts(tenant_id=tenant_id, limit=500)
         row_to_store, reason, master_upi = try_auto_match_and_fuse(
@@ -76,7 +82,14 @@ async def extract_pdf(
             existing,
             raw_extraction=extraction_json,
         )
-        stored = repository.upsert_row(row_to_store)
+        stored, validation = persist_with_validation(
+            repository,
+            row_to_store,
+            ProductPassportDraft(**(row_to_store.get("payload") or {})),
+            raw_extraction=extraction_json,
+        )
+        readiness_score_percent = validation.readiness_score_percent
+        gap_count = validation.gap_count
         if master_upi and reason != "none":
             match_status = "enriched"
             matched_master_upi = master_upi
@@ -92,4 +105,6 @@ async def extract_pdf(
         match_status=match_status,
         matched_master_upi=matched_master_upi,
         matched_by=matched_by,
+        readiness_score_percent=readiness_score_percent,
+        gap_count=gap_count,
     )

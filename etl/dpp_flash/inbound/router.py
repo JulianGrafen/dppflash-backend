@@ -12,8 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ValidationError
 
 from etl.dpp_flash.inbound.fusion import deep_merge_dpp
+from etl.dpp_flash.inbound.fusion_service import build_master_row
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
+from etl.dpp_flash.inbound.validation_service import persist_with_validation
 
 router = APIRouter(prefix="/api/v1/dpp", tags=["dpp-ingestion"])
 
@@ -79,9 +81,10 @@ async def ingest_dpp(
     except ValidationError as exc:  # defensive — fusion should preserve validity
         raise _validation_http_error("fused_result", exc) from exc
 
-    repository.save_dpp_draft(
+    persist_with_validation(
+        repository,
+        build_master_row(merged_dpp, body.tenant_id, source="enterprise_ingest"),
         merged_dpp,
-        tenant_id=body.tenant_id,
-        source="enterprise_ingest",
+        raw_extraction=body.sds_extract or None,
     )
     return DppIngestResponse(dpp=merged_dpp, tenant_id=body.tenant_id)

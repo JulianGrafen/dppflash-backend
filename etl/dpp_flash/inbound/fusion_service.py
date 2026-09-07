@@ -34,6 +34,7 @@ def fuse_enrichment_into_master(
         "match_status": "enriched",
         "master_upi": None,
         "matched_by": matched_by if matched_by != "none" else None,
+        "validation_status": "pending",
     }
 
 
@@ -54,6 +55,7 @@ def build_unmatched_enrichment_row(
         "match_status": "unmatched",
         "master_upi": None,
         "matched_by": None,
+        "validation_status": "pending",
     }
 
 
@@ -74,6 +76,7 @@ def build_master_row(
         "match_status": "master",
         "master_upi": None,
         "matched_by": None,
+        "validation_status": "pending",
     }
 
 

@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from etl.dpp_flash.inbound.fusion_service import fuse_enrichment_into_master
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
+from etl.dpp_flash.inbound.validation_service import persist_with_validation
 
 router = APIRouter(prefix="/api/v1/dpp", tags=["dpp-matching"])
 
@@ -53,7 +54,13 @@ async def manual_match_products(
         matched_by="manual",
         raw_extraction=enrichment_row.get("raw_extraction"),
     )
-    stored = repository.upsert_row(fused_row)
+    merged_draft = ProductPassportDraft(**(fused_row.get("payload") or {}))
+    stored, _validation = persist_with_validation(
+        repository,
+        fused_row,
+        merged_draft,
+        raw_extraction=fused_row.get("raw_extraction"),
+    )
     repository.delete_draft(body.tenant_id, body.enrichment_upi)
 
     return ManualMatchResponse(

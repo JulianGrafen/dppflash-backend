@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from etl.dpp_flash.inbound.fusion_service import build_master_row
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
+from etl.dpp_flash.inbound.validation_service import persist_with_validation
 
 router = APIRouter(prefix="/api/v1/kmu", tags=["kmu-ingestion"])
 
@@ -255,13 +256,16 @@ async def upload_erp_export(
             )
             continue
         draft_json = draft.model_dump(mode="json")
-        drafts.append(draft_json)
         if persist:
-            stored.append(
-                repository.upsert_row(
-                    build_master_row(draft, tenant_id, source="kmu_excel"),
-                )
+            stored_row, validation = persist_with_validation(
+                repository,
+                build_master_row(draft, tenant_id, source="kmu_excel"),
+                draft,
             )
+            draft_json["readiness_score_percent"] = validation.readiness_score_percent
+            draft_json["gap_count"] = validation.gap_count
+            stored.append(stored_row)
+        drafts.append(draft_json)
 
     if row_errors:
         raise HTTPException(

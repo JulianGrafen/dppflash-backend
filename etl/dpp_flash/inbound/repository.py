@@ -78,6 +78,7 @@ class InMemoryDppDraftRepository:
                 "match_status": match_status,
                 "master_upi": master_upi,
                 "matched_by": matched_by,
+                "validation_status": "pending",
             }
         )
 
@@ -140,6 +141,7 @@ class SupabaseDppDraftRepository:
                 "match_status": match_status,
                 "master_upi": master_upi,
                 "matched_by": matched_by,
+                "validation_status": "pending",
             }
         )
 

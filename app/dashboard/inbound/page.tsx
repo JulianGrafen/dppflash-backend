@@ -1,11 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FileSpreadsheet, FileText, Loader2, RefreshCw, Upload } from 'lucide-react';
 
 const CARD_CLASS =
   'overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]';
+
+type GapRecord = {
+  field_path: string;
+  reason: string;
+  severity?: string;
+};
 
 type DraftRow = {
   id: string;
@@ -17,6 +23,10 @@ type DraftRow = {
   match_status?: string;
   master_upi?: string | null;
   matched_by?: string | null;
+  validation_status?: 'pending' | 'valid' | 'invalid' | null;
+  readiness_score_percent?: number | null;
+  gaps?: GapRecord[] | null;
+  validated_at?: string | null;
 };
 
 const MATCH_LABELS: Record<string, string> = {
@@ -30,6 +40,26 @@ const SOURCE_LABELS: Record<string, string> = {
   pdf_extract: 'PDF',
   enterprise_ingest: 'ERP JSON',
 };
+
+function scoreColor(score: number | null | undefined, status?: string | null): string {
+  if (status === 'invalid' || (score != null && score < 40)) {
+    return 'text-red-700 bg-red-50';
+  }
+  if (score != null && score >= 80) {
+    return 'text-emerald-700 bg-emerald-50';
+  }
+  if (score != null && score >= 40) {
+    return 'text-amber-700 bg-amber-50';
+  }
+  return 'text-slate-500 bg-slate-100';
+}
+
+function validationLabel(status?: string | null): string {
+  if (status === 'valid') return 'Gültig';
+  if (status === 'invalid') return 'Ungültig';
+  if (status === 'pending') return 'Ausstehend';
+  return '—';
+}
 
 function formatUploadError(body: Record<string, unknown>): string {
   const detail = body.detail;
@@ -63,6 +93,8 @@ export default function InboundDashboardPage() {
   const [excelUploading, setExcelUploading] = useState(false);
   const [pdfUploading, setPdfUploading] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [validatingUpi, setValidatingUpi] = useState<string | null>(null);
+  const [expandedGapsUpi, setExpandedGapsUpi] = useState<string | null>(null);
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -85,6 +117,30 @@ export default function InboundDashboardPage() {
   useEffect(() => {
     void loadDrafts();
   }, [loadDrafts]);
+
+  async function revalidate(upi: string) {
+    setValidatingUpi(upi);
+    setError(null);
+    try {
+      const response = await fetch('/api/inbound/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId, upi }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.detail ?? body.error ?? `HTTP ${response.status}`);
+      }
+      setLastMessage(
+        `Validierung ${upi}: ${body.readiness_score_percent?.toFixed?.(1) ?? body.readiness_score_percent}% — ${body.gap_count} Lücken.`,
+      );
+      await loadDrafts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Validierung fehlgeschlagen');
+    } finally {
+      setValidatingUpi(null);
+    }
+  }
 
   async function manualMatch(enrichmentUpi: string, masterUpi: string) {
     setError(null);
@@ -275,6 +331,8 @@ export default function InboundDashboardPage() {
                   <th className="px-5 py-3">UPI</th>
                   <th className="px-5 py-3">Quelle</th>
                   <th className="px-5 py-3">Match</th>
+                  <th className="px-5 py-3">Score</th>
+                  <th className="px-5 py-3">Validation</th>
                   <th className="px-5 py-3">GTIN</th>
                   <th className="px-5 py-3">Gewicht</th>
                   <th className="px-5 py-3">Aktion</th>
@@ -284,8 +342,12 @@ export default function InboundDashboardPage() {
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => {
                   const payload = row.payload ?? {};
+                  const score = row.readiness_score_percent;
+                  const gaps = Array.isArray(row.gaps) ? row.gaps : [];
+                  const showGaps = expandedGapsUpi === row.upi && gaps.length > 0;
                   return (
-                    <tr key={row.id} className="hover:bg-slate-50/80">
+                    <Fragment key={row.id}>
+                    <tr className="hover:bg-slate-50/80">
                       <td className="px-5 py-3 font-medium text-[#0c1929]">{row.upi}</td>
                       <td className="px-5 py-3">
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
@@ -306,32 +368,87 @@ export default function InboundDashboardPage() {
                           {row.matched_by ? ` (${row.matched_by})` : ''}
                         </span>
                       </td>
+                      <td className="px-5 py-3">
+                        <button
+                          type="button"
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${scoreColor(score, row.validation_status)}`}
+                          onClick={() => {
+                            if (gaps.length > 0) {
+                              setExpandedGapsUpi(showGaps ? null : row.upi);
+                            }
+                          }}
+                          title={gaps.length > 0 ? 'Lücken anzeigen' : undefined}
+                        >
+                          {score != null ? `${Number(score).toFixed(1)}%` : '—'}
+                          {gaps.length > 0 ? ` (${gaps.length})` : ''}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            row.validation_status === 'valid'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : row.validation_status === 'invalid'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {validationLabel(row.validation_status)}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.gtin ?? '—')}</td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.weight ?? '—')}</td>
                       <td className="px-5 py-3">
-                        {row.match_status === 'unmatched' && masterUpis.length > 0 ? (
-                          <select
-                            className="rounded border border-slate-200 px-2 py-1 text-xs"
-                            defaultValue=""
-                            onChange={(e) => {
-                              const masterUpi = e.target.value;
-                              if (masterUpi) void manualMatch(row.upi, masterUpi);
-                              e.target.value = '';
-                            }}
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            disabled={validatingUpi === row.upi}
+                            onClick={() => void revalidate(row.upi)}
+                            className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-50"
                           >
-                            <option value="">Produkt wählen…</option>
-                            {masterUpis.map((upi) => (
-                              <option key={upi} value={upi}>{upi}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
+                            {validatingUpi === row.upi ? '…' : 'Validieren'}
+                          </button>
+                          {row.match_status === 'unmatched' && masterUpis.length > 0 ? (
+                            <select
+                              className="rounded border border-slate-200 px-2 py-1 text-xs"
+                              defaultValue=""
+                              onChange={(e) => {
+                                const masterUpi = e.target.value;
+                                if (masterUpi) void manualMatch(row.upi, masterUpi);
+                                e.target.value = '';
+                              }}
+                            >
+                              <option value="">Produkt wählen…</option>
+                              {masterUpis.map((upi) => (
+                                <option key={upi} value={upi}>{upi}</option>
+                              ))}
+                            </select>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-500">
                         {new Date(row.created_at).toLocaleString('de-DE')}
                       </td>
                     </tr>
+                    {showGaps ? (
+                      <tr key={`${row.id}-gaps`} className="bg-slate-50/60">
+                        <td colSpan={9} className="px-5 py-3">
+                          <ul className="space-y-1 text-xs text-slate-600">
+                            {gaps.slice(0, 5).map((gap) => (
+                              <li key={gap.field_path}>
+                                <span className="font-mono text-slate-800">{gap.field_path}</span>
+                                {' — '}
+                                {gap.reason}
+                              </li>
+                            ))}
+                            {gaps.length > 5 ? (
+                              <li className="text-slate-400">… und {gaps.length - 5} weitere</li>
+                            ) : null}
+                          </ul>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>

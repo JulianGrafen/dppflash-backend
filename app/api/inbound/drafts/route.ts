@@ -73,7 +73,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from('product_passports')
-    .select('id, tenant_id, upi, source, payload, is_draft, match_status, master_upi, matched_by, created_at, updated_at')
+    .select(
+      'id, tenant_id, upi, source, payload, is_draft, match_status, master_upi, matched_by, validation_status, readiness_score_percent, validation_report, gaps, validated_at, created_at, updated_at',
+    )
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .limit(200);

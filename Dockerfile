@@ -24,6 +24,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV ETL_PYTHON=/app/.venv/bin/python
 ENV PYTHONPATH=/app
+ENV PATH=/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV HOSTNAME=0.0.0.0
 
 RUN apt-get update \

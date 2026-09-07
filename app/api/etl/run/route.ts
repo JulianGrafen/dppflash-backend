@@ -6,6 +6,7 @@ import {
   buildPipelineEnvDiagnostics,
   buildPipelineRuntimeEnvRecord,
 } from '@/app/lib/etl/pipelineRuntimeEnv';
+import { describePythonResolution } from '@/app/lib/etl/resolvePythonExecutable';
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name];
@@ -25,6 +26,7 @@ export async function GET() {
 
   return NextResponse.json({
     ...buildPipelineEnvDiagnostics(),
+    python: describePythonResolution(),
     outreachEnabled: readEnv('SUPPLIER_OUTREACH_ENABLED') === 'true',
     smtpConfigured: Boolean(readEnv('SMTP_HOST') && smtpUser && readEnv('SMTP_PASSWORD')),
     smtpHost: readEnv('SMTP_HOST') ?? null,

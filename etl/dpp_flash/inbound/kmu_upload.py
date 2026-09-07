@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import re
 from typing import Any
 
 import pandas as pd
@@ -15,16 +16,168 @@ from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_r
 
 router = APIRouter(prefix="/api/v1/kmu", tags=["kmu-ingestion"])
 
-KMU_COLUMN_MAPPING: dict[str, str] = {
-    "Artikelnummer": "upi",
-    "GTIN": "gtin",
-    "Gewicht (kg)": "weight",
-    "Herstelleradresse": "manufacturer_address",
-    "Entsorgungshinweise": "disposal_instructions",
+# Canonical field → accepted header labels (German + English ERP/SAP/retail exports).
+KMU_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "upi": (
+        # German — ERP / SAP / DATEV
+        "Artikelnummer",
+        "Artikel-Nr",
+        "Art.-Nr.",
+        "Art.-Nr",
+        "Artikel Nr",
+        "Artikel-Nr.",
+        "Artikel Nummer",
+        "Artikelnr",
+        "Artikelnr.",
+        "Artnr",
+        "Artnr.",
+        "Art-Nr",
+        "Art Nr",
+        "Materialnummer",
+        "Material-Nr",
+        "Material-Nr.",
+        "Material Nr",
+        "Materialnummer SAP",
+        "MATNR",
+        "Mat.-Nr.",
+        "Warennummer",
+        "Produktnummer",
+        "Produkt-Nr",
+        "Produkt-Nr.",
+        "Produkt Nr",
+        "Produktcode",
+        "Produkt-Code",
+        "Produkt ID",
+        "Produkt-ID",
+        "Teilenummer",
+        "Teile-Nr",
+        "Referenznummer",
+        "Ref.-Nr.",
+        "Ref Nr",
+        "Interne Nummer",
+        "Interne Artikelnummer",
+        "Bestellnummer",
+        "Bestell-Nr",
+        "Katalognummer",
+        "Katalog-Nr",
+        "Lieferanten-Artikelnummer",
+        "Lieferantenartikelnummer",
+        "Hersteller-Artikelnummer",
+        "Herstellerartikelnummer",
+        "Modellnummer",
+        "Modell-Nr",
+        "Variante",
+        "Varianten-SKU",
+        "Sachnummer",
+        "Identnummer",
+        "Identifikationsnummer",
+        "Eindeutige Produktkennung",
+        # English — ERP / PIM / e-commerce
+        "SKU",
+        "UPI",
+        "Product ID",
+        "Product-ID",
+        "Product Id",
+        "Product Code",
+        "Product Number",
+        "Product No",
+        "Product No.",
+        "Item Number",
+        "Item No",
+        "Item No.",
+        "Item ID",
+        "Item-ID",
+        "Item Code",
+        "Article Number",
+        "Article No",
+        "Article No.",
+        "Article Code",
+        "Article ID",
+        "Material Number",
+        "Material No",
+        "Material ID",
+        "Material Code",
+        "Part Number",
+        "Part No",
+        "Part No.",
+        "Catalog Number",
+        "Catalog No",
+        "Catalog No.",
+        "Internal SKU",
+        "Internal Product Code",
+        "Supplier Part Number",
+        "Manufacturer Part Number",
+        "MPN",
+        "Model Number",
+        "Model No",
+        "Variant SKU",
+        "Unique Product Identifier",
+        "Unique Product ID",
+    ),
+    "gtin": ("GTIN", "EAN", "EAN-13", "EAN13", "Barcode"),
+    "weight": ("Gewicht (kg)", "Gewicht", "Weight (kg)", "Weight", "Masse (kg)", "Masse"),
+    "manufacturer_address": (
+        "Herstelleradresse",
+        "Hersteller",
+        "Manufacturer Address",
+        "Manufacturer",
+        "Adresse",
+    ),
+    "disposal_instructions": (
+        "Entsorgungshinweise",
+        "Entsorgung",
+        "Disposal Instructions",
+        "Disposal",
+    ),
 }
 
 _CSV_SUFFIXES = (".csv",)
 _EXCEL_SUFFIXES = (".xlsx", ".xls")
+
+
+def _normalize_header(value: object) -> str:
+    """Case-insensitive, whitespace-collapsed header key for alias lookup."""
+    text = str(value).strip()
+    text = re.sub(r"\s+", " ", text)
+    return text.casefold()
+
+
+def _compact_header(value: object) -> str:
+    """Punctuation-insensitive key — matches Art.-Nr. ≈ Art Nr ≈ artnr."""
+    return re.sub(r"[\s.\-_/():#,]+", "", _normalize_header(value))
+
+
+def _header_keys(value: object) -> tuple[str, str]:
+    return _normalize_header(value), _compact_header(value)
+
+
+def _build_header_lookup() -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for field, labels in KMU_COLUMN_ALIASES.items():
+        for label in labels:
+            for key in _header_keys(label):
+                lookup[key] = field
+    return lookup
+
+
+_HEADER_LOOKUP = _build_header_lookup()
+
+
+def _resolve_canonical_field(column: object) -> str | None:
+    for key in _header_keys(column):
+        if key in _HEADER_LOOKUP:
+            return _HEADER_LOOKUP[key]
+    return None
+
+
+def _canonical_column_names(frame: pd.DataFrame) -> dict[str, str]:
+    """Map original DataFrame columns to canonical inbound field names."""
+    mapping: dict[str, str] = {}
+    for column in frame.columns:
+        canonical = _resolve_canonical_field(column)
+        if canonical and canonical not in mapping.values():
+            mapping[str(column)] = canonical
+    return mapping
 
 
 def _read_dataframe(filename: str, content: bytes) -> pd.DataFrame:
@@ -32,7 +185,10 @@ def _read_dataframe(filename: str, content: bytes) -> pd.DataFrame:
     lowered = filename.lower()
     try:
         if lowered.endswith(_CSV_SUFFIXES):
-            return pd.read_csv(buffer, dtype=str)
+            sample = content[:4096].decode("utf-8-sig", errors="replace")
+            separator = ";" if sample.count(";") > sample.count(",") else ","
+            buffer.seek(0)
+            return pd.read_csv(buffer, dtype=str, sep=separator)
         if lowered.endswith(_EXCEL_SUFFIXES):
             return pd.read_excel(buffer, dtype=str)
     except Exception as exc:  # pragma: no cover
@@ -47,16 +203,23 @@ def _read_dataframe(filename: str, content: bytes) -> pd.DataFrame:
 
 
 def _normalize_rows(frame: pd.DataFrame) -> list[dict[str, Any]]:
-    known = [column for column in frame.columns if column in KMU_COLUMN_MAPPING]
-    if not known:
+    column_map = _canonical_column_names(frame)
+    if "upi" not in column_map.values():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 "message": "No known columns found in upload.",
-                "expected_columns": sorted(KMU_COLUMN_MAPPING),
+                "hint": (
+                    "At least one product-id column is required "
+                    "(e.g. Artikelnummer, SKU, Materialnummer, Product ID, MATNR)."
+                ),
+                "found_columns": [str(column) for column in frame.columns],
+                "accepted_columns": KMU_COLUMN_ALIASES,
             },
         )
-    normalized = frame[known].rename(columns=KMU_COLUMN_MAPPING)
+
+    source_columns = list(column_map.keys())
+    normalized = frame[source_columns].rename(columns=column_map)
     normalized = normalized.astype(object).where(pd.notna(normalized), None)
     return normalized.to_dict(orient="records")
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 
 from etl.http_service import app
@@ -88,7 +89,60 @@ def test_unknown_columns_yield_400() -> None:
     response = _upload("export.csv", _csv_bytes(rows))
 
     assert response.status_code == 400
-    assert "expected_columns" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert "accepted_columns" in detail
+    assert "found_columns" in detail
+
+
+def test_sku_alias_maps_to_upi() -> None:
+    rows = [
+        {
+            "SKU": "KMU-ALIAS-1",
+            "GTIN": "4006381333931",
+            "Weight": "2.0",
+        },
+    ]
+
+    response = _upload("export.csv", _csv_bytes(rows))
+
+    assert response.status_code == 201
+    assert response.json()["items"][0]["upi"] == "KMU-ALIAS-1"
+
+
+def test_german_csv_semicolon_separator() -> None:
+    content = (
+        "Artikelnummer;GTIN;Gewicht (kg)\n"
+        "KMU-DE-1;4006381333931;5.0\n"
+    ).encode()
+
+    response = _upload("export.csv", content)
+
+    assert response.status_code == 201
+    assert response.json()["items"][0]["upi"] == "KMU-DE-1"
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "SKU",
+        "Produkt ID",
+        "Produkt-ID",
+        "Art.-Nr.",
+        "MATNR",
+        "Product ID",
+        "Material-Nr.",
+        "Manufacturer Part Number",
+        "Interne Artikelnummer",
+        "Unique Product Identifier",
+    ],
+)
+def test_upi_aliases_accept_common_erp_headers(header: str) -> None:
+    rows = [{header: "KMU-ALIAS-X", "GTIN": "4006381333931"}]
+
+    response = _upload("export.csv", _csv_bytes(rows))
+
+    assert response.status_code == 201
+    assert response.json()["items"][0]["upi"] == "KMU-ALIAS-X"
 
 
 def test_invalid_row_reports_excel_row_number() -> None:
@@ -106,7 +160,7 @@ def test_invalid_row_reports_excel_row_number() -> None:
 
 
 def test_missing_upi_row_rejected() -> None:
-    rows = [{"GTIN": "4006381333931", "Gewicht (kg)": "1.0"}]
+    rows = [{"Artikelnummer": "", "GTIN": "4006381333931", "Gewicht (kg)": "1.0"}]
 
     response = _upload("export.csv", _csv_bytes(rows))
 

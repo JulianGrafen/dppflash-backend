@@ -175,7 +175,7 @@ export default function InboundDashboardPage() {
               <h2 className="font-semibold">KMU Excel / CSV</h2>
             </div>
             <p className="mb-4 text-xs text-slate-500">
-              Spalten: Artikelnummer, GTIN, Gewicht (kg), Herstelleradresse, Entsorgungshinweise
+              Produkt-ID-Spalte: SKU, Produkt ID, Artikelnummer, MATNR, Material-Nr., Product ID, …
             </p>
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-sm text-slate-600 hover:border-sky-300 hover:bg-sky-50/50">
               {excelUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}

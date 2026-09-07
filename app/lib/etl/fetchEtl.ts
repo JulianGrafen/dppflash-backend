@@ -9,11 +9,25 @@ export type EtlFetchResult = {
 };
 
 function isNextDeploymentMisroute(responseText: string): boolean {
+  const lowered = responseText.toLowerCase();
   return (
-    responseText.includes('Failed to find Server Action') ||
+    lowered.includes('failed to find server action') ||
+    lowered.includes('server action not found') ||
     responseText.includes('__NEXT_DATA__') ||
     responseText.includes('<!DOCTYPE html')
   );
+}
+
+export function assertFastApiEtlService(body: Record<string, unknown>, baseUrl: string): void {
+  if (body.service === 'dppflash-backend') {
+    throw new Error(
+      `${baseUrl} läuft als Next.js (Dockerfile), nicht als Python-ETL. ` +
+        'Render → Service dppflash-etl → Settings → Dockerfile Path: Dockerfile.etl → Manual Deploy.',
+    );
+  }
+  if (body.service === 'dppflash-etl') {
+    return;
+  }
 }
 
 export async function fetchEtl(
@@ -55,8 +69,8 @@ export async function fetchEtl(
 
   if (isNextDeploymentMisroute(responseText)) {
     throw new Error(
-      `ETL_SERVICE_URL zeigt vermutlich auf das Next.js-Backend (${baseUrl}), nicht auf dppflash-etl. ` +
-        'Setze in Render → dppflash-backend → Environment: ETL_SERVICE_URL=https://dppflash-etl.onrender.com',
+      `${baseUrl} antwortet mit Next.js statt FastAPI. ` +
+        'Render → dppflash-etl → Dockerfile Path muss Dockerfile.etl sein (nicht Dockerfile).',
     );
   }
 

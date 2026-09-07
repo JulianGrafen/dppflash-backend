@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -165,3 +166,28 @@ def test_missing_upi_row_rejected() -> None:
     response = _upload("export.csv", _csv_bytes(rows))
 
     assert response.status_code == 422
+
+
+def test_extended_mock_export_fixture() -> None:
+    fixture = (
+        Path(__file__).resolve().parent.parent / "fixtures" / "mock_kmu_export_extended.xlsx"
+    )
+    assert fixture.is_file(), f"Missing fixture: {fixture}"
+
+    response = _kmu_upload(fixture.name, fixture.read_bytes())
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["count"] == 6
+    upis = {item["upi"] for item in body["items"]}
+    assert upis == {
+        "LOC-400-25",
+        "RAW-POL-01",
+        "RAW-CAL-02",
+        "TER-939-310",
+        "RAW-SIL-05",
+        "RAW-CAL-03",
+    }
+    loc = next(item for item in body["items"] if item["upi"] == "LOC-400-25")
+    assert loc["gtin"] == "04001234987654"
+    assert loc["weight"] == "25.000 KG"

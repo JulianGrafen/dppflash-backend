@@ -31,6 +31,30 @@ const SOURCE_LABELS: Record<string, string> = {
   enterprise_ingest: 'ERP JSON',
 };
 
+function formatUploadError(body: Record<string, unknown>): string {
+  const detail = body.detail;
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (detail && typeof detail === 'object') {
+    const record = detail as {
+      message?: string;
+      hint?: string;
+      found_columns?: string[];
+    };
+    const parts = [record.message, record.hint];
+    if (record.found_columns?.length) {
+      parts.push(`Gefundene Spalten: ${record.found_columns.join(', ')}`);
+    }
+    const text = parts.filter(Boolean).join(' — ');
+    if (text) return text;
+  }
+  if (typeof body.error === 'string') {
+    return body.error;
+  }
+  return `HTTP ${String(body.status ?? 'error')}`;
+}
+
 export default function InboundDashboardPage() {
   const [tenantId, setTenantId] = useState('default');
   const [rows, setRows] = useState<DraftRow[]>([]);
@@ -100,7 +124,7 @@ export default function InboundDashboardPage() {
       const response = await fetch(endpoint, { method: 'POST', body: form });
       const body = await response.json();
       if (!response.ok) {
-        throw new Error(body.detail?.message ?? body.error ?? body.detail ?? `HTTP ${response.status}`);
+        throw new Error(formatUploadError(body as Record<string, unknown>));
       }
       const count = body.count ?? 1;
       const matchInfo = body.match_status === 'enriched'

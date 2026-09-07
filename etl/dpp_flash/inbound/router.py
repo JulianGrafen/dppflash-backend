@@ -79,5 +79,9 @@ async def ingest_dpp(
     except ValidationError as exc:  # defensive — fusion should preserve validity
         raise _validation_http_error("fused_result", exc) from exc
 
-    repository.save_dpp_draft(merged_dpp, tenant_id=body.tenant_id)
+    repository.save_dpp_draft(
+        merged_dpp,
+        tenant_id=body.tenant_id,
+        source="enterprise_ingest",
+    )
     return DppIngestResponse(dpp=merged_dpp, tenant_id=body.tenant_id)

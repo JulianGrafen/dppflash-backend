@@ -24,12 +24,20 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DPP_INBOUND_REPOSITORY
+        value: supabase
       - key: NEXT_PUBLIC_DPP_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: DPP_INBOUND_REPOSITORY
+        value: supabase
       - key: SUPPLIER_OUTREACH_SECRET
         sync: false
       - key: SUPPLIER_OUTREACH_ENABLED
@@ -62,6 +70,12 @@ services:
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DPP_INBOUND_REPOSITORY
+        value: supabase
       - key: ETL_SERVICE_SECRET
         sync: false
       - key: SUPPLIER_OUTREACH_SECRET

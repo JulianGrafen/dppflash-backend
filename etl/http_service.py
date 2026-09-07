@@ -13,7 +13,9 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 
+from etl.dpp_flash.inbound.drafts_router import router as dpp_drafts_router
 from etl.dpp_flash.inbound.kmu_upload import router as kmu_upload_router
+from etl.dpp_flash.inbound.pdf_extract import router as pdf_extract_router
 from etl.dpp_flash.inbound.router import router as dpp_ingest_router
 from etl.pipeline_runner import run_pipeline_payload
 from etl.services.mailer import describe_smtp_config, send_smtp_test_email
@@ -21,6 +23,8 @@ from etl.services.mailer import describe_smtp_config, send_smtp_test_email
 app = FastAPI(title="DPP-Flash ETL Service", version="0.1.0")
 app.include_router(dpp_ingest_router)
 app.include_router(kmu_upload_router)
+app.include_router(pdf_extract_router)
+app.include_router(dpp_drafts_router)
 
 
 class SmtpTestRequest(BaseModel):

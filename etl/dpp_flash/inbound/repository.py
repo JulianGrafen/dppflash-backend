@@ -1,80 +1,131 @@
-"""Persistence layer for product passport drafts (Supabase / PostgreSQL).
-
-MVP: in-memory mock with the exact call shape of the Supabase Python client, so
-swapping in the real client is a one-line change inside :func:`save_dpp_draft`.
-
-Target table (RLS-enabled)::
-
-    create table product_passports (
-        id          uuid primary key default gen_random_uuid(),
-        tenant_id   uuid not null,
-        upi         text not null,
-        payload     jsonb not null,
-        is_draft    boolean not null default true,
-        created_at  timestamptz not null default now(),
-        unique (tenant_id, upi)
-    );
-    alter table product_passports enable row level security;
-    create policy tenant_isolation on product_passports
-        using (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
-"""
+"""Persistence layer for product passport drafts (Supabase / PostgreSQL)."""
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+import os
+from typing import Any, Literal, Protocol
 
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 
+DraftSource = Literal["kmu_excel", "pdf_extract", "enterprise_ingest"]
+
 
 class DppDraftRepository(Protocol):
-    """Interface so the router never depends on a concrete storage backend."""
+    def save_dpp_draft(
+        self,
+        dpp: ProductPassportDraft,
+        tenant_id: str,
+        *,
+        source: DraftSource,
+        raw_extraction: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
 
-    def save_dpp_draft(self, dpp: ProductPassportDraft, tenant_id: str) -> dict[str, Any]:
-        """Persist a draft; returns the stored row (id, tenant_id, upi, payload)."""
-        ...
+    def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]: ...
+
+
+def _resolve_supabase_url() -> str | None:
+    return (
+        os.environ.get("SUPABASE_URL", "").strip()
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "").strip()
+        or None
+    )
+
+
+def _resolve_supabase_key() -> str | None:
+    return os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip() or None
 
 
 class InMemoryDppDraftRepository:
-    """MVP mock — keeps drafts in memory, keyed by (tenant_id, upi)."""
+    """MVP fallback when Supabase is not configured (tests, local dev)."""
 
     def __init__(self) -> None:
         self._rows: dict[tuple[str, str], dict[str, Any]] = {}
 
-    def save_dpp_draft(self, dpp: ProductPassportDraft, tenant_id: str) -> dict[str, Any]:
-        """Upsert the draft for this tenant (mirrors the Supabase upsert below).
-
-        Real Supabase implementation::
-
-            from supabase import create_client
-            client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-            response = (
-                client.table("product_passports")
-                .upsert(
-                    {
-                        "tenant_id": tenant_id,          # RLS partition key
-                        "upi": dpp.upi,
-                        "payload": dpp.model_dump(mode="json"),
-                        "is_draft": dpp.is_draft,
-                    },
-                    on_conflict="tenant_id,upi",
-                )
-                .execute()
-            )
-            return response.data[0]
-        """
+    def save_dpp_draft(
+        self,
+        dpp: ProductPassportDraft,
+        tenant_id: str,
+        *,
+        source: DraftSource,
+        raw_extraction: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         row = {
+            "id": f"mem-{tenant_id}-{dpp.upi}",
             "tenant_id": tenant_id,
             "upi": dpp.upi,
+            "source": source,
             "payload": dpp.model_dump(mode="json"),
+            "raw_extraction": raw_extraction,
             "is_draft": dpp.is_draft,
         }
         self._rows[(tenant_id, dpp.upi)] = row
         return row
 
+    def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        rows = [row for key, row in self._rows.items() if key[0] == tenant_id]
+        rows.sort(key=lambda row: row.get("upi", ""))
+        return rows[:limit]
+
+
+class SupabaseDppDraftRepository:
+    """Supabase-backed repository using the service-role key (server-side only)."""
+
+    def __init__(self) -> None:
+        url = _resolve_supabase_url()
+        key = _resolve_supabase_key()
+        if not url or not key:
+            raise RuntimeError(
+                "Supabase not configured: set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) "
+                "and SUPABASE_SERVICE_ROLE_KEY."
+            )
+        from supabase import create_client
+
+        self._client = create_client(url, key)
+
+    def save_dpp_draft(
+        self,
+        dpp: ProductPassportDraft,
+        tenant_id: str,
+        *,
+        source: DraftSource,
+        raw_extraction: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        row = {
+            "tenant_id": tenant_id,
+            "upi": dpp.upi,
+            "source": source,
+            "payload": dpp.model_dump(mode="json"),
+            "raw_extraction": raw_extraction,
+            "is_draft": dpp.is_draft,
+        }
+        response = (
+            self._client.table("product_passports")
+            .upsert(row, on_conflict="tenant_id,upi")
+            .execute()
+        )
+        if not response.data:
+            raise RuntimeError("Supabase upsert returned no data.")
+        return response.data[0]
+
+    def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        response = (
+            self._client.table("product_passports")
+            .select("*")
+            .eq("tenant_id", tenant_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return list(response.data or [])
+
 
 _default_repository = InMemoryDppDraftRepository()
 
 
-def get_dpp_draft_repository() -> DppDraftRepository:
-    """FastAPI dependency — swap for a Supabase-backed instance in production."""
+def get_dpp_draft_repository() -> InMemoryDppDraftRepository | SupabaseDppDraftRepository:
+    """FastAPI dependency — Supabase when explicitly enabled, otherwise in-memory."""
+    if os.environ.get("DPP_INBOUND_REPOSITORY", "").strip().lower() != "supabase":
+        return _default_repository
+    if _resolve_supabase_url() and _resolve_supabase_key():
+        return SupabaseDppDraftRepository()
     return _default_repository

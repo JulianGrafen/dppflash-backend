@@ -29,11 +29,16 @@ VALID_ROWS = [
 ]
 
 
-def _upload(filename: str, content: bytes) -> object:
+def _kmu_upload(filename: str, content: bytes, tenant_id: str = "tenant-1") -> object:
     return client.post(
         "/api/v1/kmu/upload-erp-export",
         files={"file": (filename, content, "application/octet-stream")},
+        data={"tenant_id": tenant_id},
     )
+
+
+def _upload(filename: str, content: bytes) -> object:
+    return _kmu_upload(filename, content)
 
 
 def _xlsx_bytes(rows: list[dict[str, object]]) -> bytes:

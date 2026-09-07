@@ -9,6 +9,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import ValidationError
 
+from etl.dpp_flash.inbound.fusion_service import build_master_row
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
 
@@ -94,10 +95,8 @@ async def upload_erp_export(
         drafts.append(draft_json)
         if persist:
             stored.append(
-                repository.save_dpp_draft(
-                    draft,
-                    tenant_id=tenant_id,
-                    source="kmu_excel",
+                repository.upsert_row(
+                    build_master_row(draft, tenant_id, source="kmu_excel"),
                 )
             )
 

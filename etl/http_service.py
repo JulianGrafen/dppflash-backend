@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from etl.dpp_flash.inbound.drafts_router import router as dpp_drafts_router
 from etl.dpp_flash.inbound.kmu_upload import router as kmu_upload_router
+from etl.dpp_flash.inbound.match_router import router as dpp_match_router
 from etl.dpp_flash.inbound.pdf_extract import router as pdf_extract_router
 from etl.dpp_flash.inbound.router import router as dpp_ingest_router
 from etl.pipeline_runner import run_pipeline_payload
@@ -25,6 +26,7 @@ app.include_router(dpp_ingest_router)
 app.include_router(kmu_upload_router)
 app.include_router(pdf_extract_router)
 app.include_router(dpp_drafts_router)
+app.include_router(dpp_match_router)
 
 
 class SmtpTestRequest(BaseModel):

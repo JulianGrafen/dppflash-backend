@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from etl.dpp_flash.inbound.extraction_mapper import analysis_result_to_passport_draft
+from etl.dpp_flash.inbound.fusion_service import try_auto_match_and_fuse
 from etl.dpp_flash.inbound.models import ProductPassportDraft
+from etl.dpp_flash.inbound.product_matcher import MatchReason
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
 from etl.graph.nodes.extractor import _build_extractor
 from etl.services.dpp_extractor import LLMExtractionError, PDFReadError
@@ -19,12 +21,15 @@ _PDF_SUFFIXES = (".pdf",)
 
 
 class PdfExtractResponse(BaseModel):
-    """Full extraction JSON plus normalized draft stored in Supabase."""
+    """Full extraction JSON plus normalized draft; may be fused into a master product."""
 
     draft: ProductPassportDraft
     extraction: dict[str, Any]
     stored: dict[str, Any] | None = None
     tenant_id: str
+    match_status: Literal["enriched", "unmatched"]
+    matched_master_upi: str | None = None
+    matched_by: MatchReason | None = None
 
 
 @router.post("/pdf", response_model=PdfExtractResponse, status_code=status.HTTP_201_CREATED)
@@ -34,7 +39,7 @@ async def extract_pdf(
     persist: bool = Form(default=True),
     repository: DppDraftRepository = Depends(get_dpp_draft_repository),
 ) -> PdfExtractResponse:
-    """Extract ESPR fields from a PDF and optionally persist the draft."""
+    """Extract ESPR fields from a PDF and match/fuse into an Excel master when possible."""
     if not file.filename:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename missing.")
     if not file.filename.lower().endswith(_PDF_SUFFIXES):
@@ -59,17 +64,32 @@ async def extract_pdf(
     draft = analysis_result_to_passport_draft(analysis, file.filename)
 
     stored: dict[str, Any] | None = None
+    match_status: Literal["enriched", "unmatched"] = "unmatched"
+    matched_master_upi: str | None = None
+    matched_by: MatchReason | None = None
+
     if persist:
-        stored = repository.save_dpp_draft(
+        existing = repository.list_dpp_drafts(tenant_id=tenant_id, limit=500)
+        row_to_store, reason, master_upi = try_auto_match_and_fuse(
             draft,
-            tenant_id=tenant_id,
-            source="pdf_extract",
+            tenant_id,
+            existing,
             raw_extraction=extraction_json,
         )
+        stored = repository.upsert_row(row_to_store)
+        if master_upi and reason != "none":
+            match_status = "enriched"
+            matched_master_upi = master_upi
+            matched_by = reason
+        else:
+            match_status = "unmatched"
 
     return PdfExtractResponse(
         draft=draft,
         extraction=extraction_json,
         stored=stored,
         tenant_id=tenant_id,
+        match_status=match_status,
+        matched_master_upi=matched_master_upi,
+        matched_by=matched_by,
     )

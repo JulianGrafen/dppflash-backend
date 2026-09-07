@@ -40,6 +40,7 @@ def test_pdf_extract_returns_json(mock_build: MagicMock) -> None:
     body = response.json()
     assert body["tenant_id"] == "tenant-pdf"
     assert body["draft"]["upi"] == "PDF-sample"
+    assert body["match_status"] == "unmatched"
     assert body["extraction"]["product_category"] == "GENERIC"
 
 

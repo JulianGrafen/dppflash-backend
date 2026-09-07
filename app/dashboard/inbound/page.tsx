@@ -14,6 +14,15 @@ type DraftRow = {
   payload: Record<string, unknown>;
   is_draft: boolean;
   created_at: string;
+  match_status?: string;
+  master_upi?: string | null;
+  matched_by?: string | null;
+};
+
+const MATCH_LABELS: Record<string, string> = {
+  master: 'Master (Excel)',
+  enriched: 'Angereichert',
+  unmatched: 'Nicht zugeordnet',
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -53,6 +62,33 @@ export default function InboundDashboardPage() {
     void loadDrafts();
   }, [loadDrafts]);
 
+  async function manualMatch(enrichmentUpi: string, masterUpi: string) {
+    setError(null);
+    try {
+      const response = await fetch('/api/inbound/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          enrichment_upi: enrichmentUpi,
+          master_upi: masterUpi,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.detail ?? body.error ?? `HTTP ${response.status}`);
+      }
+      setLastMessage(`PDF ${enrichmentUpi} → Produkt ${masterUpi} zugeordnet.`);
+      await loadDrafts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Zuordnung fehlgeschlagen');
+    }
+  }
+
+  const masterUpis = rows
+    .filter((row) => row.match_status === 'master' || row.match_status === 'enriched')
+    .map((row) => row.upi);
+
   async function uploadFile(endpoint: string, file: File, setBusy: (v: boolean) => void) {
     setBusy(true);
     setLastMessage(null);
@@ -67,7 +103,12 @@ export default function InboundDashboardPage() {
         throw new Error(body.detail?.message ?? body.error ?? body.detail ?? `HTTP ${response.status}`);
       }
       const count = body.count ?? 1;
-      setLastMessage(`${count} Datensatz${count === 1 ? '' : 'e'} importiert.`);
+      const matchInfo = body.match_status === 'enriched'
+        ? ` → Produkt ${body.matched_master_upi} (${body.matched_by})`
+        : body.match_status === 'unmatched'
+          ? ' (kein Match — manuell zuordnen)'
+          : '';
+      setLastMessage(`${count} Datensatz${count === 1 ? '' : 'e'} importiert${matchInfo}.`);
       await loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload fehlgeschlagen');
@@ -159,7 +200,7 @@ export default function InboundDashboardPage() {
               <h2 className="font-semibold">PDF → JSON</h2>
             </div>
             <p className="mb-4 text-xs text-slate-500">
-              LangGraph/OpenAI-Extraktion — vollständiges JSON + normalisierter Draft in Supabase.
+              Zuerst Excel importieren (Master). PDF wird per UPI/GTIN automatisch dem Produkt zugeordnet.
             </p>
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-sm text-slate-600 hover:border-sky-300 hover:bg-sky-50/50">
               {pdfUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -209,8 +250,10 @@ export default function InboundDashboardPage() {
                 <tr>
                   <th className="px-5 py-3">UPI</th>
                   <th className="px-5 py-3">Quelle</th>
+                  <th className="px-5 py-3">Match</th>
                   <th className="px-5 py-3">GTIN</th>
                   <th className="px-5 py-3">Gewicht</th>
+                  <th className="px-5 py-3">Aktion</th>
                   <th className="px-5 py-3">Erstellt</th>
                 </tr>
               </thead>
@@ -225,8 +268,42 @@ export default function InboundDashboardPage() {
                           {SOURCE_LABELS[row.source] ?? row.source}
                         </span>
                       </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs ${
+                            row.match_status === 'unmatched'
+                              ? 'bg-amber-100 text-amber-800'
+                              : row.match_status === 'enriched'
+                                ? 'bg-sky-100 text-sky-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {MATCH_LABELS[row.match_status ?? 'master'] ?? row.match_status}
+                          {row.matched_by ? ` (${row.matched_by})` : ''}
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.gtin ?? '—')}</td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.weight ?? '—')}</td>
+                      <td className="px-5 py-3">
+                        {row.match_status === 'unmatched' && masterUpis.length > 0 ? (
+                          <select
+                            className="rounded border border-slate-200 px-2 py-1 text-xs"
+                            defaultValue=""
+                            onChange={(e) => {
+                              const masterUpi = e.target.value;
+                              if (masterUpi) void manualMatch(row.upi, masterUpi);
+                              e.target.value = '';
+                            }}
+                          >
+                            <option value="">Produkt wählen…</option>
+                            {masterUpis.map((upi) => (
+                              <option key={upi} value={upi}>{upi}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-xs text-slate-500">
                         {new Date(row.created_at).toLocaleString('de-DE')}
                       </td>

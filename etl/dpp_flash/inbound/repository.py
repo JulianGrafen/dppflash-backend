@@ -18,7 +18,16 @@ class DppDraftRepository(Protocol):
         *,
         source: DraftSource,
         raw_extraction: dict[str, Any] | None = None,
+        match_status: str = "master",
+        master_upi: str | None = None,
+        matched_by: str | None = None,
     ) -> dict[str, Any]: ...
+
+    def upsert_row(self, row: dict[str, Any]) -> dict[str, Any]: ...
+
+    def get_draft(self, tenant_id: str, upi: str) -> dict[str, Any] | None: ...
+
+    def delete_draft(self, tenant_id: str, upi: str) -> None: ...
 
     def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]: ...
 
@@ -41,6 +50,12 @@ class InMemoryDppDraftRepository:
     def __init__(self) -> None:
         self._rows: dict[tuple[str, str], dict[str, Any]] = {}
 
+    def upsert_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        key = (row["tenant_id"], row["upi"])
+        stored = {**row, "id": row.get("id") or f"mem-{key[0]}-{key[1]}"}
+        self._rows[key] = stored
+        return stored
+
     def save_dpp_draft(
         self,
         dpp: ProductPassportDraft,
@@ -48,22 +63,33 @@ class InMemoryDppDraftRepository:
         *,
         source: DraftSource,
         raw_extraction: dict[str, Any] | None = None,
+        match_status: str = "master",
+        master_upi: str | None = None,
+        matched_by: str | None = None,
     ) -> dict[str, Any]:
-        row = {
-            "id": f"mem-{tenant_id}-{dpp.upi}",
-            "tenant_id": tenant_id,
-            "upi": dpp.upi,
-            "source": source,
-            "payload": dpp.model_dump(mode="json"),
-            "raw_extraction": raw_extraction,
-            "is_draft": dpp.is_draft,
-        }
-        self._rows[(tenant_id, dpp.upi)] = row
-        return row
+        return self.upsert_row(
+            {
+                "tenant_id": tenant_id,
+                "upi": dpp.upi,
+                "source": source,
+                "payload": dpp.model_dump(mode="json"),
+                "raw_extraction": raw_extraction,
+                "is_draft": dpp.is_draft,
+                "match_status": match_status,
+                "master_upi": master_upi,
+                "matched_by": matched_by,
+            }
+        )
+
+    def get_draft(self, tenant_id: str, upi: str) -> dict[str, Any] | None:
+        return self._rows.get((tenant_id, upi))
+
+    def delete_draft(self, tenant_id: str, upi: str) -> None:
+        self._rows.pop((tenant_id, upi), None)
 
     def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
         rows = [row for key, row in self._rows.items() if key[0] == tenant_id]
-        rows.sort(key=lambda row: row.get("upi", ""))
+        rows.sort(key=lambda row: row.get("created_at", row.get("upi", "")), reverse=True)
         return rows[:limit]
 
 
@@ -82,22 +108,7 @@ class SupabaseDppDraftRepository:
 
         self._client = create_client(url, key)
 
-    def save_dpp_draft(
-        self,
-        dpp: ProductPassportDraft,
-        tenant_id: str,
-        *,
-        source: DraftSource,
-        raw_extraction: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        row = {
-            "tenant_id": tenant_id,
-            "upi": dpp.upi,
-            "source": source,
-            "payload": dpp.model_dump(mode="json"),
-            "raw_extraction": raw_extraction,
-            "is_draft": dpp.is_draft,
-        }
+    def upsert_row(self, row: dict[str, Any]) -> dict[str, Any]:
         response = (
             self._client.table("product_passports")
             .upsert(row, on_conflict="tenant_id,upi")
@@ -106,6 +117,49 @@ class SupabaseDppDraftRepository:
         if not response.data:
             raise RuntimeError("Supabase upsert returned no data.")
         return response.data[0]
+
+    def save_dpp_draft(
+        self,
+        dpp: ProductPassportDraft,
+        tenant_id: str,
+        *,
+        source: DraftSource,
+        raw_extraction: dict[str, Any] | None = None,
+        match_status: str = "master",
+        master_upi: str | None = None,
+        matched_by: str | None = None,
+    ) -> dict[str, Any]:
+        return self.upsert_row(
+            {
+                "tenant_id": tenant_id,
+                "upi": dpp.upi,
+                "source": source,
+                "payload": dpp.model_dump(mode="json"),
+                "raw_extraction": raw_extraction,
+                "is_draft": dpp.is_draft,
+                "match_status": match_status,
+                "master_upi": master_upi,
+                "matched_by": matched_by,
+            }
+        )
+
+    def get_draft(self, tenant_id: str, upi: str) -> dict[str, Any] | None:
+        response = (
+            self._client.table("product_passports")
+            .select("*")
+            .eq("tenant_id", tenant_id)
+            .eq("upi", upi)
+            .limit(1)
+            .execute()
+        )
+        if not response.data:
+            return None
+        return response.data[0]
+
+    def delete_draft(self, tenant_id: str, upi: str) -> None:
+        self._client.table("product_passports").delete().eq("tenant_id", tenant_id).eq(
+            "upi", upi
+        ).execute()
 
     def list_dpp_drafts(self, tenant_id: str, limit: int = 100) -> list[dict[str, Any]]:
         response = (

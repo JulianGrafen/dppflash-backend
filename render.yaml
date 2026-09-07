@@ -34,7 +34,7 @@ services:
         fromService:
           name: dppflash-etl
           type: web
-          envVarKey: RENDER_EXTERNAL_URL
+          property: hostport
       - key: ETL_SERVICE_SECRET
         fromService:
           name: dppflash-etl

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { readEtlServiceBaseUrl, readEtlServiceHeaders } from '@/app/lib/etl/etlServiceUrl';
+import { fetchEtl } from '@/app/lib/etl/fetchEtl';
 
 export async function POST(request: Request) {
   try {
@@ -16,20 +16,11 @@ export async function POST(request: Request) {
     outbound.append('tenant_id', tenantId);
     outbound.append('persist', 'true');
 
-    const response = await fetch(`${readEtlServiceBaseUrl()}/api/v1/extract/pdf`, {
+    const { status, body } = await fetchEtl('/api/v1/extract/pdf', {
       method: 'POST',
-      headers: readEtlServiceHeaders(),
       body: outbound,
-    }).catch((error: unknown) => {
-      throw new Error(
-        `ETL nicht erreichbar unter ${readEtlServiceBaseUrl()}. ` +
-          'Starte: .venv-langgraph/bin/uvicorn etl.http_service:app --port 8000',
-        { cause: error },
-      );
     });
-
-    const body = await response.json().catch(() => ({ error: 'Ungültige ETL-Antwort' }));
-    return NextResponse.json(body, { status: response.status });
+    return NextResponse.json(body, { status });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'PDF-Extraktion fehlgeschlagen' },

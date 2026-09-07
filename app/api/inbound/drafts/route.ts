@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { readEtlServiceBaseUrl, readEtlServiceHeaders } from '@/app/lib/etl/etlServiceUrl';
+import { fetchEtl } from '@/app/lib/etl/fetchEtl';
 import { supabase } from '@/app/lib/supabase';
 
 function isPlaceholderSupabaseUrl(url: string | undefined): boolean {
@@ -14,16 +14,14 @@ function isPlaceholderSupabaseUrl(url: string | undefined): boolean {
 }
 
 async function fetchDraftsFromEtl(tenantId: string) {
-  const response = await fetch(
-    `${readEtlServiceBaseUrl()}/api/v1/dpp/drafts?tenant_id=${encodeURIComponent(tenantId)}`,
-    { headers: readEtlServiceHeaders() },
+  const { ok, status, body } = await fetchEtl(
+    `/api/v1/dpp/drafts?tenant_id=${encodeURIComponent(tenantId)}`,
   );
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
+  if (!ok) {
     throw new Error(
       typeof body.detail === 'string'
         ? body.detail
-        : `ETL-Liste fehlgeschlagen (HTTP ${response.status}). Läuft uvicorn auf Port 8000?`,
+        : `ETL-Liste fehlgeschlagen (HTTP ${status}).`,
     );
   }
   return body;

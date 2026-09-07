@@ -7,12 +7,36 @@ function isRenderProduction(): boolean {
   );
 }
 
+function assertNotSelfEtlUrl(url: string): void {
+  const ownUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+  if (!ownUrl) {
+    return;
+  }
+  if (url.replace(/\/$/, '') === ownUrl.replace(/\/$/, '')) {
+    throw new Error(
+      'ETL_SERVICE_URL zeigt auf dieses Backend — muss die URL von dppflash-etl sein ' +
+        '(z. B. https://dppflash-etl.onrender.com).',
+    );
+  }
+}
+
+/** Normalize Render private host:port or public https URL. */
+export function normalizeEtlServiceUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/$/, '');
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `http://${trimmed}`;
+}
+
 /** Base URL for the Python ETL FastAPI service (local fallback for dev only). */
 export function readEtlServiceBaseUrl(): string {
   const configured =
     process.env.ETL_SERVICE_URL?.trim() || process.env.ETL_REMOTE_URL?.trim();
   if (configured) {
-    return configured.replace(/\/$/, '');
+    const url = normalizeEtlServiceUrl(configured);
+    assertNotSelfEtlUrl(url);
+    return url;
   }
   if (isRenderProduction()) {
     throw new Error(

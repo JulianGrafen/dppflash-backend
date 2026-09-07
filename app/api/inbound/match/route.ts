@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
 
-import { readEtlServiceBaseUrl, readEtlServiceHeaders } from '@/app/lib/etl/etlServiceUrl';
+import { fetchEtl } from '@/app/lib/etl/fetchEtl';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const response = await fetch(`${readEtlServiceBaseUrl()}/api/v1/dpp/match`, {
+    const { status, body: payload } = await fetchEtl('/api/v1/dpp/match', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...readEtlServiceHeaders(),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    const payload = await response.json().catch(() => ({ error: 'Ungültige ETL-Antwort' }));
-    return NextResponse.json(payload, { status: response.status });
+    return NextResponse.json(payload, { status });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Match fehlgeschlagen' },

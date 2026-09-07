@@ -2,32 +2,11 @@ import process from 'node:process';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
+import { getEtlProjectRoot, resolvePythonExecutable } from '@/app/lib/etl/resolvePythonExecutable';
 
 const PIPELINE_TIMEOUT_MS = 180_000;
-
-function getProjectRoot(): string {
-  // app/lib/etl/runPipelineServer.ts → repo root (works even if process.cwd() is wrong)
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-}
-
-function resolvePythonExecutable(projectRoot: string): string {
-  const fromEnv = process.env.ETL_PYTHON?.trim();
-  if (fromEnv) {
-    return path.isAbsolute(fromEnv) ? fromEnv : path.join(projectRoot, fromEnv);
-  }
-
-  for (const relativePath of ['.venv-langgraph/bin/python', '.venv/bin/python']) {
-    const candidate = path.join(projectRoot, relativePath);
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return 'python3';
-}
 
 function formatPipelineError(stderr: string, exitCode: number, python: string): string {
   const trimmed = stderr.trim();
@@ -54,9 +33,15 @@ function formatPipelineError(stderr: string, exitCode: number, python: string): 
 }
 
 export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const projectRoot = getProjectRoot();
+  const projectRoot = getEtlProjectRoot();
   const python = resolvePythonExecutable(projectRoot);
   const cliScript = path.join(projectRoot, 'etl', 'run_pipeline_cli.py');
+
+  if (!existsSync(cliScript)) {
+    return Promise.reject(
+      new Error(`Pipeline CLI nicht gefunden: ${cliScript} (project root: ${projectRoot})`),
+    );
+  }
 
   return new Promise((resolve, reject) => {
     // Omit `env` so the child inherits the full Render/container environment.
@@ -89,7 +74,13 @@ export function runPipeline(payload: unknown): Promise<{ stdout: string; stderr:
       if (!settled) {
         settled = true;
         clearTimeout(timer);
-        reject(error);
+        const message =
+          error instanceof Error && error.message.includes('ENOENT')
+            ? `Python nicht startbar (${python}). ${error.message}`
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        reject(new Error(message));
       }
     });
     child.on('close', (exitCode) => {

@@ -1,31 +1,12 @@
-import process from 'node:process';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { buildPipelineRuntimeEnvRecord } from '@/app/lib/etl/pipelineRuntimeEnv';
-
-function getProjectRoot(): string {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-}
-
-function resolvePythonExecutable(projectRoot: string): string {
-  const fromEnv = process.env.ETL_PYTHON?.trim();
-  if (fromEnv) {
-    return path.isAbsolute(fromEnv) ? fromEnv : path.join(projectRoot, fromEnv);
-  }
-  for (const relativePath of ['.venv-langgraph/bin/python', '.venv/bin/python']) {
-    const candidate = path.join(projectRoot, relativePath);
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-  return 'python3';
-}
+import { getEtlProjectRoot, resolvePythonExecutable } from '@/app/lib/etl/resolvePythonExecutable';
 
 export function runSmtpTest(toAddress: string): Promise<Record<string, unknown>> {
-  const projectRoot = getProjectRoot();
+  const projectRoot = getEtlProjectRoot();
   const python = resolvePythonExecutable(projectRoot);
   const cliScript = path.join(projectRoot, 'etl', 'smtp_test_cli.py');
 
@@ -44,7 +25,17 @@ export function runSmtpTest(toAddress: string): Promise<Record<string, unknown>>
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString('utf8');
     });
-    child.on('error', reject);
+    child.on('error', (error) => {
+      reject(
+        new Error(
+          error instanceof Error && error.message.includes('ENOENT')
+            ? `Python nicht startbar (${python}). ${error.message}`
+            : error instanceof Error
+              ? error.message
+              : String(error),
+        ),
+      );
+    });
     child.on('close', () => {
       try {
         resolve(JSON.parse(stdout || '{}') as Record<string, unknown>);

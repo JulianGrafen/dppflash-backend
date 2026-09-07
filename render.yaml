@@ -11,7 +11,19 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - app/**
+        - public/**
+        - package.json
+        - package-lock.json
+        - next.config.ts
+        - tsconfig.json
+        - Dockerfile
+        - pyproject.toml
+        - etl/**
+        - render.yaml
     envVars:
       - key: NODE_ENV
         value: production
@@ -67,6 +79,13 @@ services:
     dockerfilePath: ./Dockerfile.etl
     dockerContext: .
     healthCheckPath: /health
+    buildFilter:
+      paths:
+        - etl/**
+        - pyproject.toml
+        - etl/requirements.txt
+        - Dockerfile.etl
+        - render.yaml
     envVars:
       - key: OPENAI_API_KEY
         sync: false

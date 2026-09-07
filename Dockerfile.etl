@@ -5,20 +5,17 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    libcairo2 \
-    libpango-1.0-0 \
-    libjpeg62-turbo \
-    libgif7 \
-    librsvg2-2 \
-  && rm -rf /var/lib/apt/lists/*
-
+# Layer 1: Python deps — cached until requirements/pyproject change (not on every etl/*.py edit)
 COPY pyproject.toml README.md ./
-COPY etl ./etl
+COPY etl/requirements.txt ./etl/requirements.txt
 
 RUN pip install --no-cache-dir --upgrade pip \
-  && pip install --no-cache-dir .
+  && pip install --no-cache-dir -r etl/requirements.txt
+
+# Layer 2: application code — fast reinstall of the local package only
+COPY etl ./etl
+
+RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000
 

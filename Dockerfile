@@ -25,7 +25,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV ETL_PYTHON=/app/.venv/bin/python
 ENV PYTHONPATH=/app
 ENV PATH=/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ENV HOSTNAME=0.0.0.0
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
@@ -60,4 +59,4 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run start -- -p ${PORT:-3000}"]
+CMD ["sh", "-c", "npm run start -- -H 0.0.0.0 -p ${PORT:-3000}"]

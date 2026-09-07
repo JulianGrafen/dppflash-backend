@@ -46,6 +46,8 @@ async def diagnostics() -> dict[str, Any]:
 
     return {
         "ok": True,
+        "service": "dppflash-etl",
+        "routes": sorted(app.openapi().get("paths", {}).keys()),
         "openai_configured": resolve_openai_api_key() is not None,
         "smtp": describe_smtp_config(),
         "supplier_outreach_secret": bool(

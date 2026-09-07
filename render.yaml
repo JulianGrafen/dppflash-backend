@@ -29,11 +29,17 @@ services:
         value: production
       - key: ETL_PYTHON
         value: /app/.venv/bin/python
-      # Required when Next.js runs serverless (/var/task). Point to dppflash-etl service URL.
+      # Points Next.js API routes at the sibling ETL web service (not localhost).
       - key: ETL_SERVICE_URL
-        sync: false
+        fromService:
+          name: dppflash-etl
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: ETL_SERVICE_SECRET
-        sync: false
+        fromService:
+          name: dppflash-etl
+          type: web
+          envVarKey: ETL_SERVICE_SECRET
       - key: OPENAI_API_KEY
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_URL

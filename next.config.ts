@@ -46,6 +46,10 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_DPP_URL || vercelUrl || "http://localhost:3000",
   },
+  rewrites: async () => [
+    { source: "/health", destination: "/health.json" },
+    { source: "/api/v1/health", destination: "/health.json" },
+  ],
   headers: async () => [
     {
       source: "/:path*",

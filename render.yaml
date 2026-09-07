@@ -11,7 +11,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /api/health
+    healthCheckPath: /health.json
     buildFilter:
       paths:
         - app/**

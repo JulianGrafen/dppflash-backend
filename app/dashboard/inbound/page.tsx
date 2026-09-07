@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileSpreadsheet, FileText, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { FileSpreadsheet, FileText, Loader2, RefreshCw, Search, Upload } from 'lucide-react';
 
 import { DraftAuditorPanel } from '@/app/dashboard/inbound/DraftAuditorPanel';
 import type { InboundGapRecord, InboundValidationReportBundle } from '@/app/domain/inbound/draftAuditDisplay';
@@ -333,6 +333,9 @@ export default function InboundDashboardPage() {
         <div className={`${CARD_CLASS} overflow-x-auto`}>
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-semibold text-[#0c1929]">Gespeicherte Drafts ({rows.length})</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Klick auf UPI, Score oder <span className="font-medium text-sky-700">Auditor</span> öffnet die Detailansicht mit Audit-Trail.
+            </p>
           </div>
           {loading ? (
             <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-slate-500">
@@ -352,6 +355,7 @@ export default function InboundDashboardPage() {
                   <th className="px-5 py-3">Match</th>
                   <th className="px-5 py-3">Score</th>
                   <th className="px-5 py-3">Validation</th>
+                  <th className="px-5 py-3">Auditor</th>
                   <th className="px-5 py-3">GTIN</th>
                   <th className="px-5 py-3">Gewicht</th>
                   <th className="px-5 py-3">Aktion</th>
@@ -418,17 +422,20 @@ export default function InboundDashboardPage() {
                           {validationLabel(row.validation_status)}
                         </span>
                       </td>
+                      <td className="px-5 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRow(row)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 underline decoration-sky-200 underline-offset-2 hover:text-sky-900"
+                        >
+                          <Search className="h-3.5 w-3.5" />
+                          Auditor
+                        </button>
+                      </td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.gtin ?? '—')}</td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.weight ?? '—')}</td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRow(row)}
-                            className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
-                          >
-                            Auditor
-                          </button>
                           <button
                             type="button"
                             disabled={validatingUpi === row.upi}

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from etl.dpp_flash.inbound.draft_to_analysis import resolve_analysis_for_validation
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.graph.state import GapRecord, ValidationStatus
+from etl.models.dpp_schemas import DPPAnalysisResult
 from etl.services.espr_auditor import run_espr_audit
 from etl.services.validation import validate_extracted_data
 
@@ -41,12 +42,8 @@ def _merge_gaps(*gap_lists: list[GapRecord]) -> list[GapRecord]:
     return merged
 
 
-def validate_passport_draft(
-    draft: ProductPassportDraft,
-    raw_extraction: dict[str, Any] | None = None,
-) -> InboundValidationResult:
-    """Run deterministic ESPR validation + audit on an inbound draft."""
-    analysis = resolve_analysis_for_validation(draft, raw_extraction)
+def _build_validation_result(analysis: DPPAnalysisResult) -> InboundValidationResult:
+    """Run validator + auditor on a resolved analysis payload."""
     outcome = validate_extracted_data(analysis)
     audit = run_espr_audit(analysis)
 
@@ -69,14 +66,30 @@ def validate_passport_draft(
     )
 
 
-def validation_fields_for_row(result: InboundValidationResult) -> dict[str, Any]:
+def validate_passport_draft(
+    draft: ProductPassportDraft,
+    raw_extraction: dict[str, Any] | None = None,
+) -> tuple[InboundValidationResult, DPPAnalysisResult]:
+    """Run deterministic ESPR validation + audit on an inbound draft."""
+    analysis = resolve_analysis_for_validation(draft, raw_extraction)
+    return _build_validation_result(analysis), analysis
+
+
+def validation_fields_for_row(
+    result: InboundValidationResult,
+    analysis: DPPAnalysisResult,
+) -> dict[str, Any]:
     """Persistence columns for product_passports."""
+    gap_analysis = analysis.calculate_gap_analysis()
     return {
         "validation_status": result.validation_status,
         "readiness_score_percent": result.readiness_score_percent,
         "validation_report": {
             "validation": result.validation_report,
             "audit": result.audit_report,
+            "analysis_snapshot": analysis.model_dump(mode="json"),
+            "filled_field_paths": gap_analysis["filled_field_names"],
+            "total_field_paths": gap_analysis["total_fields"],
         },
         "gaps": [gap.model_dump(mode="json") for gap in result.gaps],
         "validated_at": result.validated_at,
@@ -90,9 +103,9 @@ def apply_validation_to_row(
     raw_extraction: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate draft and merge validation fields into a persistence row."""
-    result = validate_passport_draft(draft, raw_extraction)
+    result, analysis = validate_passport_draft(draft, raw_extraction)
     updated = dict(row)
-    updated.update(validation_fields_for_row(result))
+    updated.update(validation_fields_for_row(result, analysis))
     updated["is_draft"] = result.validation_status != "valid"
     return updated
 
@@ -105,9 +118,9 @@ def persist_with_validation(
     raw_extraction: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], InboundValidationResult]:
     """Validate draft, persist row, return stored row + validation result."""
-    result = validate_passport_draft(draft, raw_extraction)
+    result, analysis = validate_passport_draft(draft, raw_extraction)
     validated_row = dict(row)
-    validated_row.update(validation_fields_for_row(result))
+    validated_row.update(validation_fields_for_row(result, analysis))
     validated_row["is_draft"] = result.validation_status != "valid"
     stored = repository.upsert_row(validated_row)
     return stored, result

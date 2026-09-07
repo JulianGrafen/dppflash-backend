@@ -9,10 +9,7 @@ from pydantic import BaseModel, Field
 
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
-from etl.dpp_flash.inbound.validation_service import (
-    persist_with_validation,
-    validate_passport_draft,
-)
+from etl.dpp_flash.inbound.validation_service import persist_with_validation
 
 router = APIRouter(prefix="/api/v1/dpp", tags=["dpp-validation"])
 

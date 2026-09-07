@@ -4,14 +4,13 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FileSpreadsheet, FileText, Loader2, RefreshCw, Upload } from 'lucide-react';
 
+import { DraftAuditorPanel } from '@/app/dashboard/inbound/DraftAuditorPanel';
+import type { InboundGapRecord, InboundValidationReportBundle } from '@/app/domain/inbound/draftAuditDisplay';
+
 const CARD_CLASS =
   'overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]';
 
-type GapRecord = {
-  field_path: string;
-  reason: string;
-  severity?: string;
-};
+type GapRecord = InboundGapRecord;
 
 type DraftRow = {
   id: string;
@@ -25,6 +24,7 @@ type DraftRow = {
   matched_by?: string | null;
   validation_status?: 'pending' | 'valid' | 'invalid' | null;
   readiness_score_percent?: number | null;
+  validation_report?: InboundValidationReportBundle | null;
   gaps?: GapRecord[] | null;
   validated_at?: string | null;
 };
@@ -94,7 +94,7 @@ export default function InboundDashboardPage() {
   const [pdfUploading, setPdfUploading] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [validatingUpi, setValidatingUpi] = useState<string | null>(null);
-  const [expandedGapsUpi, setExpandedGapsUpi] = useState<string | null>(null);
+  const [selectedRow, setSelectedRow] = useState<DraftRow | null>(null);
   const [storageHint, setStorageHint] = useState<string | null>(null);
 
   const loadDrafts = useCallback(async () => {
@@ -137,6 +137,9 @@ export default function InboundDashboardPage() {
       setLastMessage(
         `Validierung ${upi}: ${body.readiness_score_percent?.toFixed?.(1) ?? body.readiness_score_percent}% — ${body.gap_count} Lücken.`,
       );
+      if (selectedRow?.upi === upi && body.stored) {
+        setSelectedRow(body.stored as DraftRow);
+      }
       await loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Validierung fehlgeschlagen');
@@ -360,11 +363,18 @@ export default function InboundDashboardPage() {
                   const payload = row.payload ?? {};
                   const score = row.readiness_score_percent;
                   const gaps = Array.isArray(row.gaps) ? row.gaps : [];
-                  const showGaps = expandedGapsUpi === row.upi && gaps.length > 0;
                   return (
                     <Fragment key={row.id}>
                     <tr className="hover:bg-slate-50/80">
-                      <td className="px-5 py-3 font-medium text-[#0c1929]">{row.upi}</td>
+                      <td className="px-5 py-3 font-medium text-[#0c1929]">
+                        <button
+                          type="button"
+                          className="text-left underline decoration-slate-300 underline-offset-2 hover:text-sky-700"
+                          onClick={() => setSelectedRow(row)}
+                        >
+                          {row.upi}
+                        </button>
+                      </td>
                       <td className="px-5 py-3">
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
                           {SOURCE_LABELS[row.source] ?? row.source}
@@ -388,12 +398,8 @@ export default function InboundDashboardPage() {
                         <button
                           type="button"
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${scoreColor(score, row.validation_status)}`}
-                          onClick={() => {
-                            if (gaps.length > 0) {
-                              setExpandedGapsUpi(showGaps ? null : row.upi);
-                            }
-                          }}
-                          title={gaps.length > 0 ? 'Lücken anzeigen' : undefined}
+                          onClick={() => setSelectedRow(row)}
+                          title="ESPR-Auditor öffnen"
                         >
                           {score != null ? `${Number(score).toFixed(1)}%` : '—'}
                           {gaps.length > 0 ? ` (${gaps.length})` : ''}
@@ -416,6 +422,13 @@ export default function InboundDashboardPage() {
                       <td className="px-5 py-3 text-slate-600">{String(payload.weight ?? '—')}</td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRow(row)}
+                            className="rounded border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
+                          >
+                            Auditor
+                          </button>
                           <button
                             type="button"
                             disabled={validatingUpi === row.upi}
@@ -446,24 +459,6 @@ export default function InboundDashboardPage() {
                         {new Date(row.created_at).toLocaleString('de-DE')}
                       </td>
                     </tr>
-                    {showGaps ? (
-                      <tr key={`${row.id}-gaps`} className="bg-slate-50/60">
-                        <td colSpan={9} className="px-5 py-3">
-                          <ul className="space-y-1 text-xs text-slate-600">
-                            {gaps.slice(0, 5).map((gap) => (
-                              <li key={gap.field_path}>
-                                <span className="font-mono text-slate-800">{gap.field_path}</span>
-                                {' — '}
-                                {gap.reason}
-                              </li>
-                            ))}
-                            {gaps.length > 5 ? (
-                              <li className="text-slate-400">… und {gaps.length - 5} weitere</li>
-                            ) : null}
-                          </ul>
-                        </td>
-                      </tr>
-                    ) : null}
                     </Fragment>
                   );
                 })}
@@ -472,6 +467,21 @@ export default function InboundDashboardPage() {
           )}
         </div>
       </div>
+
+      {selectedRow ? (
+        <DraftAuditorPanel
+          upi={selectedRow.upi}
+          source={SOURCE_LABELS[selectedRow.source] ?? selectedRow.source}
+          validationStatus={selectedRow.validation_status}
+          readinessScore={selectedRow.readiness_score_percent}
+          validatedAt={selectedRow.validated_at}
+          validationReport={selectedRow.validation_report}
+          gaps={selectedRow.gaps}
+          validating={validatingUpi === selectedRow.upi}
+          onClose={() => setSelectedRow(null)}
+          onRevalidate={() => void revalidate(selectedRow.upi)}
+        />
+      ) : null}
     </div>
   );
 }

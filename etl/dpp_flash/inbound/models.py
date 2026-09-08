@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 # GTIN-8 / GTIN-12 (UPC) / GTIN-13 (EAN) / GTIN-14 — digits only.
 _GTIN_PATTERN = re.compile(r"^\d{8}$|^\d{12,14}$")
@@ -53,7 +55,20 @@ class ProductPassportDraft(BaseModel):
     gtin: str | None = Field(default=None, description="GTIN-8/12/13/14, digits only.")
     weight: str | None = None
     is_draft: bool = True
-    manufacturer_address: str | None = None
+    hersteller: str | None = Field(default=None, description="Legal manufacturer name (ERP master).")
+    herstelleradresse: str | None = Field(
+        default=None,
+        description="Full manufacturer postal address (ERP master).",
+    )
+    kontakt: Contact | None = Field(default=None, description="Manufacturer contact person.")
+    eori: str | None = Field(
+        default=None,
+        description="Economic operator registration (EORI) if known in ERP.",
+    )
+    manufacturer_address: str | None = Field(
+        default=None,
+        description="Deprecated alias for herstelleradresse — kept for backward compatibility.",
+    )
     disposal_instructions: str | None = None
     safety_warnings: list[str] = Field(default_factory=list)
     bom: list[BillOfMaterialItem] = Field(default_factory=list)
@@ -71,3 +86,14 @@ class ProductPassportDraft(BaseModel):
                 f"got {normalized!r}"
             )
         return normalized
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_legacy_master_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        legacy_address = payload.get("manufacturer_address")
+        if legacy_address and not payload.get("herstelleradresse"):
+            payload["herstelleradresse"] = legacy_address
+        return payload

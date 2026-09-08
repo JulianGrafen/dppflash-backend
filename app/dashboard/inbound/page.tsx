@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { FileSpreadsheet, FileText, Loader2, RefreshCw, Search, Upload } from 'lucide-react';
 
 import { DraftAuditorPanel } from '@/app/dashboard/inbound/DraftAuditorPanel';
+import { StammdatenFieldsCard } from '@/app/dashboard/inbound/StammdatenFieldsCard';
 import type { InboundGapRecord, InboundValidationReportBundle } from '@/app/domain/inbound/draftAuditDisplay';
 
 const CARD_CLASS =
@@ -262,6 +263,8 @@ export default function InboundDashboardPage() {
           </div>
         </div>
 
+        <StammdatenFieldsCard />
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className={`${CARD_CLASS} p-5`}>
             <div className="mb-3 flex items-center gap-2 text-[#0c1929]">
@@ -358,6 +361,7 @@ export default function InboundDashboardPage() {
                   <th className="px-5 py-3">Auditor</th>
                   <th className="px-5 py-3">GTIN</th>
                   <th className="px-5 py-3">Gewicht</th>
+                  <th className="px-5 py-3">Hersteller</th>
                   <th className="px-5 py-3">Aktion</th>
                   <th className="px-5 py-3">Erstellt</th>
                 </tr>
@@ -434,6 +438,9 @@ export default function InboundDashboardPage() {
                       </td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.gtin ?? '—')}</td>
                       <td className="px-5 py-3 text-slate-600">{String(payload.weight ?? '—')}</td>
+                      <td className="max-w-[10rem] truncate px-5 py-3 text-slate-600" title={String(payload.hersteller ?? payload.manufacturer_address ?? '')}>
+                        {String(payload.hersteller ?? '—')}
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-1">
                           <button
@@ -479,6 +486,7 @@ export default function InboundDashboardPage() {
         <DraftAuditorPanel
           upi={selectedRow.upi}
           source={SOURCE_LABELS[selectedRow.source] ?? selectedRow.source}
+          payload={selectedRow.payload ?? {}}
           validationStatus={selectedRow.validation_status}
           readinessScore={selectedRow.readiness_score_percent}
           validatedAt={selectedRow.validated_at}

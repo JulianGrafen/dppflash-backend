@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from etl.dpp_flash.inbound.models import BillOfMaterialItem, ProductPassportDraft
+from etl.dpp_flash.inbound.models import BillOfMaterialItem, Contact, ProductPassportDraft
 from etl.models.audit_field import AuditField, is_audit_field_filled
 from etl.models.dpp_schemas import (
     DPPAnalysisResult,
@@ -38,6 +38,13 @@ def _bom_to_composition_text(bom: list[BillOfMaterialItem]) -> str | None:
     return "; ".join(lines) if lines else None
 
 
+def _format_kontakt(kontakt: Contact | None) -> str | None:
+    if kontakt is None:
+        return None
+    parts = [part for part in (kontakt.name, kontakt.email, kontakt.phone) if part]
+    return " · ".join(parts) if parts else None
+
+
 def passport_draft_to_analysis_result(
     draft: ProductPassportDraft,
     *,
@@ -52,11 +59,17 @@ def passport_draft_to_analysis_result(
         gtin_or_equivalent=_erp_field(draft.gtin, "ERP: GTIN/EAN"),
     )
 
+    herstelleradresse = draft.herstelleradresse or draft.manufacturer_address
     economic_operator = None
-    if draft.manufacturer_address:
+    if any((draft.hersteller, herstelleradresse, draft.kontakt, draft.eori)):
         economic_operator = DPPEconomicOperator(
-            manufacturer_name=_erp_field(draft.manufacturer_address, "ERP: Herstelleradresse"),
-            manufacturer_address=_erp_field(draft.manufacturer_address, "ERP: Herstelleradresse"),
+            manufacturer_name=_erp_field(draft.hersteller, "ERP: Hersteller"),
+            manufacturer_address=_erp_field(herstelleradresse, "ERP: Herstelleradresse"),
+            electronic_contact_details=_erp_field(
+                _format_kontakt(draft.kontakt),
+                "ERP: Kontakt",
+            ),
+            unique_operator_identifier=_erp_field(draft.eori, "ERP: EORI"),
         )
 
     product_details = GenericProductDetails(
@@ -119,6 +132,14 @@ def _overlay_erp_on_extraction(
             extraction.economic_operator.manufacturer_address = _overlay_audit_field(
                 extraction.economic_operator.manufacturer_address,
                 erp.economic_operator.manufacturer_address,
+            )
+            extraction.economic_operator.electronic_contact_details = _overlay_audit_field(
+                extraction.economic_operator.electronic_contact_details,
+                erp.economic_operator.electronic_contact_details,
+            )
+            extraction.economic_operator.unique_operator_identifier = _overlay_audit_field(
+                extraction.economic_operator.unique_operator_identifier,
+                erp.economic_operator.unique_operator_identifier,
             )
 
     if erp.product_details:

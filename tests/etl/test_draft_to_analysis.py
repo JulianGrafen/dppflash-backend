@@ -22,7 +22,8 @@ def test_passport_draft_maps_core_erp_fields() -> None:
         upi="LOC-400-25",
         gtin="04001234987654",
         weight="25.000 KG",
-        manufacturer_address="TechVolt GmbH, Berlin",
+        hersteller="TechVolt GmbH",
+        herstelleradresse="TechVolt GmbH, Berlin",
         disposal_instructions="Restmüll",
     )
     result = passport_draft_to_analysis_result(draft)
@@ -30,7 +31,8 @@ def test_passport_draft_maps_core_erp_fields() -> None:
     assert audit_value(result.identification.unique_product_identifier) == "LOC-400-25"
     assert audit_value(result.identification.gtin_or_equivalent) == "04001234987654"
     assert audit_value(result.product_details.product_weight) == "25.000 KG"
-    assert audit_value(result.economic_operator.manufacturer_name) == "TechVolt GmbH, Berlin"
+    assert audit_value(result.economic_operator.manufacturer_name) == "TechVolt GmbH"
+    assert audit_value(result.economic_operator.manufacturer_address) == "TechVolt GmbH, Berlin"
     assert audit_value(result.sustainability.end_of_life_treatment) == "Restmüll"
 
 

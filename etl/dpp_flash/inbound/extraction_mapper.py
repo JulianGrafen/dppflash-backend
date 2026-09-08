@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from etl.dpp_flash.inbound.models import ProductPassportDraft
+from etl.dpp_flash.inbound.models import Contact, ProductPassportDraft
 from etl.models.dpp_schemas import DPPAnalysisResult
 
 
@@ -35,9 +35,17 @@ def analysis_result_to_passport_draft(
         result.identification.gtin_or_equivalent if result.identification else None
     )
 
-    manufacturer_address = None
+    hersteller = None
+    herstelleradresse = None
+    eori = None
+    kontakt = None
     if result.economic_operator is not None:
-        manufacturer_address = _audit_value(result.economic_operator.manufacturer_name)
+        hersteller = _audit_value(result.economic_operator.manufacturer_name)
+        herstelleradresse = _audit_value(result.economic_operator.manufacturer_address)
+        eori = _audit_value(result.economic_operator.unique_operator_identifier)
+        contact_text = _audit_value(result.economic_operator.electronic_contact_details)
+        if contact_text:
+            kontakt = Contact(name=contact_text)
 
     weight = None
     if result.product_details is not None:
@@ -49,7 +57,10 @@ def analysis_result_to_passport_draft(
         upi=upi,
         gtin=gtin,
         weight=weight,
-        manufacturer_address=manufacturer_address,
+        hersteller=hersteller,
+        herstelleradresse=herstelleradresse,
+        kontakt=kontakt,
+        eori=eori,
         safety_warnings=safety_warnings,
         is_draft=True,
     )

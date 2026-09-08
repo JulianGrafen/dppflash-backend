@@ -13,10 +13,12 @@ import {
   type InboundValidationReportBundle,
   sourceSystemLabel,
 } from '@/app/domain/inbound/draftAuditDisplay';
+import { DraftStammdatenSection } from '@/app/dashboard/inbound/DraftStammdatenSection';
 
 type DraftAuditorPanelProps = {
   upi: string;
   source: string;
+  payload: Record<string, unknown>;
   validationStatus?: string | null;
   readinessScore?: number | null;
   validatedAt?: string | null;
@@ -62,6 +64,7 @@ function statusBadgeClass(status: DraftAuditFieldRow['status']): string {
 export function DraftAuditorPanel({
   upi,
   source,
+  payload,
   validationStatus,
   readinessScore,
   validatedAt,
@@ -185,6 +188,9 @@ export function DraftAuditorPanel({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          <DraftStammdatenSection payload={payload} />
+
+          <h3 className="mb-3 text-sm font-semibold text-[#0c1929]">ESPR-Felder (Validator)</h3>
           {[...grouped.entries()].map(([block, blockRows]) => (
             <section key={block} className="mb-6">
               <h3 className="mb-2 text-sm font-semibold text-[#0c1929]">{blockLabel(block)}</h3>

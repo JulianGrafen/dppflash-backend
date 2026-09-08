@@ -15,7 +15,8 @@ SAP_PAYLOAD: dict[str, Any] = {
     "upi": "UPI-670689",
     "gtin": "4006381333931",
     "weight": None,
-    "manufacturer_address": "Musterstraße 1, 12345 Berlin",
+    "hersteller": "Muster GmbH",
+    "herstelleradresse": "Musterstraße 1, 12345 Berlin",
     "bom": [
         {
             "bom_number": "B1",
@@ -27,7 +28,8 @@ SAP_PAYLOAD: dict[str, Any] = {
 
 SDS_EXTRACT: dict[str, Any] = {
     "weight": "12.5 kg",
-    "manufacturer_address": "WRONG — must not overwrite",
+    "herstelleradresse": "WRONG — must not overwrite",
+    "hersteller": "WRONG NAME",
     "safety_warnings": ["H315", "H319"],
     "bom": [
         {
@@ -57,7 +59,9 @@ def test_ingest_fuses_master_and_enrichment() -> None:
     assert dpp["bom"][0]["component_description"] == "Quarz 50%"
     assert dpp["bom"][0]["supplier_contact"]["email"] == "supplier@example.com"
     # … but never overwrites master values.
-    assert dpp["manufacturer_address"] == "Musterstraße 1, 12345 Berlin"
+    assert dpp["manufacturer_address"] is None
+    assert dpp["hersteller"] == "Muster GmbH"
+    assert dpp["herstelleradresse"] == "Musterstraße 1, 12345 Berlin"
     assert dpp["bom"][0]["supplier_contact"]["name"] == "SAP Supplier"
     assert dpp["is_draft"] is True
 

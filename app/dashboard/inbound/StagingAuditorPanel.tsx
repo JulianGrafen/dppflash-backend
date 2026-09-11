@@ -271,9 +271,9 @@ export function StagingAuditorPanel({
                   <p className="text-xs font-medium text-slate-700">{block}</p>
                   <ul className="mt-1 space-y-1">
                     {blockRows.slice(0, 12).map((row) => (
-                      <li key={row.fieldPath} className="flex justify-between text-xs text-slate-600">
+                      <li key={row.path} className="flex justify-between text-xs text-slate-600">
                         <span>{row.label}</span>
-                        <span>{row.displayValue ?? '—'}</span>
+                        <span>{row.value ?? '—'}</span>
                       </li>
                     ))}
                   </ul>

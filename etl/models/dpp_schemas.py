@@ -85,6 +85,7 @@ class ProductCategory(str, Enum):
     TEXTILES_APPAREL = "TEXTILES_APPAREL"
     ELECTRONICS = "ELECTRONICS"
     BATTERIES = "BATTERIES"
+    CHEMICALS = "CHEMICALS"
     GENERIC = "GENERIC"
 
 
@@ -292,12 +293,17 @@ class BatteryProductDetails(BaseProductDetails):
     category: Literal[ProductCategory.BATTERIES] = ProductCategory.BATTERIES
 
 
+class ChemicalProductDetails(BaseProductDetails):
+    category: Literal[ProductCategory.CHEMICALS] = ProductCategory.CHEMICALS
+
+
 ProductDetailsModel = Annotated[
     Union[
         GenericProductDetails,
         TextileProductDetails,
         ElectronicsProductDetails,
         BatteryProductDetails,
+        ChemicalProductDetails,
     ],
     Field(discriminator="category"),
 ]
@@ -390,12 +396,17 @@ class BatterySustainability(BaseSustainabilityCircularity):
     category: Literal[ProductCategory.BATTERIES] = ProductCategory.BATTERIES
 
 
+class ChemicalSustainability(BaseSustainabilityCircularity):
+    category: Literal[ProductCategory.CHEMICALS] = ProductCategory.CHEMICALS
+
+
 SustainabilityModel = Annotated[
     Union[
         GenericSustainability,
         TextileSustainability,
         ElectronicsSustainability,
         BatterySustainability,
+        ChemicalSustainability,
     ],
     Field(discriminator="category"),
 ]
@@ -513,6 +524,7 @@ _CATEGORY_PRODUCT_DETAILS: dict[ProductCategory, type[BaseProductDetails]] = {
     ProductCategory.TEXTILES_APPAREL: TextileProductDetails,
     ProductCategory.ELECTRONICS: ElectronicsProductDetails,
     ProductCategory.BATTERIES: BatteryProductDetails,
+    ProductCategory.CHEMICALS: ChemicalProductDetails,
 }
 
 _CATEGORY_SUSTAINABILITY: dict[ProductCategory, type[BaseSustainabilityCircularity]] = {
@@ -520,6 +532,7 @@ _CATEGORY_SUSTAINABILITY: dict[ProductCategory, type[BaseSustainabilityCirculari
     ProductCategory.TEXTILES_APPAREL: TextileSustainability,
     ProductCategory.ELECTRONICS: ElectronicsSustainability,
     ProductCategory.BATTERIES: BatterySustainability,
+    ProductCategory.CHEMICALS: ChemicalSustainability,
 }
 
 

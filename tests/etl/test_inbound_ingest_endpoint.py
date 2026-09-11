@@ -7,15 +7,31 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
 from etl.http_service import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _seed_ingest_tenant_stammdaten() -> None:
+    stammdaten_repo.upsert_stammdaten(
+        "tenant-1",
+        TenantStammdatenUpsert(
+            hersteller="Muster GmbH",
+            herstelleradresse="Musterstraße 1, 12345 Berlin",
+            taric_code="34060000",
+        ),
+    )
 
 SAP_PAYLOAD: dict[str, Any] = {
     "upi": "UPI-670689",
     "gtin": "4006381333931",
     "weight": None,
     "hersteller": "Muster GmbH",
+    "manufacturer_name": "Muster GmbH",
+    "taric_code": "34060000",
     "herstelleradresse": "Musterstraße 1, 12345 Berlin",
     "bom": [
         {

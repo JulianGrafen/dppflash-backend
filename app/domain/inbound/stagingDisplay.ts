@@ -11,6 +11,7 @@ export const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
   TEXTILES_APPAREL: 'Textilien / Bekleidung',
   ELECTRONICS: 'Elektronik',
   BATTERIES: 'Batterien',
+  CHEMICALS: 'Chemie / Klebstoffe',
   GENERIC: 'Allgemein',
 };
 

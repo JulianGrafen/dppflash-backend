@@ -23,6 +23,7 @@ class TenantStammdaten(BaseModel):
     herstelleradresse: str | None = None
     kontakt: TenantKontakt | None = None
     eori: str | None = None
+    taric_code: str | None = None
 
 
 class TenantStammdatenUpsert(BaseModel):
@@ -30,3 +31,4 @@ class TenantStammdatenUpsert(BaseModel):
     herstelleradresse: str | None = None
     kontakt: TenantKontakt | None = None
     eori: str | None = None
+    taric_code: str | None = None

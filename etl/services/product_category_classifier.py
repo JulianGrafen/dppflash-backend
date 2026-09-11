@@ -32,6 +32,21 @@ _CATEGORY_PATTERNS: dict[ProductCategory, tuple[tuple[str, float], ...]] = {
         (r"\bIP\s*\d{2}\b", 1.0),
         (r"\belectronic\s+device\b", 1.5),
     ),
+    ProductCategory.CHEMICALS: (
+        (r"\bsicherheitsdatenblatt\b", 2.5),
+        (r"\bsds\b", 2.0),
+        (r"\bmsds\b", 2.0),
+        (r"\bklebstoff\b", 2.5),
+        (r"\bdichtstoff\b", 2.5),
+        (r"\badhesive\b", 2.0),
+        (r"\bsealant\b", 2.0),
+        (r"\bREACH\b", 2.0),
+        (r"\bSVHC\b", 2.5),
+        (r"\babschnitt\s*3\b", 1.5),
+        (r"\bsection\s*3\b", 1.5),
+        (r"\bmixture\b", 1.5),
+        (r"\bgemisch\b", 1.5),
+    ),
     ProductCategory.TEXTILES_APPAREL: (
         (r"\bGOTS\b", 3.0),
         (r"\bOeko-?Tex\b", 2.5),
@@ -52,6 +67,7 @@ _FILENAME_HINTS: dict[ProductCategory, tuple[str, ...]] = {
     ProductCategory.BATTERIES: ("battery", "batterie", "akku", "cell"),
     ProductCategory.ELECTRONICS: ("electronics", "elektronik", "device", "geraet"),
     ProductCategory.TEXTILES_APPAREL: ("textile", "textil", "garment", "apparel", "fabric"),
+    ProductCategory.CHEMICALS: ("sds", "msds", "klebstoff", "adhesive", "sealant", "chemical"),
 }
 
 _UPGRADE_THRESHOLD = 2.5
@@ -85,6 +101,7 @@ def classify_product_category(corpus: str, filename: str = "") -> CategoryClassi
     for category in (
         ProductCategory.BATTERIES,
         ProductCategory.ELECTRONICS,
+        ProductCategory.CHEMICALS,
         ProductCategory.TEXTILES_APPAREL,
     ):
         score, hits = _score_category(normalized, category)

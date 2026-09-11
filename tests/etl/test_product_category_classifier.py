@@ -31,7 +31,7 @@ def test_classify_electronics_from_rohs_weee() -> None:
 def test_classify_generic_adhesive() -> None:
     corpus = "Klebstoff auf Epoxidharzbasis. Abschnitt 3: Quarz 50%, Harz 50%."
     result = classify_product_category(corpus)
-    assert result.category == ProductCategory.GENERIC
+    assert result.category == ProductCategory.CHEMICALS
 
 
 def test_refine_upgrades_generic_to_battery() -> None:

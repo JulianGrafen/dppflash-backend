@@ -9,10 +9,24 @@ from etl.dpp_flash.inbound.staging_merge import (
     merge_staging_event,
 )
 from etl.dpp_flash.inbound.staging_repository import InMemoryStagingEventRepository
+from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
 from etl.dpp_flash.inbound.triage import process_incoming_data
 
 
+def _seed_merge_tenant(tenant_id: str) -> None:
+    stammdaten_repo.upsert_stammdaten(
+        tenant_id,
+        TenantStammdatenUpsert(
+            hersteller="Merge Tenant GmbH",
+            herstelleradresse="Merge Str. 1",
+            taric_code="34060000",
+        ),
+    )
+
+
 def test_auto_merge_creates_master_passport() -> None:
+    _seed_merge_tenant("merge-tenant-1")
     staging = InMemoryStagingEventRepository()
     drafts = InMemoryDppDraftRepository()
     stored = ingest_and_maybe_merge(
@@ -35,7 +49,11 @@ def test_auto_merge_fuses_into_existing_master() -> None:
 
     stammdaten_repo.upsert_stammdaten(
         "merge-tenant-2",
-        TenantStammdatenUpsert(hersteller="Master GmbH", herstelleradresse="Berlin"),
+        TenantStammdatenUpsert(
+            hersteller="Master GmbH",
+            herstelleradresse="Berlin",
+            taric_code="34060000",
+        ),
     )
 
     staging = InMemoryStagingEventRepository()
@@ -70,6 +88,7 @@ def test_duplicate_open_upi_marks_conflict() -> None:
 
 
 def test_orphan_assign_and_merge() -> None:
+    _seed_merge_tenant("merge-tenant-4")
     staging = InMemoryStagingEventRepository()
     drafts = InMemoryDppDraftRepository()
     orphan = process_incoming_data({"Title": "No id"}, "CSV_UPLOAD", "merge-tenant-4")

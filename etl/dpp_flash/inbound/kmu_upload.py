@@ -124,6 +124,50 @@ KMU_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "Disposal Instructions",
         "Disposal",
     ),
+    "category": (
+        "Produktkategorie",
+        "Product Category",
+        "ESPR Category",
+        "ESPR Kategorie",
+        "Kategorie",
+        "Category",
+    ),
+    "taric_code": (
+        "TARIC",
+        "Taric",
+        "HS Code",
+        "HS-Code",
+        "Zolltarif",
+        "Zolltarifnummer",
+        "Commodity Code",
+    ),
+    "manufacturer_name": (
+        "Manufacturer Name",
+        "Manufacturer",
+        "Herstellername",
+    ),
+    "material_composition": (
+        "Material Composition",
+        "Materialzusammensetzung",
+        "Zusammensetzung",
+        "Composition",
+    ),
+    "repairability_info": (
+        "Repairability",
+        "Reparierbarkeit",
+        "Repairability Info",
+    ),
+    "recyclability_info": (
+        "Recyclability",
+        "Recyclingfähigkeit",
+        "Recyclability Info",
+    ),
+    "contains_svhc": (
+        "SVHC",
+        "contains SVHC",
+        "REACH SVHC",
+        "Enthält SVHC",
+    ),
 }
 
 _CSV_SUFFIXES = (".csv",)
@@ -266,11 +310,20 @@ async def upload_erp_export(
             continue
         draft_json = draft.model_dump(mode="json")
         if persist:
-            stored_row, validation = persist_with_validation(
-                repository,
-                build_master_row(draft, tenant_id, source="kmu_excel"),
-                draft,
-            )
+            try:
+                stored_row, validation = persist_with_validation(
+                    repository,
+                    build_master_row(draft, tenant_id, source="kmu_excel"),
+                    draft,
+                )
+            except ValueError as exc:
+                row_errors.append(
+                    {
+                        "row": index + 2,
+                        "errors": [{"type": "value_error", "msg": str(exc)}],
+                    }
+                )
+                continue
             merged_payload = stored_row.get("payload") or draft_json
             draft_json = {
                 **merged_payload,

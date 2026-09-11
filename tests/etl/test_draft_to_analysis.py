@@ -11,11 +11,24 @@ from etl.dpp_flash.inbound.draft_to_analysis import (
     resolve_analysis_for_validation,
 )
 from etl.dpp_flash.inbound.models import ProductPassportDraft
+from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
 from etl.http_service import app
 from etl.models.audit_field import audit_value
 from etl.models.dpp_schemas import ProductCategory
 
 client = TestClient(app)
+
+
+def _seed_validate_tenant_stammdaten() -> None:
+    stammdaten_repo.upsert_stammdaten(
+        "validate-tenant",
+        TenantStammdatenUpsert(
+            hersteller="Fixture Hersteller GmbH",
+            herstelleradresse="Fixturestraße 1",
+            taric_code="34060000",
+        ),
+    )
 
 
 def test_passport_draft_maps_core_erp_fields() -> None:
@@ -74,6 +87,7 @@ def test_resolve_preserves_pdf_product_category() -> None:
 
 
 def test_extended_fixture_upload_then_validate_has_score() -> None:
+    _seed_validate_tenant_stammdaten()
     fixture = (
         Path(__file__).resolve().parent.parent / "fixtures" / "mock_kmu_export_extended.xlsx"
     )

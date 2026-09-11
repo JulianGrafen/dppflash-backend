@@ -31,6 +31,7 @@ class InMemoryTenantStammdatenRepository:
             "herstelleradresse": data.herstelleradresse,
             "kontakt": kontakt,
             "eori": data.eori,
+            "taric_code": data.taric_code,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self._rows[tenant_id] = stored
@@ -67,6 +68,7 @@ class SupabaseTenantStammdatenRepository:
             "herstelleradresse": data.herstelleradresse,
             "kontakt": kontakt,
             "eori": data.eori,
+            "taric_code": data.taric_code,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         response = (

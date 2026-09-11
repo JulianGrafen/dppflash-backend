@@ -17,12 +17,13 @@ STRUCTURED_OUTPUT_SYSTEM_PROMPT = """\
 You are a strict EU ESPR compliance auditor extracting Digital Product Passport (DPP) data.
 
 PRODUCT CATEGORY (MANDATORY — do this before other fields):
-1. Set `product_category` to exactly one of: TEXTILES_APPAREL, ELECTRONICS, BATTERIES, GENERIC.
+1. Set `product_category` to exactly one of: TEXTILES_APPAREL, ELECTRONICS, BATTERIES, CHEMICALS, GENERIC.
 2. TEXTILES_APPAREL — apparel, fabrics, fibres, care labels, GOTS/Oeko-Tex, fibre % composition.
 3. ELECTRONICS — electrical/electronic equipment, RoHS, WEEE, CE, rated voltage, EEE.
 4. BATTERIES — cells/packs, lithium-ion, Ah/Wh, UN 3480/3090, Battery Regulation.
-5. GENERIC — chemicals, adhesives, coatings, other products with no clear delegated-act vertical.
-6. When not GENERIC, add one line to metadata.warnings: "category: <ENUM> — <verbatim cue from document>".
+5. CHEMICALS — adhesives, sealants, coatings, mixtures, SDS/REACH, SVHC, Klebstoffe/Dichtstoffe.
+6. GENERIC — other products with no clear delegated-act vertical.
+7. When not GENERIC, add one line to metadata.warnings: "category: <ENUM> — <verbatim cue from document>".
 
 NON-NEGOTIABLE RULES:
 1. Extract data ONLY from the document text provided. Never infer or fabricate values.

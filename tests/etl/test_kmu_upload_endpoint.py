@@ -9,6 +9,8 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
 from etl.http_service import app
 
 client = TestClient(app)
@@ -20,6 +22,8 @@ VALID_ROWS = [
         "Gewicht (kg)": "12.5",
         "Herstelleradresse": "Musterstraße 1, 12345 Berlin",
         "Entsorgungshinweise": "Restmüll",
+        "TARIC": "34060000",
+        "Manufacturer Name": "KMU Test GmbH",
     },
     {
         "Artikelnummer": "KMU-1003",
@@ -27,8 +31,23 @@ VALID_ROWS = [
         "Gewicht (kg)": None,  # NaN → None path
         "Herstelleradresse": None,
         "Entsorgungshinweise": None,
+        "TARIC": "34060001",
+        "Manufacturer Name": "KMU Test GmbH",
     },
 ]
+
+
+@pytest.fixture(autouse=True)
+def _seed_kmu_tenant_stammdaten() -> None:
+    for tenant_id in ("tenant-1", "validate-tenant"):
+        stammdaten_repo.upsert_stammdaten(
+            tenant_id,
+            TenantStammdatenUpsert(
+                hersteller="Stammdaten Hersteller GmbH",
+                herstelleradresse="Stammdatenweg 1",
+                taric_code="34060000",
+            ),
+        )
 
 
 def _kmu_upload(filename: str, content: bytes, tenant_id: str = "tenant-1") -> object:
@@ -65,10 +84,12 @@ def test_xlsx_upload_normalizes_and_validates() -> None:
     assert first["upi"] == "KMU-1001"
     assert first["gtin"] == "4006381333931"  # not mangled into a float
     assert first["weight"] == "12.5"
-    assert first.get("herstelleradresse") is None  # Stammdaten come from tenant settings, not Excel
+    assert first.get("herstelleradresse") == "Stammdatenweg 1"
+    assert first.get("manufacturer_name") == "Stammdaten Hersteller GmbH"
+    assert first.get("taric_code") == "34060000"
     assert first["is_draft"] is True
     assert second["weight"] is None  # NaN converted to None
-    assert second.get("herstelleradresse") is None
+    assert second.get("herstelleradresse") == "Stammdatenweg 1"
 
 
 def test_csv_upload_works() -> None:

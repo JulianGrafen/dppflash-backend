@@ -6,15 +6,17 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from etl.dpp_flash.inbound.category_requirements import effective_manufacturer_name
 from etl.dpp_flash.inbound.models import BillOfMaterialItem, Contact, ProductPassportDraft
 from etl.models.audit_field import AuditField, is_audit_field_filled
 from etl.models.dpp_schemas import (
     DPPAnalysisResult,
     DPPIdentification,
     DPPEconomicOperator,
-    GenericProductDetails,
-    GenericSustainability,
     ProductCategory,
+    _CATEGORY_PRODUCT_DETAILS,
+    _CATEGORY_SUSTAINABILITY,
+    reassign_analysis_category,
 )
 
 
@@ -22,6 +24,18 @@ def _erp_field(value: str | None, source_detail: str) -> AuditField | None:
     if value is None or not str(value).strip():
         return None
     return AuditField.from_erp_master(str(value).strip(), source_detail)
+
+
+def _svhc_audit_field(value: str | None) -> AuditField | None:
+    if value is None or not str(value).strip():
+        return None
+    text = str(value).strip()
+    lowered = text.casefold()
+    if lowered in {"true", "yes", "ja", "1", "y"}:
+        return AuditField.from_erp_master(True, source_detail="ERP: SVHC/REACH")
+    if lowered in {"false", "no", "nein", "0", "n"}:
+        return AuditField.from_erp_master(False, source_detail="ERP: SVHC/REACH")
+    return AuditField.from_erp_master(text, source_detail="ERP: SVHC/REACH")
 
 
 def _bom_to_composition_text(bom: list[BillOfMaterialItem]) -> str | None:
@@ -48,22 +62,25 @@ def _format_kontakt(kontakt: Contact | None) -> str | None:
 def passport_draft_to_analysis_result(
     draft: ProductPassportDraft,
     *,
-    product_category: ProductCategory = ProductCategory.GENERIC,
+    product_category: ProductCategory | None = None,
 ) -> DPPAnalysisResult:
     """Build a minimal DPPAnalysisResult from a flat inbound draft (ERP/Excel master)."""
+    category = product_category or draft.category
     safety_text = "; ".join(draft.safety_warnings) if draft.safety_warnings else None
-    composition = _bom_to_composition_text(draft.bom)
+    composition = draft.material_composition or _bom_to_composition_text(draft.bom)
+    manufacturer = effective_manufacturer_name(draft)
 
     identification = DPPIdentification(
         unique_product_identifier=_erp_field(draft.upi, "ERP: Artikelnummer/SKU"),
         gtin_or_equivalent=_erp_field(draft.gtin, "ERP: GTIN/EAN"),
+        commodity_code_taric=_erp_field(draft.taric_code, "ERP: TARIC/Zolltarif"),
     )
 
     herstelleradresse = draft.herstelleradresse or draft.manufacturer_address
     economic_operator = None
-    if any((draft.hersteller, herstelleradresse, draft.kontakt, draft.eori)):
+    if any((manufacturer, herstelleradresse, draft.kontakt, draft.eori)):
         economic_operator = DPPEconomicOperator(
-            manufacturer_name=_erp_field(draft.hersteller, "ERP: Hersteller"),
+            manufacturer_name=_erp_field(manufacturer, "ERP: Hersteller"),
             manufacturer_address=_erp_field(herstelleradresse, "ERP: Herstelleradresse"),
             electronic_contact_details=_erp_field(
                 _format_kontakt(draft.kontakt),
@@ -72,23 +89,40 @@ def passport_draft_to_analysis_result(
             unique_operator_identifier=_erp_field(draft.eori, "ERP: EORI"),
         )
 
-    product_details = GenericProductDetails(
+    details_cls = _CATEGORY_PRODUCT_DETAILS[category]
+    product_details = details_cls(
+        category=category,
         product_weight=_erp_field(draft.weight, "ERP: Gewicht"),
         warnings_safety_information=_erp_field(safety_text, "ERP: Sicherheitshinweise"),
+        contains_svhc=_svhc_audit_field(draft.contains_svhc),
     )
 
-    sustainability = None
-    if draft.disposal_instructions or composition:
-        sustainability = GenericSustainability(
-            end_of_life_treatment=_erp_field(
-                draft.disposal_instructions,
-                "ERP: Entsorgungshinweise",
-            ),
-            material_composition=_erp_field(composition, "ERP: Stückliste/BOM"),
+    sustainability_cls = _CATEGORY_SUSTAINABILITY[category]
+    sustainability_fields: dict[str, Any] = {"category": category}
+    if draft.disposal_instructions:
+        sustainability_fields["end_of_life_treatment"] = _erp_field(
+            draft.disposal_instructions,
+            "ERP: Entsorgungshinweise",
         )
+    if composition:
+        sustainability_fields["material_composition"] = _erp_field(
+            composition,
+            "ERP: Materialzusammensetzung",
+        )
+    if draft.repairability_info:
+        sustainability_fields["repairability_info"] = _erp_field(
+            draft.repairability_info,
+            "ERP: Reparierbarkeit",
+        )
+    if draft.recyclability_info:
+        sustainability_fields["recyclability_info"] = _erp_field(
+            draft.recyclability_info,
+            "ERP: Recyclingfähigkeit",
+        )
+    sustainability = sustainability_cls(**sustainability_fields) if len(sustainability_fields) > 1 else None
 
     return DPPAnalysisResult(
-        product_category=product_category,
+        product_category=category,
         identification=identification,
         economic_operator=economic_operator,
         product_details=product_details,
@@ -117,6 +151,10 @@ def _overlay_erp_on_extraction(
         extraction.identification.gtin_or_equivalent = _overlay_audit_field(
             extraction.identification.gtin_or_equivalent,
             erp.identification.gtin_or_equivalent,
+        )
+        extraction.identification.commodity_code_taric = _overlay_audit_field(
+            extraction.identification.commodity_code_taric,
+            erp.identification.commodity_code_taric,
         )
     elif erp.identification and extraction.identification is None:
         extraction.identification = erp.identification
@@ -154,6 +192,10 @@ def _overlay_erp_on_extraction(
                 extraction.product_details.warnings_safety_information,
                 erp.product_details.warnings_safety_information,
             )
+            extraction.product_details.contains_svhc = _overlay_audit_field(
+                extraction.product_details.contains_svhc,
+                erp.product_details.contains_svhc,
+            )
 
     if erp.sustainability:
         if extraction.sustainability is None:
@@ -166,6 +208,14 @@ def _overlay_erp_on_extraction(
             extraction.sustainability.material_composition = _overlay_audit_field(
                 extraction.sustainability.material_composition,
                 erp.sustainability.material_composition,
+            )
+            extraction.sustainability.repairability_info = _overlay_audit_field(
+                extraction.sustainability.repairability_info,
+                erp.sustainability.repairability_info,
+            )
+            extraction.sustainability.recyclability_info = _overlay_audit_field(
+                extraction.sustainability.recyclability_info,
+                erp.sustainability.recyclability_info,
             )
 
     return extraction
@@ -186,5 +236,9 @@ def resolve_analysis_for_validation(
         return erp_analysis
 
     merged = _overlay_erp_on_extraction(extraction, erp_analysis)
-    merged.product_category = extraction.product_category
+    # Draft category wins when explicitly set (non-GENERIC); otherwise keep PDF inference.
+    if draft.category != ProductCategory.GENERIC:
+        merged = reassign_analysis_category(merged, draft.category)
+    else:
+        merged.product_category = extraction.product_category
     return merged

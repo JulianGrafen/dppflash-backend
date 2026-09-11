@@ -19,6 +19,7 @@ def test_upsert_and_apply_on_kmu_upload() -> None:
             hersteller="Tenant Hersteller GmbH",
             herstelleradresse="Hauptstr. 1",
             eori="DE123",
+            taric_code="34060000",
         ),
     )
 

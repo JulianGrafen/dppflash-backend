@@ -8,9 +8,22 @@ import uuid
 import pandas as pd
 from fastapi.testclient import TestClient
 
+from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
 from etl.http_service import app
 
 client = TestClient(app)
+
+
+def _seed_tenant_stammdaten(tenant_id: str) -> None:
+    stammdaten_repo.upsert_stammdaten(
+        tenant_id,
+        TenantStammdatenUpsert(
+            hersteller="Ingest Test GmbH",
+            herstelleradresse="Testweg 1",
+            taric_code="34060000",
+        ),
+    )
 
 
 def _csv_bytes(rows: list[dict[str, object]]) -> bytes:
@@ -21,6 +34,7 @@ def _csv_bytes(rows: list[dict[str, object]]) -> bytes:
 
 def test_webhook_ingest_auto_merges_to_processed() -> None:
     tenant = f"wh-{uuid.uuid4().hex[:8]}"
+    _seed_tenant_stammdaten(tenant)
     response = client.post(
         "/api/v1/inbound/ingest/webhook",
         json={"tenant_id": tenant, "SKU": "WH-001", "Name": "Webhook Product"},
@@ -46,6 +60,7 @@ def test_webhook_orphan_without_anchor() -> None:
 
 def test_file_ingest_creates_one_event_per_row() -> None:
     tenant = f"file-{uuid.uuid4().hex[:8]}"
+    _seed_tenant_stammdaten(tenant)
     rows = [
         {"SKU": "FILE-1", "EAN": "4006381333931"},
         {"Title": "No SKU row"},

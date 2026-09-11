@@ -21,10 +21,13 @@ def tenant_stammdaten_to_draft_payload(record: dict[str, Any] | None) -> dict[st
     payload: dict[str, Any] = {}
     if record.get("hersteller"):
         payload["hersteller"] = record["hersteller"]
+        payload["manufacturer_name"] = record["hersteller"]
     if record.get("herstelleradresse"):
         payload["herstelleradresse"] = record["herstelleradresse"]
     if record.get("eori"):
         payload["eori"] = record["eori"]
+    if record.get("taric_code"):
+        payload["taric_code"] = record["taric_code"]
     kontakt = record.get("kontakt")
     if kontakt and isinstance(kontakt, dict):
         if any(kontakt.get(key) for key in ("name", "email", "phone")):

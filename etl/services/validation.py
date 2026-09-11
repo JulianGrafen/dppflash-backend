@@ -4,23 +4,17 @@ Deterministic validation for extracted DPP payloads.
 Checks
 ------
 1. ESPR field completeness (via `DPPAnalysisResult.calculate_gap_analysis()`).
-2. Material mass-balance when percentage patterns are present in the composition text.
+2. Validation Agent plausibility rules (mass balance, GTIN, recycled %, etc.).
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from etl.graph.state import GapRecord, ValidationReport, ValidationStatus
-from etl.models.audit_field import AuditField, audit_text, audit_value
 from etl.models.dpp_schemas import DPPAnalysisResult
+from etl.services.validation_agent import ValidationAgentReport, run_validation_agent
 
-_COMPOSITION_PERCENT_PATTERN = re.compile(
-    r"(?P<label>[^;\n%]+?)\s*(?:[:=]?\s*)?(?P<value>\d{1,3}(?:[.,]\d+)?)\s*%",
-    re.IGNORECASE,
-)
-_MASS_BALANCE_TOLERANCE = 0.5
 _MIN_READINESS_FOR_VALID = 100.0
 
 
@@ -28,40 +22,7 @@ _MIN_READINESS_FOR_VALID = 100.0
 class ValidationOutcome:
     report: ValidationReport
     gaps: list[GapRecord]
-
-
-def _extract_percentages_from_composition_text(text: str | None) -> list[float]:
-    if not text:
-        return []
-    values: list[float] = []
-    for match in _COMPOSITION_PERCENT_PATTERN.finditer(text):
-        raw = match.group("value").replace(",", ".")
-        try:
-            values.append(float(raw))
-        except ValueError:
-            continue
-    return values
-
-
-def _evaluate_mass_balance(result: DPPAnalysisResult) -> tuple[bool, float | None, list[str]]:
-    composition_text = None
-    if result.sustainability is not None:
-        composition_text = audit_text(result.sustainability.material_composition)
-
-    percentages = _extract_percentages_from_composition_text(composition_text)
-    if not percentages:
-        return True, None, []
-
-    total = round(sum(percentages), 2)
-    issues: list[str] = []
-    if abs(total - 100.0) > _MASS_BALANCE_TOLERANCE:
-        issues.append(
-            f"Mass balance deviation: parsed composition percentages sum to {total}% "
-            f"(expected 100% ± {_MASS_BALANCE_TOLERANCE})."
-        )
-        return False, total, issues
-
-    return True, total, []
+    agent_report: ValidationAgentReport
 
 
 def validate_extracted_data(result: DPPAnalysisResult) -> ValidationOutcome:
@@ -72,8 +33,15 @@ def validate_extracted_data(result: DPPAnalysisResult) -> ValidationOutcome:
     missing_paths: list[str] = list(gap_analysis["missing_fields"])
     readiness = float(gap_analysis["score_percent"])
 
-    mass_balance_ok, mass_total, mass_issues = _evaluate_mass_balance(result)
-    issues = list(mass_issues)
+    agent_outcome = run_validation_agent(result)
+    agent_report: ValidationAgentReport = agent_outcome.report
+
+    mass_balance_ok = agent_report.mass_balance_total_percent is None or not any(
+        f.rule_id == "mass_balance" and f.severity == "critical" for f in agent_report.findings
+    )
+    mass_total = agent_report.mass_balance_total_percent
+
+    issues: list[str] = [f.message for f in agent_report.findings]
 
     gaps: list[GapRecord] = [
         GapRecord(
@@ -84,16 +52,29 @@ def validate_extracted_data(result: DPPAnalysisResult) -> ValidationOutcome:
         for path in missing_paths
     ]
 
-    if not mass_balance_ok:
+    seen_gap_paths = {g.field_path for g in gaps}
+    for finding in agent_report.findings:
+        if finding.severity not in ("critical", "major"):
+            continue
+        if finding.field_path in seen_gap_paths:
+            continue
+        seen_gap_paths.add(finding.field_path)
+        gap_severity = "critical" if finding.severity == "critical" else "major"
         gaps.append(
             GapRecord(
-                field_path="sustainability.material_composition",
-                reason=issues[-1],
-                severity="critical",
+                field_path=finding.field_path,
+                reason=finding.message,
+                severity=gap_severity,
             )
         )
 
-    is_complete = len(missing_paths) == 0 and mass_balance_ok and readiness >= _MIN_READINESS_FOR_VALID
+    agent_passed = agent_report.passed
+    is_complete = (
+        len(missing_paths) == 0
+        and mass_balance_ok
+        and agent_passed
+        and readiness >= _MIN_READINESS_FOR_VALID
+    )
     status = ValidationStatus.VALID if is_complete else ValidationStatus.INVALID
 
     report = ValidationReport(
@@ -106,7 +87,7 @@ def validate_extracted_data(result: DPPAnalysisResult) -> ValidationOutcome:
         issues=issues,
     )
 
-    return ValidationOutcome(report=report, gaps=gaps)
+    return ValidationOutcome(report=report, gaps=gaps, agent_report=agent_report)
 
 
 def build_mass_balance_retry_feedback(report: ValidationReport) -> str:
@@ -123,4 +104,3 @@ def build_mass_balance_retry_feedback(report: ValidationReport) -> str:
         "'Nicht deklarationspflichtige Stoffe / Füllstoffe' for the remainder. "
         "If the sum exceeds 100%, scale proportionally or remove duplicate entries."
     )
-

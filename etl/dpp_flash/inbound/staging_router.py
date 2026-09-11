@@ -334,6 +334,7 @@ async def preview_validate_staging_event(
         "gaps": [gap.model_dump(mode="json") for gap in result.gaps],
         "validation_report": {
             "validation": result.validation_report,
+            "plausibility": result.plausibility_report,
             "audit": result.audit_report,
             "analysis_snapshot": analysis.model_dump(mode="json"),
             "filled_field_paths": gap_analysis["filled_field_names"],

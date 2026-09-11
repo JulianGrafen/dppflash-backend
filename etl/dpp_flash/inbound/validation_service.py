@@ -27,6 +27,7 @@ class InboundValidationResult(BaseModel):
     gaps: list[GapRecord]
     validation_report: dict[str, Any]
     audit_report: dict[str, Any]
+    plausibility_report: dict[str, Any]
     validated_at: str
 
 
@@ -62,6 +63,7 @@ def _build_validation_result(analysis: DPPAnalysisResult) -> InboundValidationRe
         gaps=gaps,
         validation_report=outcome.report.model_dump(mode="json"),
         audit_report=audit.report.model_dump(mode="json"),
+        plausibility_report=outcome.agent_report.model_dump(mode="json"),
         validated_at=datetime.now(timezone.utc).isoformat(),
     )
 
@@ -86,6 +88,7 @@ def validation_fields_for_row(
         "readiness_score_percent": result.readiness_score_percent,
         "validation_report": {
             "validation": result.validation_report,
+            "plausibility": result.plausibility_report,
             "audit": result.audit_report,
             "analysis_snapshot": analysis.model_dump(mode="json"),
             "filled_field_paths": gap_analysis["filled_field_names"],

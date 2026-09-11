@@ -11,12 +11,26 @@ export type InboundGapRecord = {
   severity?: string;
 };
 
+export type InboundPlausibilityFinding = {
+  rule_id: string;
+  field_path: string;
+  message: string;
+  severity?: string;
+};
+
 export type InboundValidationReportBundle = {
   validation?: {
     missing_field_paths?: string[];
     readiness_score_percent?: number;
     mass_balance_ok?: boolean;
     issues?: string[];
+  };
+  plausibility?: {
+    passed?: boolean;
+    findings?: InboundPlausibilityFinding[];
+    mass_balance_total_percent?: number | null;
+    gtin_checked?: boolean;
+    gtin_valid?: boolean | null;
   };
   audit?: {
     is_fully_compliant?: boolean;

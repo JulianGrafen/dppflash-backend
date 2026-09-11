@@ -108,6 +108,13 @@ export function DraftAuditorPanel({
       ? PRODUCT_CATEGORY_LABELS[productCategoryRaw]
       : productCategoryRaw || null;
 
+  const plausibility = validationReport?.plausibility;
+  const plausibilityFindings = plausibility?.findings ?? [];
+  const showPlausibility =
+    plausibilityFindings.length > 0 &&
+    (plausibility?.passed === false ||
+      plausibilityFindings.some((f) => f.severity === 'warning'));
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
@@ -172,6 +179,37 @@ export function DraftAuditorPanel({
           {validationReport?.audit?.co2_mapping_applied ? (
             <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
               CO₂-Proxy angewendet: {validationReport.audit.co2_notes ?? 'Platzhalter-LCA'}
+            </div>
+          ) : null}
+
+          {showPlausibility ? (
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-semibold text-slate-700">
+                Plausibilität
+                {plausibility?.passed === false ? (
+                  <span className="ml-2 font-normal text-red-700">— Prüfung fehlgeschlagen</span>
+                ) : (
+                  <span className="ml-2 font-normal text-amber-800">— Hinweise</span>
+                )}
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {plausibilityFindings.map((finding, index) => (
+                  <li key={`${finding.rule_id}-${index}`} className="flex items-start gap-1.5 text-xs">
+                    <CircleAlert
+                      className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                        finding.severity === 'critical' || finding.severity === 'major'
+                          ? 'text-red-600'
+                          : 'text-amber-600'
+                      }`}
+                    />
+                    <span className="text-slate-700">
+                      <span className="font-medium text-slate-500">{finding.field_path}</span>
+                      {' — '}
+                      {finding.message}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
 

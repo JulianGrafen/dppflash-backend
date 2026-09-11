@@ -11,7 +11,7 @@ export function DraftStammdatenSection({ payload }: DraftStammdatenSectionProps)
   return (
     <section className="mb-6">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-[#0c1929]">Stammdaten (Master)</h3>
+        <h3 className="text-sm font-semibold text-[#0c1929]">Stammdaten (Tenant)</h3>
         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600">
           {filled} / {total} befüllt
         </span>
@@ -42,7 +42,7 @@ export function DraftStammdatenSection({ payload }: DraftStammdatenSectionProps)
                     : 'bg-slate-50 text-slate-500 ring-slate-200'
                 }`}
               >
-                {row.filled ? 'ERP' : 'Offen'}
+                {row.filled ? 'Gesetzt' : 'Offen'}
               </span>
             </div>
           </li>

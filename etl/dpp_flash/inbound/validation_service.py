@@ -118,6 +118,18 @@ def persist_with_validation(
     raw_extraction: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], InboundValidationResult]:
     """Validate draft, persist row, return stored row + validation result."""
+    tenant_id = str(row.get("tenant_id") or "").strip()
+    if tenant_id:
+        from etl.dpp_flash.inbound.stammdaten_repository import get_tenant_stammdaten_repository
+        from etl.dpp_flash.inbound.stammdaten_service import apply_tenant_stammdaten_to_draft
+
+        draft = apply_tenant_stammdaten_to_draft(
+            draft,
+            tenant_id,
+            get_tenant_stammdaten_repository(),
+        )
+        row = dict(row)
+        row["payload"] = draft.model_dump(mode="json")
     result, analysis = validate_passport_draft(draft, raw_extraction)
     validated_row = dict(row)
     validated_row.update(validation_fields_for_row(result, analysis))

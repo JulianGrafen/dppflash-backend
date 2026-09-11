@@ -30,10 +30,18 @@ def test_auto_merge_creates_master_passport() -> None:
 
 
 def test_auto_merge_fuses_into_existing_master() -> None:
+    from etl.dpp_flash.inbound.stammdaten_models import TenantStammdatenUpsert
+    from etl.dpp_flash.inbound.stammdaten_repository import _default_repo as stammdaten_repo
+
+    stammdaten_repo.upsert_stammdaten(
+        "merge-tenant-2",
+        TenantStammdatenUpsert(hersteller="Master GmbH", herstelleradresse="Berlin"),
+    )
+
     staging = InMemoryStagingEventRepository()
     drafts = InMemoryDppDraftRepository()
     ingest_and_maybe_merge(
-        {"SKU": "FUSE-1", "hersteller": "Master GmbH"},
+        {"SKU": "FUSE-1"},
         "CSV_UPLOAD",
         "merge-tenant-2",
         staging_repo=staging,

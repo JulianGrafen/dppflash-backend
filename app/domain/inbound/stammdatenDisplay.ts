@@ -1,31 +1,46 @@
 export type StammdatenFieldDef = {
-  key: string;
+  key: 'hersteller' | 'herstelleradresse' | 'eori';
   label: string;
-  excelColumns: string;
+  placeholder: string;
+  multiline?: boolean;
 };
 
 export const STAMMDATEN_FIELD_DEFS: StammdatenFieldDef[] = [
   {
     key: 'hersteller',
     label: 'Hersteller',
-    excelColumns: 'Hersteller, Herstellername, Manufacturer, Lieferant',
+    placeholder: 'z. B. TechVolt GmbH',
   },
   {
     key: 'herstelleradresse',
     label: 'Herstelleradresse',
-    excelColumns: 'Herstelleradresse, Adresse, Manufacturer Address, Anschrift',
-  },
-  {
-    key: 'kontakt',
-    label: 'Kontakt',
-    excelColumns: 'Kontakt, Ansprechpartner + E-Mail + Telefon (separate Spalten)',
+    placeholder: 'Straße, PLZ Ort, Land',
+    multiline: true,
   },
   {
     key: 'eori',
     label: 'EORI',
-    excelColumns: 'EORI, EORI-Nummer, EORI Number',
+    placeholder: 'EORI-Nummer des Wirtschaftsbeteiligten',
   },
 ];
+
+export type StammdatenFormState = {
+  hersteller: string;
+  herstelleradresse: string;
+  eori: string;
+  kontaktName: string;
+  kontaktEmail: string;
+  kontaktPhone: string;
+};
+
+export const EMPTY_STAMMDATEN_FORM: StammdatenFormState = {
+  hersteller: '',
+  herstelleradresse: '',
+  eori: '',
+  kontaktName: '',
+  kontaktEmail: '',
+  kontaktPhone: '',
+};
 
 export type StammdatenRow = {
   key: string;
@@ -63,13 +78,57 @@ function formatPayloadValue(key: string, payload: Record<string, unknown>): stri
   return text || null;
 }
 
+const DRAFT_STAMMDATEN_KEYS = [
+  { key: 'hersteller', label: 'Hersteller' },
+  { key: 'herstelleradresse', label: 'Herstelleradresse' },
+  { key: 'kontakt', label: 'Kontakt' },
+  { key: 'eori', label: 'EORI' },
+] as const;
+
+export function stammdatenFromApiRecord(
+  record: Record<string, unknown> | null | undefined,
+): StammdatenFormState {
+  if (!record) {
+    return { ...EMPTY_STAMMDATEN_FORM };
+  }
+  const kontakt =
+    record.kontakt && typeof record.kontakt === 'object'
+      ? (record.kontakt as ContactPayload)
+      : {};
+  return {
+    hersteller: String(record.hersteller ?? ''),
+    herstelleradresse: String(record.herstelleradresse ?? ''),
+    eori: String(record.eori ?? ''),
+    kontaktName: String(kontakt.name ?? ''),
+    kontaktEmail: String(kontakt.email ?? ''),
+    kontaktPhone: String(kontakt.phone ?? ''),
+  };
+}
+
+export function stammdatenFormToApiPayload(form: StammdatenFormState): Record<string, unknown> {
+  const kontakt =
+    form.kontaktName.trim() || form.kontaktEmail.trim() || form.kontaktPhone.trim()
+      ? {
+          name: form.kontaktName.trim() || null,
+          email: form.kontaktEmail.trim() || null,
+          phone: form.kontaktPhone.trim() || null,
+        }
+      : null;
+  return {
+    hersteller: form.hersteller.trim() || null,
+    herstelleradresse: form.herstelleradresse.trim() || null,
+    eori: form.eori.trim() || null,
+    kontakt,
+  };
+}
+
 export function buildStammdatenRows(payload: Record<string, unknown>): StammdatenRow[] {
   const normalized = { ...payload };
   if (!normalized.herstelleradresse && normalized.manufacturer_address) {
     normalized.herstelleradresse = normalized.manufacturer_address;
   }
 
-  return STAMMDATEN_FIELD_DEFS.map((field) => {
+  return DRAFT_STAMMDATEN_KEYS.map((field) => {
     const value = formatPayloadValue(field.key, normalized);
     return {
       key: field.key,

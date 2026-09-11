@@ -65,10 +65,10 @@ def test_xlsx_upload_normalizes_and_validates() -> None:
     assert first["upi"] == "KMU-1001"
     assert first["gtin"] == "4006381333931"  # not mangled into a float
     assert first["weight"] == "12.5"
-    assert first["herstelleradresse"] == "Musterstraße 1, 12345 Berlin"
+    assert first.get("herstelleradresse") is None  # Stammdaten come from tenant settings, not Excel
     assert first["is_draft"] is True
     assert second["weight"] is None  # NaN converted to None
-    assert second["herstelleradresse"] is None
+    assert second.get("herstelleradresse") is None
 
 
 def test_csv_upload_works() -> None:

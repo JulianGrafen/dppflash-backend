@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from etl.dpp_flash.inbound.fusion_service import build_master_row
 from etl.dpp_flash.inbound.models import ProductPassportDraft
+from etl.dpp_flash.inbound.stammdaten_service import strip_stammdaten_from_product_row
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
 from etl.dpp_flash.inbound.validation_service import persist_with_validation
 
@@ -117,45 +118,6 @@ KMU_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "gtin": ("GTIN", "EAN", "EAN-13", "EAN13", "Barcode"),
     "weight": ("Gewicht (kg)", "Gewicht", "Weight (kg)", "Weight", "Masse (kg)", "Masse"),
-    "hersteller": (
-        "Hersteller",
-        "Herstellername",
-        "Manufacturer",
-        "Manufacturer Name",
-        "Lieferant",
-    ),
-    "herstelleradresse": (
-        "Herstelleradresse",
-        "Manufacturer Address",
-        "Adresse",
-        "Anschrift",
-        "Hersteller Adresse",
-    ),
-    "eori": ("EORI", "EORI-Nummer", "EORI Number", "EORI-Nr", "EORI Nr"),
-    "kontakt_name": (
-        "Kontakt",
-        "Ansprechpartner",
-        "Kontaktperson",
-        "Contact",
-        "Contact Name",
-    ),
-    "kontakt_email": (
-        "E-Mail",
-        "Email",
-        "Kontakt E-Mail",
-        "Kontakt Email",
-        "Mail",
-    ),
-    "kontakt_phone": (
-        "Telefon",
-        "Phone",
-        "Kontakt Telefon",
-        "Tel",
-        "Telefonnummer",
-    ),
-    "manufacturer_address": (
-        "Herstelleradresse (legacy)",
-    ),
     "disposal_instructions": (
         "Entsorgungshinweise",
         "Entsorgung",
@@ -268,18 +230,8 @@ def assemble_draft_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _assemble_draft_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Map flat Excel kontakt columns into nested Contact and drop helper keys."""
-    payload = dict(row)
-    kontakt_name = payload.pop("kontakt_name", None)
-    kontakt_email = payload.pop("kontakt_email", None)
-    kontakt_phone = payload.pop("kontakt_phone", None)
-    if kontakt_name or kontakt_email or kontakt_phone:
-        payload["kontakt"] = {
-            "name": kontakt_name,
-            "email": kontakt_email,
-            "phone": kontakt_phone,
-        }
-    return payload
+    """Normalize one product row — Stammdaten come from tenant settings, not Excel."""
+    return strip_stammdaten_from_product_row(dict(row))
 
 
 @router.post("/upload-erp-export", status_code=status.HTTP_201_CREATED)
@@ -319,8 +271,12 @@ async def upload_erp_export(
                 build_master_row(draft, tenant_id, source="kmu_excel"),
                 draft,
             )
-            draft_json["readiness_score_percent"] = validation.readiness_score_percent
-            draft_json["gap_count"] = validation.gap_count
+            merged_payload = stored_row.get("payload") or draft_json
+            draft_json = {
+                **merged_payload,
+                "readiness_score_percent": validation.readiness_score_percent,
+                "gap_count": validation.gap_count,
+            }
             stored.append(stored_row)
         drafts.append(draft_json)
 

@@ -316,7 +316,7 @@ export default function InboundDashboardPage() {
           </div>
         </div>
 
-        <StammdatenFieldsCard />
+        <StammdatenFieldsCard tenantId={tenantId} />
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className={`${CARD_CLASS} p-5`}>

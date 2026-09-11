@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from etl.dpp_flash.inbound.kmu_upload import assemble_draft_row, resolve_canonical_field
+from etl.dpp_flash.inbound.stammdaten_service import strip_stammdaten_from_product_row
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 
 
@@ -22,7 +23,7 @@ def canonicalize_staging_payload(raw: dict[str, Any]) -> dict[str, Any]:
         target_key = field if field else str(key)
         if target_key not in canonical:
             canonical[target_key] = value
-    return assemble_draft_row(canonical)
+    return strip_stammdaten_from_product_row(assemble_draft_row(canonical))
 
 
 def staging_payload_to_draft(

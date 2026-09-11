@@ -5,7 +5,16 @@ import Link from 'next/link';
 import { FileSpreadsheet, FileText, Loader2, RefreshCw, Search, Upload } from 'lucide-react';
 
 import { DraftAuditorPanel } from '@/app/dashboard/inbound/DraftAuditorPanel';
+import {
+  StagingAuditorPanel,
+  type StagingEventRow,
+} from '@/app/dashboard/inbound/StagingAuditorPanel';
 import { StammdatenFieldsCard } from '@/app/dashboard/inbound/StammdatenFieldsCard';
+import {
+  STAGING_SOURCE_LABELS,
+  STAGING_STATUS_LABELS,
+  stagingStatusBadgeClass,
+} from '@/app/domain/inbound/stagingDisplay';
 import type { InboundGapRecord, InboundValidationReportBundle } from '@/app/domain/inbound/draftAuditDisplay';
 
 const CARD_CLASS =
@@ -97,6 +106,10 @@ export default function InboundDashboardPage() {
   const [validatingUpi, setValidatingUpi] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<DraftRow | null>(null);
   const [storageHint, setStorageHint] = useState<string | null>(null);
+  const [mainView, setMainView] = useState<'passports' | 'staging'>('passports');
+  const [stagingRows, setStagingRows] = useState<StagingEventRow[]>([]);
+  const [stagingLoading, setStagingLoading] = useState(false);
+  const [selectedStaging, setSelectedStaging] = useState<StagingEventRow | null>(null);
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -118,9 +131,30 @@ export default function InboundDashboardPage() {
     }
   }, [tenantId]);
 
+  const loadStaging = useCallback(async () => {
+    setStagingLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/inbound/staging/events?tenantId=${encodeURIComponent(tenantId)}`,
+      );
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+      }
+      setStagingRows((body.items ?? []) as StagingEventRow[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Staging laden fehlgeschlagen');
+      setStagingRows([]);
+    } finally {
+      setStagingLoading(false);
+    }
+  }, [tenantId]);
+
   useEffect(() => {
     void loadDrafts();
-  }, [loadDrafts]);
+    void loadStaging();
+  }, [loadDrafts, loadStaging]);
 
   async function revalidate(upi: string) {
     setValidatingUpi(upi);
@@ -254,12 +288,31 @@ export default function InboundDashboardPage() {
             />
             <button
               type="button"
-              onClick={() => void loadDrafts()}
+              onClick={() => {
+                void loadDrafts();
+                void loadStaging();
+              }}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className="h-4 w-4" />
               Aktualisieren
             </button>
+            <div className="flex rounded-lg border border-slate-200 p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setMainView('passports')}
+                className={`rounded-md px-3 py-1.5 ${mainView === 'passports' ? 'bg-[#0c1929] text-white' : 'text-slate-600'}`}
+              >
+                Passports
+              </button>
+              <button
+                type="button"
+                onClick={() => setMainView('staging')}
+                className={`rounded-md px-3 py-1.5 ${mainView === 'staging' ? 'bg-[#0c1929] text-white' : 'text-slate-600'}`}
+              >
+                Staging
+              </button>
+            </div>
           </div>
         </div>
 
@@ -333,6 +386,70 @@ export default function InboundDashboardPage() {
           </div>
         )}
 
+        {mainView === 'staging' ? (
+        <div className={`${CARD_CLASS} overflow-x-auto`}>
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-semibold text-[#0c1929]">Staging-Warteschlange ({stagingRows.length})</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Webhook/CSV-Ingest → Triage → Auto-Merge. Konflikte und Waisen im Staging-Auditor bearbeiten.
+            </p>
+          </div>
+          {stagingLoading ? (
+            <div className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Lade Staging-Events…
+            </div>
+          ) : stagingRows.length === 0 ? (
+            <p className="px-5 py-12 text-center text-sm text-slate-500">
+              Keine Staging-Events — nutze{' '}
+              <code className="text-xs">/api/inbound/ingest/webhook</code> oder File-Ingest.
+            </p>
+          ) : (
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">UPI</th>
+                  <th className="px-5 py-3">Quelle</th>
+                  <th className="px-5 py-3">Fehler</th>
+                  <th className="px-5 py-3">Auditor</th>
+                  <th className="px-5 py-3">Erstellt</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stagingRows.map((row) => (
+                  <tr key={row.id} className="hover:bg-slate-50/80">
+                    <td className="px-5 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${stagingStatusBadgeClass(row.status)}`}>
+                        {STAGING_STATUS_LABELS[row.status as keyof typeof STAGING_STATUS_LABELS] ?? row.status}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 font-medium">{row.extracted_upi ?? row.merged_upi ?? '—'}</td>
+                    <td className="px-5 py-3 text-xs">{STAGING_SOURCE_LABELS[row.source] ?? row.source}</td>
+                    <td className="max-w-[12rem] truncate px-5 py-3 text-xs text-red-700" title={row.merge_error ?? ''}>
+                      {row.merge_error ?? '—'}
+                    </td>
+                    <td className="px-5 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStaging(row)}
+                        className="text-xs font-medium text-sky-700 underline decoration-sky-200"
+                      >
+                        Auditor
+                      </button>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-slate-500">
+                      {new Date(row.created_at).toLocaleString('de-DE')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        ) : null}
+
+        {mainView === 'passports' ? (
         <div className={`${CARD_CLASS} overflow-x-auto`}>
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-semibold text-[#0c1929]">Gespeicherte Drafts ({rows.length})</h2>
@@ -480,7 +597,20 @@ export default function InboundDashboardPage() {
             </table>
           )}
         </div>
+        ) : null}
       </div>
+
+      {selectedStaging ? (
+        <StagingAuditorPanel
+          tenantId={tenantId}
+          event={selectedStaging}
+          onClose={() => setSelectedStaging(null)}
+          onUpdated={() => {
+            void loadStaging();
+            void loadDrafts();
+          }}
+        />
+      ) : null}
 
       {selectedRow ? (
         <DraftAuditorPanel

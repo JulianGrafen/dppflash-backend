@@ -18,6 +18,7 @@ from etl.dpp_flash.inbound.kmu_upload import router as kmu_upload_router
 from etl.dpp_flash.inbound.match_router import router as dpp_match_router
 from etl.dpp_flash.inbound.pdf_extract import router as pdf_extract_router
 from etl.dpp_flash.inbound.router import router as dpp_ingest_router
+from etl.dpp_flash.inbound.staging_router import router as inbound_staging_router
 from etl.dpp_flash.inbound.validate_router import router as dpp_validate_router
 from etl.pipeline_runner import run_pipeline_payload
 from etl.services.mailer import describe_smtp_config, send_smtp_test_email
@@ -29,6 +30,7 @@ app.include_router(pdf_extract_router)
 app.include_router(dpp_drafts_router)
 app.include_router(dpp_match_router)
 app.include_router(dpp_validate_router)
+app.include_router(inbound_staging_router)
 
 
 class SmtpTestRequest(BaseModel):

@@ -257,6 +257,16 @@ def _normalize_rows(frame: pd.DataFrame) -> list[dict[str, Any]]:
     return normalized.to_dict(orient="records")
 
 
+def resolve_canonical_field(column: object) -> str | None:
+    """Public alias for staging normalization."""
+    return _resolve_canonical_field(column)
+
+
+def assemble_draft_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Public alias for staging normalization."""
+    return _assemble_draft_row(row)
+
+
 def _assemble_draft_row(row: dict[str, Any]) -> dict[str, Any]:
     """Map flat Excel kontakt columns into nested Contact and drop helper keys."""
     payload = dict(row)
@@ -293,7 +303,7 @@ async def upload_erp_export(
     row_errors: list[dict[str, Any]] = []
     for index, row in enumerate(rows):
         try:
-            draft = ProductPassportDraft(**_assemble_draft_row(row))
+            draft = ProductPassportDraft(**assemble_draft_row(row))
         except ValidationError as exc:
             row_errors.append(
                 {

@@ -7,7 +7,7 @@ from typing import Any, Literal, TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from etl.dpp_flash.inbound.category_requirements import validate_universal_draft_fields
+from etl.dpp_flash.inbound.category_requirements import collect_universal_draft_gaps
 from etl.dpp_flash.inbound.draft_to_analysis import resolve_analysis_for_validation
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.graph.state import GapRecord, ValidationStatus
@@ -134,8 +134,17 @@ def persist_with_validation(
         )
         row = dict(row)
         row["payload"] = draft.model_dump(mode="json")
-    validate_universal_draft_fields(draft)
     result, analysis = validate_passport_draft(draft, raw_extraction)
+    universal_gaps = collect_universal_draft_gaps(draft)
+    if universal_gaps:
+        merged_gaps = _merge_gaps(universal_gaps, result.gaps)
+        result = result.model_copy(
+            update={
+                "gaps": merged_gaps,
+                "gap_count": len(merged_gaps),
+                "validation_status": "invalid",
+            }
+        )
     validated_row = dict(row)
     validated_row.update(validation_fields_for_row(result, analysis))
     validated_row["is_draft"] = result.validation_status != "valid"

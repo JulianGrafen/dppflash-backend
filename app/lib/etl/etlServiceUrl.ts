@@ -1,9 +1,12 @@
 import process from 'node:process';
 
-function isRenderProduction(): boolean {
+function isHostedProduction(): boolean {
+  if (process.env.NODE_ENV !== 'production') {
+    return false;
+  }
   return (
-    process.env.NODE_ENV === 'production' &&
-    Boolean(process.env.RENDER?.trim() || process.env.RENDER_SERVICE_ID?.trim())
+    Boolean(process.env.RENDER?.trim() || process.env.RENDER_SERVICE_ID?.trim()) ||
+    Boolean(process.env.VERCEL?.trim() || process.env.VERCEL_ENV?.trim())
   );
 }
 
@@ -38,11 +41,12 @@ export function readEtlServiceBaseUrl(): string {
     assertNotSelfEtlUrl(url);
     return url;
   }
-  if (isRenderProduction()) {
+  if (isHostedProduction()) {
+    const host = process.env.VERCEL ? 'Vercel' : 'Render';
     throw new Error(
-      'ETL_SERVICE_URL fehlt auf Render. In dppflash-backend → Environment setzen: ' +
+      `ETL_SERVICE_URL fehlt (${host}). Setze ` +
         'ETL_SERVICE_URL=https://dppflash-etl.onrender.com ' +
-        '(und ETL_SERVICE_SECRET identisch zum ETL-Service).',
+        'und ETL_SERVICE_SECRET (gleicher Wert wie beim ETL-Service auf Render).',
     );
   }
   return 'http://127.0.0.1:8000';

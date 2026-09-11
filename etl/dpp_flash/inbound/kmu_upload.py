@@ -310,20 +310,11 @@ async def upload_erp_export(
             continue
         draft_json = draft.model_dump(mode="json")
         if persist:
-            try:
-                stored_row, validation = persist_with_validation(
-                    repository,
-                    build_master_row(draft, tenant_id, source="kmu_excel"),
-                    draft,
-                )
-            except ValueError as exc:
-                row_errors.append(
-                    {
-                        "row": index + 2,
-                        "errors": [{"type": "value_error", "msg": str(exc)}],
-                    }
-                )
-                continue
+            stored_row, validation = persist_with_validation(
+                repository,
+                build_master_row(draft, tenant_id, source="kmu_excel"),
+                draft,
+            )
             merged_payload = stored_row.get("payload") or draft_json
             draft_json = {
                 **merged_payload,

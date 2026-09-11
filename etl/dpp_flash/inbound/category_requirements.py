@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from etl.graph.state import GapRecord
 from etl.models.dpp_schemas import ProductCategory
 
 
@@ -63,13 +64,52 @@ def validate_category_required_fields(draft: Any) -> None:
             raise ValueError(rule.message)
 
 
-def validate_universal_draft_fields(draft: Any) -> None:
-    """After Stammdaten merge: universal ESPR anchor fields must be present."""
+def collect_universal_draft_gaps(draft: Any) -> list[GapRecord]:
+    """After Stammdaten merge: report missing universal ESPR anchor fields."""
+    gaps: list[GapRecord] = []
     if not _is_filled(getattr(draft, "upi", None)):
-        raise ValueError("upi ist zwingend erforderlich.")
+        gaps.append(
+            GapRecord(
+                field_path="upi",
+                reason="upi ist zwingend erforderlich.",
+                severity="major",
+            )
+        )
     if getattr(draft, "category", None) is None:
-        raise ValueError("category ist zwingend erforderlich.")
+        gaps.append(
+            GapRecord(
+                field_path="category",
+                reason="category ist zwingend erforderlich.",
+                severity="major",
+            )
+        )
     if not _is_filled(effective_manufacturer_name(draft)):
-        raise ValueError("manufacturer_name ist zwingend erforderlich.")
+        gaps.append(
+            GapRecord(
+                field_path="manufacturer_name",
+                reason=(
+                    "manufacturer_name ist zwingend erforderlich "
+                    "(Produktzeile oder Tenant-Stammdaten)."
+                ),
+                severity="major",
+            )
+        )
     if not _is_filled(getattr(draft, "taric_code", None)):
-        raise ValueError("taric_code ist zwingend erforderlich.")
+        gaps.append(
+            GapRecord(
+                field_path="taric_code",
+                reason=(
+                    "taric_code ist zwingend erforderlich "
+                    "(Produktzeile oder Tenant-Stammdaten)."
+                ),
+                severity="major",
+            )
+        )
+    return gaps
+
+
+def validate_universal_draft_fields(draft: Any) -> None:
+    """Raise ValueError when universal anchor fields are missing (strict callers/tests)."""
+    gaps = collect_universal_draft_gaps(draft)
+    if gaps:
+        raise ValueError(gaps[0].reason)

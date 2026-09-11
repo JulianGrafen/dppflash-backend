@@ -81,7 +81,19 @@ function formatUploadError(body: Record<string, unknown>): string {
       message?: string;
       hint?: string;
       found_columns?: string[];
+      source?: string;
+      row_errors?: Array<{ row?: number; errors?: Array<{ msg?: string }> }>;
     };
+    if (record.source === 'kmu_upload' && Array.isArray(record.row_errors) && record.row_errors.length > 0) {
+      const first = record.row_errors[0];
+      const rowNo = first.row ?? '?';
+      const msg =
+        first.errors?.map((entry) => entry.msg).filter(Boolean).join('; ') ||
+        'Zeile konnte nicht importiert werden.';
+      const more =
+        record.row_errors.length > 1 ? ` (+${record.row_errors.length - 1} weitere Zeilen)` : '';
+      return `Excel Zeile ${rowNo}: ${msg}${more}`;
+    }
     const parts = [record.message, record.hint];
     if (record.found_columns?.length) {
       parts.push(`Gefundene Spalten: ${record.found_columns.join(', ')}`);

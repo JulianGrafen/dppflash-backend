@@ -14,6 +14,7 @@ import {
   sourceSystemLabel,
 } from '@/app/domain/inbound/draftAuditDisplay';
 import { DraftStammdatenSection } from '@/app/dashboard/inbound/DraftStammdatenSection';
+import { PRODUCT_CATEGORY_LABELS } from '@/app/domain/inbound/stagingDisplay';
 
 type DraftAuditorPanelProps = {
   upi: string;
@@ -96,6 +97,16 @@ export function DraftAuditorPanel({
   const missingCount = rows.filter((row) => row.status === 'missing').length;
   const totalFields = validationReport?.total_field_paths ?? rows.length;
   const hasSnapshot = Boolean(validationReport?.analysis_snapshot);
+  const productCategoryRaw =
+    validationReport?.analysis_snapshot &&
+    typeof validationReport.analysis_snapshot === 'object' &&
+    'product_category' in validationReport.analysis_snapshot
+      ? String((validationReport.analysis_snapshot as { product_category?: string }).product_category ?? '')
+      : '';
+  const productCategoryLabel =
+    productCategoryRaw && PRODUCT_CATEGORY_LABELS[productCategoryRaw]
+      ? PRODUCT_CATEGORY_LABELS[productCategoryRaw]
+      : productCategoryRaw || null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -112,6 +123,11 @@ export function DraftAuditorPanel({
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">ESPR Auditor</p>
               <h2 className="mt-1 text-lg font-bold text-[#0c1929]">{upi}</h2>
               <p className="mt-1 text-xs text-slate-500">Quelle: {source}</p>
+              {productCategoryLabel ? (
+                <p className="mt-1 text-xs text-slate-600">
+                  Produktkategorie: <span className="font-medium">{productCategoryLabel}</span>
+                </p>
+              ) : null}
             </div>
             <button
               type="button"

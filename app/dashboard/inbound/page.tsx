@@ -224,6 +224,12 @@ export default function InboundDashboardPage() {
         throw new Error(formatUploadError(body as Record<string, unknown>));
       }
       const count = body.count ?? 1;
+      const pdfCategory =
+        typeof (body as { extraction?: { product_category?: string } }).extraction?.product_category ===
+        'string'
+          ? (body as { extraction: { product_category: string } }).extraction.product_category
+          : null;
+      const categoryHint = pdfCategory ? ` — Kategorie ${pdfCategory}` : '';
       const matchInfo = body.match_status === 'enriched'
         ? ` → Produkt ${body.matched_master_upi} (${body.matched_by})`
         : body.match_status === 'unmatched'
@@ -237,7 +243,9 @@ export default function InboundDashboardPage() {
         scores.length > 0
           ? ` — ESPR-Score Ø ${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}%`
           : '';
-      setLastMessage(`${count} Datensatz${count === 1 ? '' : 'e'} importiert${matchInfo}${scoreHint}.`);
+      setLastMessage(
+        `${count} Datensatz${count === 1 ? '' : 'e'} importiert${categoryHint}${matchInfo}${scoreHint}.`,
+      );
       await loadDrafts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload fehlgeschlagen');

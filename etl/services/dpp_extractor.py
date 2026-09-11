@@ -28,7 +28,8 @@ from dataclasses import dataclass, field
 import pypdf
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
-from etl.models.dpp_schemas import DPPAnalysisResult, DPPExtractionOutput, ExtractionMetadata
+from etl.models.dpp_schemas import DPPAnalysisResult, DPPExtractionOutput, ExtractionMetadata, reassign_analysis_category
+from etl.services.product_category_classifier import refine_product_category
 from etl.services.env_loader import load_project_env, resolve_openai_api_key
 from etl.services.prompts import STRUCTURED_OUTPUT_SYSTEM_PROMPT, build_structured_user_prompt
 
@@ -264,6 +265,27 @@ class DPPExtractor:
 
         parsed = parsed_output.to_analysis_result()
         parsed.metadata.source_filename = filename
+
+        refined_category, refine_reason = refine_product_category(
+            parsed.product_category,
+            document_text,
+            filename,
+        )
+        if refine_reason:
+            logger.info(
+                "dpp_etl.category_refined",
+                extra={
+                    "filename": filename,
+                    "from_category": parsed.product_category.value,
+                    "to_category": refined_category.value,
+                    "reason": refine_reason,
+                },
+            )
+            warnings = list(parsed.metadata.warnings)
+            warnings.append(refine_reason)
+            parsed = reassign_analysis_category(parsed, refined_category)
+            parsed.metadata.warnings = warnings
+
         return parsed
 
     @staticmethod

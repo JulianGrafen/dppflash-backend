@@ -16,6 +16,14 @@ SYNTHETIC_FILLER_NAME = "Nicht deklarationspflichtige Stoffe / Fuellstoffe"
 STRUCTURED_OUTPUT_SYSTEM_PROMPT = """\
 You are a strict EU ESPR compliance auditor extracting Digital Product Passport (DPP) data.
 
+PRODUCT CATEGORY (MANDATORY — do this before other fields):
+1. Set `product_category` to exactly one of: TEXTILES_APPAREL, ELECTRONICS, BATTERIES, GENERIC.
+2. TEXTILES_APPAREL — apparel, fabrics, fibres, care labels, GOTS/Oeko-Tex, fibre % composition.
+3. ELECTRONICS — electrical/electronic equipment, RoHS, WEEE, CE, rated voltage, EEE.
+4. BATTERIES — cells/packs, lithium-ion, Ah/Wh, UN 3480/3090, Battery Regulation.
+5. GENERIC — chemicals, adhesives, coatings, other products with no clear delegated-act vertical.
+6. When not GENERIC, add one line to metadata.warnings: "category: <ENUM> — <verbatim cue from document>".
+
 NON-NEGOTIABLE RULES:
 1. Extract data ONLY from the document text provided. Never infer or fabricate values.
 2. If a field is not explicitly stated in the document → set value to null.
@@ -143,7 +151,9 @@ def build_structured_user_prompt(
         "--- DOCUMENT TEXT START ---\n"
         f"{document_text[:MAX_DOCUMENT_TEXT_CHARS]}\n"
         "--- DOCUMENT TEXT END ---\n\n"
-        "Extract all available DPP fields as AuditField objects (value + source_detail quote). "
+        "Step 1: Determine product_category from the FULL document (see system prompt rubric).\n"
+        "Step 2: Extract all applicable DPP fields for that category as AuditField objects "
+        "(value + source_detail quote).\n"
         "Set value to null when NOT explicitly present; never omit source_detail when value is set."
     )
 

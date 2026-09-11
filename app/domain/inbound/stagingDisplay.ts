@@ -7,6 +7,13 @@ export const STAGING_STATUS_LABELS: Record<StagingStatus, string> = {
   PROCESSED: 'Verarbeitet',
 };
 
+export const PRODUCT_CATEGORY_LABELS: Record<string, string> = {
+  TEXTILES_APPAREL: 'Textilien / Bekleidung',
+  ELECTRONICS: 'Elektronik',
+  BATTERIES: 'Batterien',
+  GENERIC: 'Allgemein',
+};
+
 export const STAGING_SOURCE_LABELS: Record<string, string> = {
   ERP_WEBHOOK: 'ERP Webhook',
   CSV_UPLOAD: 'CSV/Excel',

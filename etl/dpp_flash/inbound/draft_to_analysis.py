@@ -185,4 +185,6 @@ def resolve_analysis_for_validation(
     except ValidationError:
         return erp_analysis
 
-    return _overlay_erp_on_extraction(extraction, erp_analysis)
+    merged = _overlay_erp_on_extraction(extraction, erp_analysis)
+    merged.product_category = extraction.product_category
+    return merged

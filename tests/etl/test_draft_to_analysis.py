@@ -13,6 +13,7 @@ from etl.dpp_flash.inbound.draft_to_analysis import (
 from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.http_service import app
 from etl.models.audit_field import audit_value
+from etl.models.dpp_schemas import ProductCategory
 
 client = TestClient(app)
 
@@ -53,6 +54,23 @@ def test_resolve_prefers_pdf_extraction_and_fills_gaps_from_erp() -> None:
 
     assert audit_value(result.identification.unique_product_identifier) == "PDF-UPC"
     assert audit_value(result.identification.gtin_or_equivalent) == "04001234987654"
+
+
+def test_resolve_preserves_pdf_product_category() -> None:
+    draft = ProductPassportDraft(upi="BAT-1")
+    pdf_json = {
+        "product_category": "BATTERIES",
+        "identification": {
+            "unique_product_identifier": {
+                "value": "BAT-1",
+                "source_system": "DOCUMENT_SDS",
+                "source_detail": "SDS",
+            }
+        },
+        "metadata": {},
+    }
+    result = resolve_analysis_for_validation(draft, pdf_json)
+    assert result.product_category == ProductCategory.BATTERIES
 
 
 def test_extended_fixture_upload_then_validate_has_score() -> None:

@@ -759,3 +759,18 @@ def _coerce_sustainability(
         if key in allowed
     }
     return target(category=category, **payload)  # type: ignore[call-arg, arg-type]
+
+
+def reassign_analysis_category(
+    result: DPPAnalysisResult,
+    category: ProductCategory,
+) -> DPPAnalysisResult:
+    """Set product_category and re-coerce vertical blocks for gap-analysis registry."""
+    if result.product_category == category:
+        return result
+    updated = result.model_copy(update={"product_category": category})
+    if updated.product_details is not None:
+        updated.product_details = _coerce_product_details(category, updated.product_details)
+    if updated.sustainability is not None:
+        updated.sustainability = _coerce_sustainability(category, updated.sustainability)
+    return updated

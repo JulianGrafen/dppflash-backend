@@ -17,23 +17,18 @@ from etl.graph.state import (
     ValidationStatus,
 )
 from etl.models.dpp_schemas import DPPAnalysisResult
-from etl.services.dpp_extractor import DPPExtractor, ExtractorConfig, LLMExtractionError, PDFReadError
-from etl.services.env_loader import describe_missing_llm_config, load_project_env, resolve_openai_api_key
+from etl.services.dpp_extractor import DPPExtractor, LLMExtractionError, PDFReadError
+from etl.services.env_loader import describe_missing_llm_config, load_project_env
+from etl.services.llm_config import build_extractor_config
 
 logger = logging.getLogger(__name__)
 
 
 def _build_extractor(api_key: str | None = None) -> DPPExtractor:
     load_project_env()
-    resolved = (api_key or "").strip() or resolve_openai_api_key()
-    if not resolved:
+    config = build_extractor_config(openai_api_key_override=api_key)
+    if config is None:
         raise LLMExtractionError(describe_missing_llm_config())
-
-    config = ExtractorConfig(
-        openai_api_key=resolved,
-        model=os.environ.get("DPP_EXTRACTOR_MODEL", "gpt-4o-2024-08-06"),
-        timeout_seconds=float(os.environ.get("DPP_EXTRACTOR_TIMEOUT_SECONDS", "120")),
-    )
     return DPPExtractor(config)
 
 

@@ -58,15 +58,19 @@ async def health() -> dict[str, bool]:
 @app.get("/diagnostics")
 async def diagnostics() -> dict[str, Any]:
     from etl.services.env_loader import openai_api_key_status, resolve_openai_api_key
+    from etl.services.llm_config import azure_openai_status, llm_extractor_configured, resolve_azure_openai_config
 
     return {
         "ok": True,
         "service": "dppflash-etl",
         "render_service_name": os.environ.get("RENDER_SERVICE_NAME"),
         "routes": sorted(app.openapi().get("paths", {}).keys()),
+        "llm_configured": llm_extractor_configured(),
         "openai_configured": resolve_openai_api_key() is not None,
+        "azure_openai_configured": resolve_azure_openai_config() is not None,
         "openai_forwarding_enabled": bool(os.environ.get("ETL_SERVICE_SECRET", "").strip()),
         **openai_api_key_status(),
+        **azure_openai_status(),
         "smtp": describe_smtp_config(),
         "supplier_outreach_secret": bool(
             os.environ.get("SUPPLIER_OUTREACH_SECRET", "").strip()

@@ -109,10 +109,12 @@ def _is_hosted_runtime() -> bool:
 
 
 def describe_missing_llm_config() -> str:
+    from etl.services.llm_config import llm_extractor_configured, resolve_azure_openai_config
+
     load_project_env()
-    if resolve_openai_api_key():
+    if llm_extractor_configured():
         loaded = load_project_env()
-        return f"Loaded env from `{loaded.name}`." if loaded else "OPENAI_API_KEY is set in the environment."
+        return f"Loaded env from `{loaded.name}`." if loaded else "LLM credentials are set in the environment."
 
     if _is_hosted_runtime():
         status = openai_api_key_status()
@@ -122,12 +124,26 @@ def describe_missing_llm_config() -> str:
                 f"OPENAI_API_KEY is set on Render service `{service}` but empty. "
                 "Re-enter the key in Render → Environment (no quotes/spaces only), then redeploy."
             )
+        azure = resolve_azure_openai_config()
+        if azure is None:
+            partial = []
+            if os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip():
+                partial.append("endpoint")
+            if os.environ.get("AZURE_OPENAI_API_KEY", "").strip():
+                partial.append("api key")
+            if partial and not os.environ.get("AZURE_OPENAI_DEPLOYMENT", "").strip():
+                return (
+                    f"Azure OpenAI is partially configured on `{service}` ({', '.join(partial)} set) "
+                    "but AZURE_OPENAI_DEPLOYMENT is missing. "
+                    "Add the deployment name from Azure AI Foundry, then redeploy dppflash-etl."
+                )
         return (
-            f"OPENAI_API_KEY is missing on Render service `{service}`. "
-            "Fix A: Render → dppflash-etl → Environment → OPENAI_API_KEY, redeploy. "
-            "Fix B: set OPENAI_API_KEY on Vercel (server env) — PDF upload forwards it to ETL "
-            "when ETL_SERVICE_SECRET matches. "
-            "Check: https://dppflash-etl.onrender.com/diagnostics (openai_configured or use Vercel key)."
+            f"No LLM credentials on Render service `{service}`. "
+            "Option A (Azure): AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT "
+            "(same as the Next.js app). "
+            "Option B (OpenAI): OPENAI_API_KEY on dppflash-etl, or on Vercel with ETL_SERVICE_SECRET "
+            "(forwarded on PDF upload). "
+            "Check: https://dppflash-etl.onrender.com/diagnostics"
         )
 
     loaded = load_project_env()

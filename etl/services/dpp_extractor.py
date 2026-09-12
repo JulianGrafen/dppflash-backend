@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 
 import pypdf
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, AzureOpenAI, OpenAI
 
 from etl.models.dpp_schemas import DPPAnalysisResult, DPPExtractionOutput, ExtractionMetadata, reassign_analysis_category
 from etl.services.product_category_classifier import refine_product_category
@@ -65,7 +65,10 @@ class ExtractorConfig:
         Increase for very long documents; watch token cost.
     """
 
-    openai_api_key: str
+    openai_api_key: str | None = None
+    azure_endpoint: str | None = None
+    azure_api_key: str | None = None
+    azure_api_version: str = "2024-10-21"
     model: str = "gpt-4o-2024-08-06"
     temperature: float = 0.0
     timeout_seconds: float = 120.0
@@ -110,10 +113,22 @@ class DPPExtractor:
 
     def __init__(self, config: ExtractorConfig) -> None:
         self._config = config
-        self._client = OpenAI(
-            api_key=config.openai_api_key,
-            timeout=config.timeout_seconds,
-        )
+        if config.azure_endpoint:
+            if not config.azure_api_key:
+                raise ValueError("azure_api_key is required when azure_endpoint is set.")
+            self._client = AzureOpenAI(
+                azure_endpoint=config.azure_endpoint,
+                api_key=config.azure_api_key,
+                api_version=config.azure_api_version,
+                timeout=config.timeout_seconds,
+            )
+        elif config.openai_api_key:
+            self._client = OpenAI(
+                api_key=config.openai_api_key,
+                timeout=config.timeout_seconds,
+            )
+        else:
+            raise ValueError("ExtractorConfig requires openai_api_key or Azure OpenAI settings.")
 
     # ── Public API ─────────────────────────────────────────────────────────────
 

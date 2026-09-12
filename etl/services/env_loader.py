@@ -83,21 +83,38 @@ def resolve_openai_api_key() -> str | None:
     return file_value or None
 
 
+def _is_hosted_runtime() -> bool:
+    return bool(
+        os.environ.get("RENDER", "").strip()
+        or os.environ.get("RENDER_SERVICE_ID", "").strip()
+        or os.environ.get("VERCEL", "").strip()
+    )
+
+
 def describe_missing_llm_config() -> str:
+    load_project_env()
+    if resolve_openai_api_key():
+        loaded = load_project_env()
+        return f"Loaded env from `{loaded.name}`." if loaded else "OPENAI_API_KEY is set in the environment."
+
+    if _is_hosted_runtime():
+        return (
+            "OPENAI_API_KEY is not set on the Python ETL service. "
+            "Render → dppflash-etl → Environment → add OPENAI_API_KEY (sk-...), then redeploy. "
+            "PDF extraction does not use Vercel env files."
+        )
+
     loaded = load_project_env()
     env_hint = f"Loaded env from `{loaded.name}`." if loaded else "No `.env` or `.env.local` found in project root."
-
-    if resolve_openai_api_key():
-        return env_hint
 
     _, empty_hint = _read_env_key_from_files("OPENAI_API_KEY")
     if empty_hint:
         return (
             f"{env_hint} {empty_hint} "
-            "Paste your key: OPENAI_API_KEY=sk-... then restart `langgraph dev`."
+            "Paste your key: OPENAI_API_KEY=sk-... then restart the ETL server or `langgraph dev`."
         )
 
     return (
         f"{env_hint} Add `OPENAI_API_KEY=sk-...` to `.env.local` or `.env`, "
-        "then restart `langgraph dev`."
+        "then restart the ETL server (`uvicorn etl.http_service:app`) or `langgraph dev`."
     )

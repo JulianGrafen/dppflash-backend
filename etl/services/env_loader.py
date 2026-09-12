@@ -73,13 +73,30 @@ def _read_env_key_from_files(key: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def openai_api_key_status() -> dict[str, bool]:
+    """Non-secret diagnostics for /diagnostics and support."""
+    raw = os.environ.get("OPENAI_API_KEY")
+    stripped = raw.strip() if isinstance(raw, str) else ""
+    return {
+        "openai_env_var_defined": raw is not None,
+        "openai_env_var_nonempty": bool(stripped),
+    }
+
+
 def resolve_openai_api_key() -> str | None:
-    """Return trimmed OpenAI API key if configured."""
+    """Return trimmed OpenAI API key if configured (process env wins over dotenv files)."""
+    value = os.environ.get("OPENAI_API_KEY", "").strip()
+    if value:
+        return value
+
+    if _is_hosted_runtime():
+        return None
+
     load_project_env()
     value = os.environ.get("OPENAI_API_KEY", "").strip()
     if value:
         return value
-    file_value, hint = _read_env_key_from_files("OPENAI_API_KEY")
+    file_value, _hint = _read_env_key_from_files("OPENAI_API_KEY")
     return file_value or None
 
 
@@ -98,10 +115,17 @@ def describe_missing_llm_config() -> str:
         return f"Loaded env from `{loaded.name}`." if loaded else "OPENAI_API_KEY is set in the environment."
 
     if _is_hosted_runtime():
+        status = openai_api_key_status()
+        service = os.environ.get("RENDER_SERVICE_NAME", "dppflash-etl")
+        if status["openai_env_var_defined"] and not status["openai_env_var_nonempty"]:
+            return (
+                f"OPENAI_API_KEY is set on Render service `{service}` but empty. "
+                "Re-enter the key in Render → Environment (no quotes/spaces only), then redeploy."
+            )
         return (
-            "OPENAI_API_KEY is not set on the Python ETL service. "
-            "Render → dppflash-etl → Environment → add OPENAI_API_KEY (sk-...), then redeploy. "
-            "PDF extraction does not use Vercel env files."
+            f"OPENAI_API_KEY is missing on Render service `{service}` (not Vercel/backend). "
+            "Render → dppflash-etl → Environment → OPENAI_API_KEY=sk-..., Save, Manual Deploy. "
+            "Verify: GET https://dppflash-etl.onrender.com/diagnostics → openai_configured: true."
         )
 
     loaded = load_project_env()

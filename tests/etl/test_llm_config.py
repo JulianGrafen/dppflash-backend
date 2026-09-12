@@ -31,6 +31,18 @@ def test_build_extractor_config_prefers_openai_over_azure(monkeypatch: pytest.Mo
     assert config.azure_endpoint is None
 
 
+def test_build_extractor_config_azure_ignores_dpp_extractor_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("etl.services.llm_config.resolve_openai_api_key", lambda: None)
+    monkeypatch.setenv("DPP_EXTRACTOR_MODEL", "gpt-4o-2024-08-06")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://x.openai.azure.com")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "azure-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "my-foundry-deployment")
+
+    config = build_extractor_config()
+    assert config is not None
+    assert config.model == "my-foundry-deployment"
+
+
 def test_build_extractor_config_uses_azure_when_no_openai(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("etl.services.llm_config.resolve_openai_api_key", lambda: None)
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://x.openai.azure.com")

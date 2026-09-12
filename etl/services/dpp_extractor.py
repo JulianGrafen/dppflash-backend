@@ -264,9 +264,22 @@ class DPPExtractor:
                 f"OpenAI connection error while processing '{filename}': {exc}"
             ) from exc
         except APIStatusError as exc:
+            detail = exc.message
+            if exc.status_code == 404 and "DeploymentNotFound" in str(detail):
+                deployment = self._config.model
+                hint = (
+                    f"Azure deployment '{deployment}' was not found on this endpoint. "
+                    "Set AZURE_OPENAI_DEPLOYMENT to the exact deployment name from "
+                    "Azure AI Foundry (not the model id such as gpt-4o). "
+                    "If DPP_EXTRACTOR_MODEL is set for OpenAI, it is ignored for Azure; "
+                    "use DPP_EXTRACTOR_AZURE_DEPLOYMENT to override the deployment name."
+                )
+                raise LLMExtractionError(
+                    f"Azure OpenAI error while processing '{filename}': {detail} {hint}"
+                ) from exc
             raise LLMExtractionError(
                 f"OpenAI API error {exc.status_code} while processing '{filename}': "
-                f"{exc.message}"
+                f"{detail}"
             ) from exc
 
         parsed_output = completion.choices[0].message.parsed

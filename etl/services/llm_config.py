@@ -41,6 +41,23 @@ def azure_openai_status() -> dict[str, bool]:
     }
 
 
+def resolve_azure_deployment_name() -> str | None:
+    """
+    Azure chat API expects the *deployment name* from AI Foundry, not the OpenAI model id.
+
+    Optional override: DPP_EXTRACTOR_AZURE_DEPLOYMENT (never use DPP_EXTRACTOR_MODEL here).
+    """
+    override = os.environ.get("DPP_EXTRACTOR_AZURE_DEPLOYMENT", "").strip()
+    if override:
+        return override
+
+    primary = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "").strip()
+    if primary:
+        return primary
+
+    return os.environ.get("AZURE_OPENAI_COMPLIANCE_DEPLOYMENT", "").strip() or None
+
+
 def resolve_azure_openai_config() -> AzureOpenAiConfig | None:
     """Azure settings from process env (hosted) or dotenv files (local)."""
     if not _is_hosted_runtime():
@@ -48,7 +65,7 @@ def resolve_azure_openai_config() -> AzureOpenAiConfig | None:
 
     endpoint_raw = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
     api_key = os.environ.get("AZURE_OPENAI_API_KEY", "").strip()
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "").strip()
+    deployment = resolve_azure_deployment_name() or ""
     if not endpoint_raw or not api_key or not deployment:
         return None
 
@@ -84,9 +101,8 @@ def build_extractor_config(openai_api_key_override: str | None = None) -> Extrac
 
     azure = resolve_azure_openai_config()
     if azure:
-        model = os.environ.get("DPP_EXTRACTOR_MODEL", "").strip() or azure.deployment
         return ExtractorConfig(
-            model=model,
+            model=azure.deployment,
             openai_api_key=None,
             azure_endpoint=azure.endpoint,
             azure_api_key=azure.api_key,

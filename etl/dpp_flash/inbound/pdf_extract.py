@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from etl.dpp_flash.inbound.extraction_mapper import analysis_result_to_passport_draft
@@ -15,6 +15,7 @@ from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_r
 from etl.dpp_flash.inbound.validation_service import persist_with_validation
 from etl.graph.nodes.extractor import _build_extractor
 from etl.services.dpp_extractor import LLMExtractionError, PDFReadError
+from etl.services.etl_service_auth import etl_bearer_authorized, resolve_openai_for_inbound_request
 
 router = APIRouter(prefix="/api/v1/extract", tags=["pdf-extraction"])
 
@@ -41,6 +42,8 @@ async def extract_pdf(
     tenant_id: str = Form(default="default"),
     persist: bool = Form(default=True),
     repository: DppDraftRepository = Depends(get_dpp_draft_repository),
+    authorization: str | None = Header(default=None),
+    x_dpp_openai_api_key: str | None = Header(default=None, alias="X-DPP-OpenAI-Api-Key"),
 ) -> PdfExtractResponse:
     """Extract ESPR fields from a PDF and match/fuse into an Excel master when possible."""
     if not file.filename:
@@ -55,8 +58,13 @@ async def extract_pdf(
     if not pdf_bytes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file.")
 
+    forwarded_key = (x_dpp_openai_api_key or "").strip()
+    if forwarded_key and not etl_bearer_authorized(authorization):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized.")
+
     try:
-        extractor = _build_extractor()
+        api_key = resolve_openai_for_inbound_request(authorization, x_dpp_openai_api_key)
+        extractor = _build_extractor(api_key=api_key)
         analysis = extractor.extract(pdf_bytes, filename=file.filename)
     except PDFReadError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

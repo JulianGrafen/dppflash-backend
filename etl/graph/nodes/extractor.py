@@ -23,14 +23,14 @@ from etl.services.env_loader import describe_missing_llm_config, load_project_en
 logger = logging.getLogger(__name__)
 
 
-def _build_extractor() -> DPPExtractor:
+def _build_extractor(api_key: str | None = None) -> DPPExtractor:
     load_project_env()
-    api_key = resolve_openai_api_key()
-    if not api_key:
+    resolved = (api_key or "").strip() or resolve_openai_api_key()
+    if not resolved:
         raise LLMExtractionError(describe_missing_llm_config())
 
     config = ExtractorConfig(
-        openai_api_key=api_key,
+        openai_api_key=resolved,
         model=os.environ.get("DPP_EXTRACTOR_MODEL", "gpt-4o-2024-08-06"),
         timeout_seconds=float(os.environ.get("DPP_EXTRACTOR_TIMEOUT_SECONDS", "120")),
     )

@@ -65,6 +65,7 @@ async def diagnostics() -> dict[str, Any]:
         "render_service_name": os.environ.get("RENDER_SERVICE_NAME"),
         "routes": sorted(app.openapi().get("paths", {}).keys()),
         "openai_configured": resolve_openai_api_key() is not None,
+        "openai_forwarding_enabled": bool(os.environ.get("ETL_SERVICE_SECRET", "").strip()),
         **openai_api_key_status(),
         "smtp": describe_smtp_config(),
         "supplier_outreach_secret": bool(

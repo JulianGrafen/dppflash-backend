@@ -123,9 +123,11 @@ def describe_missing_llm_config() -> str:
                 "Re-enter the key in Render → Environment (no quotes/spaces only), then redeploy."
             )
         return (
-            f"OPENAI_API_KEY is missing on Render service `{service}` (not Vercel/backend). "
-            "Render → dppflash-etl → Environment → OPENAI_API_KEY=sk-..., Save, Manual Deploy. "
-            "Verify: GET https://dppflash-etl.onrender.com/diagnostics → openai_configured: true."
+            f"OPENAI_API_KEY is missing on Render service `{service}`. "
+            "Fix A: Render → dppflash-etl → Environment → OPENAI_API_KEY, redeploy. "
+            "Fix B: set OPENAI_API_KEY on Vercel (server env) — PDF upload forwards it to ETL "
+            "when ETL_SERVICE_SECRET matches. "
+            "Check: https://dppflash-etl.onrender.com/diagnostics (openai_configured or use Vercel key)."
         )
 
     loaded = load_project_env()

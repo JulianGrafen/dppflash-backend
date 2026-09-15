@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from etl.models.audit_field import audit_text
 from etl.models.dpp_schemas import DPPAnalysisResult, ProductCategory, TextileProductDetails
 from etl.services.composition_parse import extract_percentages_from_text
+from etl.services.tracing import traceable
 
 PlausibilitySeverity = Literal["critical", "major", "warning"]
 
@@ -218,6 +219,7 @@ _EXTRA_RULES: list[Callable[[DPPAnalysisResult], list[PlausibilityFinding]]] = [
 ]
 
 
+@traceable(name="dpp_validation_agent")
 def run_validation_agent(result: DPPAnalysisResult) -> ValidationAgentOutcome:
     """Run all plausibility rules; failed if any critical or major finding."""
     findings: list[PlausibilityFinding] = []

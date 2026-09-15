@@ -15,11 +15,13 @@ from etl.graph.state import (
     ValidationStatus,
 )
 from etl.services.dpp_extractor import LLMExtractionError, PDFReadError
+from etl.services.tracing import traceable
 from etl.services.validation import build_mass_balance_retry_feedback, validate_extracted_data
 
 logger = logging.getLogger(__name__)
 
 
+@traceable(name="graph_extraction_phase")
 async def extraction_phase_node(state: DppGraphState) -> dict[str, Any]:
     """
     Run LLM extraction and mass-balance validation in one node.

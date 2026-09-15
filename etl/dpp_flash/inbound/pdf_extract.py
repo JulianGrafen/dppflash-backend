@@ -16,10 +16,22 @@ from etl.dpp_flash.inbound.validation_service import persist_with_validation
 from etl.graph.nodes.extractor import _build_extractor
 from etl.services.dpp_extractor import LLMExtractionError, PDFReadError
 from etl.services.etl_service_auth import etl_bearer_authorized, resolve_openai_for_inbound_request
+from etl.services.tracing import traceable
 
 router = APIRouter(prefix="/api/v1/extract", tags=["pdf-extraction"])
 
 _PDF_SUFFIXES = (".pdf",)
+
+
+@traceable(name="inbound_pdf_extract")
+def _run_pdf_extraction(
+    pdf_bytes: bytes,
+    filename: str,
+    *,
+    api_key: str | None,
+) -> Any:
+    extractor = _build_extractor(api_key=api_key)
+    return extractor.extract(pdf_bytes, filename=filename)
 
 
 class PdfExtractResponse(BaseModel):
@@ -64,8 +76,11 @@ async def extract_pdf(
 
     try:
         api_key = resolve_openai_for_inbound_request(authorization, x_dpp_openai_api_key)
-        extractor = _build_extractor(api_key=api_key)
-        analysis = extractor.extract(pdf_bytes, filename=file.filename)
+        analysis = _run_pdf_extraction(
+            pdf_bytes,
+            file.filename,
+            api_key=api_key,
+        )
     except PDFReadError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except LLMExtractionError as exc:

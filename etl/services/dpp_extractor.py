@@ -32,6 +32,7 @@ from etl.models.dpp_schemas import DPPAnalysisResult, DPPExtractionOutput, Extra
 from etl.services.product_category_classifier import refine_product_category
 from etl.services.env_loader import load_project_env, resolve_openai_api_key
 from etl.services.prompts import STRUCTURED_OUTPUT_SYSTEM_PROMPT, build_structured_user_prompt
+from etl.services.tracing import traceable
 
 load_project_env()
 
@@ -132,6 +133,7 @@ class DPPExtractor:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
+    @traceable(name="dpp_pdf_extract")
     def extract(self, pdf_bytes: bytes, filename: str = "document.pdf", *, correction_hints: str | None = None) -> DPPAnalysisResult:
         """
         Full pipeline: PDF bytes → structured, validated DPPAnalysisResult.
@@ -179,6 +181,7 @@ class DPPExtractor:
 
         return result
 
+    @traceable(name="dpp_text_extract")
     def extract_from_text(
         self,
         document_text: str,
@@ -230,6 +233,7 @@ class DPPExtractor:
 
     # ── Private: LLM call ──────────────────────────────────────────────────────
 
+    @traceable(run_type="llm", name="dpp_structured_llm")
     def _run_structured_extraction(
         self,
         document_text: str,

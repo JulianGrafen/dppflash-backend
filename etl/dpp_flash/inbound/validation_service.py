@@ -13,6 +13,7 @@ from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.graph.state import GapRecord, ValidationStatus
 from etl.models.dpp_schemas import DPPAnalysisResult
 from etl.services.espr_auditor import run_espr_audit
+from etl.services.tracing import traceable
 from etl.services.validation import validate_extracted_data
 
 if TYPE_CHECKING:
@@ -69,6 +70,7 @@ def _build_validation_result(analysis: DPPAnalysisResult) -> InboundValidationRe
     )
 
 
+@traceable(name="inbound_validate_passport_draft")
 def validate_passport_draft(
     draft: ProductPassportDraft,
     raw_extraction: dict[str, Any] | None = None,
@@ -114,6 +116,7 @@ def apply_validation_to_row(
     return updated
 
 
+@traceable(name="inbound_persist_with_validation")
 def persist_with_validation(
     repository: "DppDraftRepository",
     row: dict[str, Any],

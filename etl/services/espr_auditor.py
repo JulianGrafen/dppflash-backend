@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from etl.graph.state import EspAuditReport, GapRecord
 from etl.models.audit_field import AuditField, audit_text, audit_value
 from etl.models.dpp_schemas import DPPAnalysisResult
+from etl.services.tracing import traceable
 
 _FULL_COMPLIANCE_THRESHOLD = 100.0
 
@@ -44,6 +45,7 @@ def _apply_co2_proxy_mapping(result: DPPAnalysisResult) -> tuple[bool, str | Non
     return True, proxy_note
 
 
+@traceable(name="dpp_espr_audit")
 def run_espr_audit(result: DPPAnalysisResult) -> EspAuditOutcome:
     """
     Run ESPR schema validation, completeness check, and CO₂ proxy mapping.

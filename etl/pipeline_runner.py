@@ -7,6 +7,8 @@ import os
 from enum import Enum
 from typing import Any
 
+from etl.services.tracing import traceable
+
 
 def apply_runtime_env(payload: dict[str, Any]) -> dict[str, bool | int]:
     """Apply server-side env forwarded from Next.js (Render runtime secrets)."""
@@ -38,6 +40,7 @@ def to_jsonable(value: Any) -> Any:
     return value
 
 
+@traceable(name="dpp_extraction_pipeline")
 async def run_pipeline_payload(payload: dict[str, Any]) -> dict[str, Any]:
     from etl.graph.graph import graph, initial_state
 

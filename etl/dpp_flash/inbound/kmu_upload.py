@@ -15,6 +15,7 @@ from etl.dpp_flash.inbound.models import ProductPassportDraft
 from etl.dpp_flash.inbound.stammdaten_service import strip_stammdaten_from_product_row
 from etl.dpp_flash.inbound.repository import DppDraftRepository, get_dpp_draft_repository
 from etl.dpp_flash.inbound.validation_service import persist_with_validation
+from etl.services.tracing import traceable
 
 router = APIRouter(prefix="/api/v1/kmu", tags=["kmu-ingestion"])
 
@@ -278,20 +279,16 @@ def _assemble_draft_row(row: dict[str, Any]) -> dict[str, Any]:
     return strip_stammdaten_from_product_row(dict(row))
 
 
-@router.post("/upload-erp-export", status_code=status.HTTP_201_CREATED)
-async def upload_erp_export(
-    file: UploadFile = File(...),
-    tenant_id: str = Form(default="default"),
-    persist: bool = Form(default=True),
-    repository: DppDraftRepository = Depends(get_dpp_draft_repository),
+@traceable(name="kmu_excel_upload")
+def _ingest_kmu_export(
+    *,
+    filename: str,
+    file_bytes: bytes,
+    tenant_id: str,
+    persist: bool,
+    repository: DppDraftRepository,
 ) -> dict[str, Any]:
-    """Normalize a KMU ERP export and persist validated drafts to Supabase."""
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Filename missing."
-        )
-
-    frame = _read_dataframe(file.filename, await file.read())
+    frame = _read_dataframe(filename, file_bytes)
     rows = _normalize_rows(frame)
 
     drafts: list[dict[str, Any]] = []
@@ -336,3 +333,25 @@ async def upload_erp_export(
         "items": drafts,
         "stored": stored if persist else [],
     }
+
+
+@router.post("/upload-erp-export", status_code=status.HTTP_201_CREATED)
+async def upload_erp_export(
+    file: UploadFile = File(...),
+    tenant_id: str = Form(default="default"),
+    persist: bool = Form(default=True),
+    repository: DppDraftRepository = Depends(get_dpp_draft_repository),
+) -> dict[str, Any]:
+    """Normalize a KMU ERP export and persist validated drafts to Supabase."""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Filename missing."
+        )
+
+    return _ingest_kmu_export(
+        filename=file.filename,
+        file_bytes=await file.read(),
+        tenant_id=tenant_id,
+        persist=persist,
+        repository=repository,
+    )

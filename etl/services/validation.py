@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from etl.graph.state import GapRecord, ValidationReport, ValidationStatus
 from etl.models.dpp_schemas import DPPAnalysisResult
+from etl.services.tracing import traceable
 from etl.services.validation_agent import ValidationAgentReport, run_validation_agent
 
 _MIN_READINESS_FOR_VALID = 100.0
@@ -25,6 +26,7 @@ class ValidationOutcome:
     agent_report: ValidationAgentReport
 
 
+@traceable(name="dpp_validate_extracted_data")
 def validate_extracted_data(result: DPPAnalysisResult) -> ValidationOutcome:
     """
     Validate extracted DPP data and derive gap records for downstream remediation.

@@ -9,8 +9,6 @@ import {
 import type { EsprProductData } from '../../types/espr';
 import {
   coerceMaterialCompositionArray,
-  tryChemicalCompositionToSankey,
-  tryMaterialCompositionToSankeyFromRaw,
 } from '@/app/domain/dpp/materialCompositionToSankey';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
 import {
@@ -33,11 +31,8 @@ import {
 } from '@/app/domain/rag/sourceDocuments';
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
-import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
-import { MaterialCompositionFlowSection } from './MaterialCompositionFlowSection';
 import { IsccPlusSection } from './IsccPlusSection';
 import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
-import { HumanReviewStatusBar } from './HumanReviewStatusBar';
 import { ProductImageCard } from './ProductImageCard';
 import { Avv170106DisposalDetailCard } from './Avv170106DisposalDetailCard';
 import { shouldShowAvv170106DisposalDetail } from '@/app/domain/dpp/waste/avv170106DisposalGuidance';
@@ -131,41 +126,6 @@ function Field({
         {sourceBadge ? (
           <span
             className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
-            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
-          >
-            {sourceBadge}
-          </span>
-        ) : null}
-      </dd>
-    </div>
-  );
-}
-
-function ReviewField({
-  label,
-  value,
-  highlighted,
-  sourceBadge,
-}: {
-  label: string;
-  value?: string | number;
-  highlighted: boolean;
-  sourceBadge?: string;
-}) {
-  if (!highlighted) {
-    return <Field label={label} value={value} sourceBadge={sourceBadge} />;
-  }
-
-  if (value === undefined || value === null || value === '') return null;
-
-  return (
-    <div className="flex flex-col gap-0.5 bg-amber-50/80 px-5 py-3.5 ring-1 ring-inset ring-amber-200/60 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-      <dt className="text-[13px] font-medium leading-snug text-amber-800 sm:w-[40%] sm:shrink-0">{label}</dt>
-      <dd className="text-[13px] font-semibold leading-snug text-amber-950 sm:max-w-[58%] sm:text-right">
-        <span>{String(value)}</span>
-        {sourceBadge ? (
-          <span
-            className="ml-2 inline-flex align-middle rounded-md bg-white/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900 ring-1 ring-amber-200/80"
             title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
           >
             {sourceBadge}
@@ -1329,21 +1289,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     asString(raw.ewcCode),
   );
 
-  const chemicalCompositionSankey = tryChemicalCompositionToSankey(
-    raw.chemicalComposition,
-    displayProductName,
-  );
   const traceabilityMaxPublicTier =
     typeof raw.traceabilityMaxPublicTier === 'number'
       ? (raw.traceabilityMaxPublicTier as 1 | 2 | 3)
       : 3;
-  const materialCompositionSankey =
-    chemicalCompositionSankey === null && traceabilityMaxPublicTier !== 1
-      ? tryMaterialCompositionToSankeyFromRaw(raw as Record<string, unknown>, displayProductName)
-      : null;
-  const enrichmentReview = asRecord(raw.enrichmentReview);
-  const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
-  const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
   const ragSuppliedFields = asStringArray(raw.ragSuppliedFieldKeys);
   const productLevelPStatements = resolveProductLevelHazardCodes(
     raw,
@@ -1403,9 +1352,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     downloadableDocuments: mergedComplianceDocuments,
     sourceDocuments: mergedComplianceDocuments,
   });
-  const isReviewRequired = asString(raw.complianceStatus) === 'REVIEW_REQUIRED'
-    || asString(enrichmentReview?.status) === 'PENDING';
-
   const hasRecycledContentSection =
     p.recycledContent.cobaltPct !== undefined
     || p.recycledContent.lithiumPct !== undefined
@@ -1459,14 +1405,10 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               <div className="mb-4 flex justify-center md:justify-start">
                 <div className="inline-flex flex-wrap items-center justify-center gap-2 md:justify-start">
                   <span
-                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset ${
-                      isReviewRequired
-                        ? 'bg-amber-50 text-amber-900 ring-amber-200/80'
-                        : 'bg-emerald-50 text-emerald-800 ring-emerald-200/80'
-                    }`}
+                    className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-800 ring-1 ring-inset ring-emerald-200/80"
                   >
                     <ShieldCheck size={14} strokeWidth={2} aria-hidden />
-                    {isReviewRequired ? 'Review erforderlich' : 'EU-Konform'}
+                    EU-Konform
                     <span className="text-[10px] font-semibold text-slate-500 normal-case tracking-normal">
                       · ESPR 2024/1781
                     </span>
@@ -1488,52 +1430,6 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 sm:space-y-6">
 
-        {isReviewRequired && (
-          <div className="space-y-3 rounded-2xl border border-amber-200/90 bg-amber-50/80 px-5 py-5 shadow-sm ring-1 ring-amber-900/[0.04]">
-            <p className="text-sm font-semibold text-yellow-800">
-              Enrichment-Werte wurden automatisch aus Web-Quellen ergänzt. Bitte prüfen und bestätigen.
-            </p>
-            {enrichmentSources.length > 0 ? (
-              <ul className="text-sm text-yellow-900 space-y-1">
-                {enrichmentSources.map((url) => (
-                  <li key={url}>
-                    <a href={url} target="_blank" rel="noreferrer" className="underline hover:no-underline">
-                      {url}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <form action="/api/products/validate" method="post" className="space-y-3">
-              <input type="hidden" name="productId" value={p.id} />
-              <input type="hidden" name="returnUrl" value={`/p/${p.id}`} />
-              <div>
-                <label htmlFor="validatedBy" className="block text-xs font-semibold text-amber-950">
-                  Auditor / prüfende Person
-                </label>
-                <input
-                  id="validatedBy"
-                  name="validatedBy"
-                  type="text"
-                  autoComplete="name"
-                  maxLength={240}
-                  className="mt-1.5 w-full max-w-md rounded-lg border border-amber-200/90 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
-                  placeholder="z. B. Name oder interne Kennung"
-                />
-                <p className="mt-1 text-[11px] text-amber-800/90">
-                  Wird nach Abnahme unter „Allgemeine Informationen“ als Verifizierender angezeigt.
-                </p>
-              </div>
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-md bg-yellow-600 px-3 py-2 text-sm font-semibold text-white hover:bg-yellow-700"
-              >
-                Daten validieren
-              </button>
-            </form>
-          </div>
-        )}
-
         {/* ── Identity ── */}
         <Section>
           {manufacturerDisplayBlock ? (
@@ -1543,11 +1439,9 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
               multiline
             />
           ) : null}
-          <HumanReviewStatusBar />
-          <ReviewField
+          <Field
             label="Ursprungsland"
             value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}
-            highlighted={enrichmentFields.includes('countryOfOrigin')}
           />
           <Field label="Herstellungsland"  value={typeof raw.countryOfManufacturing === 'string' ? raw.countryOfManufacturing : undefined} />
           <Field label="Modell"            value={p.modellname} />
@@ -1578,27 +1472,19 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           maxDisclosureTier={traceabilityMaxPublicTier}
         />
 
-        {chemicalCompositionSankey ? (
-          <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />
-        ) : materialCompositionSankey ? (
-          <MaterialCompositionFlowSection graph={materialCompositionSankey} />
-        ) : null}
-
         <EnvironmentalFootprintSection raw={raw as Record<string, unknown>} carbonFootprint={p.carbonFootprint} />
 
         {/* ── DPP Core fields (new extraction schema) ── */}
         <Section title="Entsorgung" subtitle="ESPR · Abfall & Rückbau">
           <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
-          <ReviewField
+          <Field
             label="GTIN"
             value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
-            highlighted={enrichmentFields.includes('gtin')}
             sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
           />
-          <ReviewField
+          <Field
             label="SKU"
             value={resolvePassportSku(raw)}
-            highlighted={enrichmentFields.includes('sku')}
             sourceBadge={ragSuppliedFields.includes('sku') ? 'RAG' : undefined}
           />
           <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />

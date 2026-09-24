@@ -3,6 +3,7 @@ import { calculateBezierPath, calculateFlowRibbonPath } from '@/app/domain/dpp/t
 import { computeTraceabilityTieredLayout } from '@/app/domain/dpp/traceability/computeTraceabilityTieredLayout';
 import { createDemoBatteryPublicPassport } from '@/app/fixtures/demoBatteryPublicPassport';
 import {
+  buildPublicTierOneTraceabilityFlowFromRaw,
   buildTraceabilityTieredFlowFromRaw,
   buildTraceabilityTieredFlowModel,
   clampTraceabilityModelToMaxTier,
@@ -104,18 +105,17 @@ describe('clampTraceabilityModelToMaxTier', () => {
 });
 
 describe('demo battery public passport traceability', () => {
-  it('builds tier-1 material rows from fixture materialComposition', () => {
+  it('builds tier-1 → product ribbon flow from fixture materialComposition', () => {
     const passport = createDemoBatteryPublicPassport();
-    const model = buildTraceabilityTieredFlowFromRaw(
+    const publicModel = buildPublicTierOneTraceabilityFlowFromRaw(
       passport as unknown as Record<string, unknown>,
       passport.productName,
     );
-    expect(model).not.toBeNull();
-    expect(model!.nodes.filter((node) => node.tier === 1)).toHaveLength(7);
-
-    const publicModel = clampTraceabilityModelToMaxTier(model!, 1);
-    expect(publicModel.nodes).toHaveLength(7);
-    expect(publicModel.links).toHaveLength(0);
-    expect(publicModel.nodes.some((node) => node.label.includes('Nickel'))).toBe(true);
+    expect(publicModel).not.toBeNull();
+    expect(publicModel!.nodes.filter((node) => node.tier === 1)).toHaveLength(7);
+    expect(publicModel!.nodes.some((node) => node.tier === 3)).toBe(true);
+    expect(publicModel!.nodes.filter((node) => node.tier === 2)).toHaveLength(0);
+    expect(publicModel!.links).toHaveLength(7);
+    expect(publicModel!.nodes.some((node) => node.label.includes('Nickel'))).toBe(true);
   });
 });

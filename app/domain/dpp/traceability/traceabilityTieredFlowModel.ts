@@ -179,6 +179,73 @@ export function buildTraceabilityTieredFlowModel(
   };
 }
 
+/**
+ * Öffentliche Tier-1-Freigabe: Rohstoffe → Endprodukt (Ribbon-Flow, keine Verarbeitungslane).
+ */
+export function buildPublicTierOneTraceabilityFlowModel(
+  input: BuildTraceabilityTieredFlowModelInput,
+): TraceabilityTieredFlowModel | null {
+  const balanced = closeSankeyRowsWithNonDeclarableFiller([...input.materials]);
+  if (balanced.length === 0) {
+    return null;
+  }
+
+  const productLabel = input.productLabel.trim() || 'Produkt';
+  const rawNodes: TraceabilityFlowNode[] = balanced.map((row, index) => ({
+    id: slugifyMaterialId(row.material, index),
+    label: row.material.trim(),
+    tier: 1,
+    sharePercent: row.percentage,
+    color: TRACEABILITY_MATERIAL_COLORS[index % TRACEABILITY_MATERIAL_COLORS.length] ?? '#64748b',
+  }));
+
+  const productShare = rawNodes.reduce((sum, node) => sum + node.sharePercent, 0);
+  const productNode: TraceabilityFlowNode = {
+    id: PRODUCT_NODE_ID,
+    label: productLabel,
+    tier: 3,
+    sharePercent: productShare,
+    color: TRACEABILITY_PRODUCT_COLOR,
+  };
+
+  const links: TraceabilityFlowLink[] = rawNodes.map((raw) => ({
+    id: `link_${raw.id}_${PRODUCT_NODE_ID}`,
+    sourceId: raw.id,
+    targetId: PRODUCT_NODE_ID,
+    value: raw.sharePercent,
+    color: raw.color,
+  }));
+
+  return {
+    nodes: [...rawNodes, productNode],
+    links,
+    productLabel,
+  };
+}
+
+export function buildPublicTierOneTraceabilityFlowFromRaw(
+  raw: Record<string, unknown>,
+  productLabel: string,
+): TraceabilityTieredFlowModel | null {
+  const chemicalRows = extractChemicalCompositionRowsForSankey(raw.chemicalComposition);
+  if (chemicalRows.length > 0) {
+    return buildPublicTierOneTraceabilityFlowModel({
+      materials: [...chemicalRows],
+      productLabel,
+    });
+  }
+
+  const materialRows = collectPassportCoreMaterialRowsForSankey(raw);
+  if (materialRows.length > 0) {
+    return buildPublicTierOneTraceabilityFlowModel({
+      materials: [...materialRows],
+      productLabel,
+    });
+  }
+
+  return null;
+}
+
 export function buildTraceabilityTieredFlowFromRaw(
   raw: Record<string, unknown>,
   productLabel: string,

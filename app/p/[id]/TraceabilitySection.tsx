@@ -1,15 +1,10 @@
 import { Truck } from 'lucide-react';
-import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
 import { TraceabilityTieredFlowchart } from '@/app/components/dpp/traceability/TraceabilityTieredFlowchart';
 import {
-  tryMaterialCompositionToSankeyFromRaw,
-  tryTraceabilitySankeyFromRaw,
-} from '@/app/domain/dpp/materialCompositionToSankey';
-import {
+  buildPublicTierOneTraceabilityFlowFromRaw,
   buildTraceabilityTieredFlowFromRaw,
   clampTraceabilityModelToMaxTier,
 } from '@/app/domain/dpp/traceability/traceabilityTieredFlowModel';
-import { TraceabilityTierOneList } from './TraceabilityTierOneList';
 
 type TraceabilitySectionProps = {
   /** Product passport fields (needs `regulatoryExtraction`, `materialComposition`, `chemicalComposition`). */
@@ -26,43 +21,27 @@ export function TraceabilitySection({
   productDisplayName,
   maxDisclosureTier = 3,
 }: TraceabilitySectionProps) {
-  const fullTieredModel = buildTraceabilityTieredFlowFromRaw(raw, productDisplayName);
-  const tieredModel =
-    fullTieredModel !== null
-      ? clampTraceabilityModelToMaxTier(fullTieredModel, maxDisclosureTier)
-      : null;
-  const { graph, source } = tryTraceabilitySankeyFromRaw(raw, productDisplayName);
+  const publicTierOneOnly = maxDisclosureTier === 1;
+  const tieredModel = publicTierOneOnly
+    ? buildPublicTierOneTraceabilityFlowFromRaw(raw, productDisplayName)
+    : (() => {
+        const fullTieredModel = buildTraceabilityTieredFlowFromRaw(raw, productDisplayName);
+        return fullTieredModel !== null
+          ? clampTraceabilityModelToMaxTier(fullTieredModel, maxDisclosureTier)
+          : null;
+      })();
 
-  if (!tieredModel && !graph) {
+  if (!tieredModel) {
     return null;
   }
 
-  const publicTierOneOnly = maxDisclosureTier === 1 && tieredModel !== null;
-  const tierOneMaterialSankey =
-    publicTierOneOnly
-      ? tryMaterialCompositionToSankeyFromRaw(raw, productDisplayName)
-      : null;
-  const usesTieredFlow = tieredModel !== null && !publicTierOneOnly;
+  const chainSubtitle = publicTierOneOnly
+    ? 'Öffentliche Angabe · ESPR Tier-1 Rohstoffe'
+    : 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung';
 
-  const chainSubtitle =
-    publicTierOneOnly
-      ? 'Öffentliche Angabe · ESPR Tier-1 Rohstoffe'
-      : source === 'regulatory' && !usesTieredFlow
-        ? 'Herkunftskette — Lieferkette'
-        : usesTieredFlow
-          ? 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung'
-          : 'Herkunftskette — aus Materialanteilen (%)';
-
-  const footnote =
-    publicTierOneOnly
-      ? tierOneMaterialSankey
-        ? 'Öffentlich sichtbar: Rohstoffe → Produkt (Tier-1). Verarbeitungs- und Lieferkettenstufen darüber hinaus sind nicht freigegeben.'
-        : 'Öffentlich sichtbar sind nur Rohstoffanteile (Tier-1). Verarbeitungs- und Endproduktstufen sind in diesem Pass nicht freigegeben.'
-      : source === 'regulatory' && !usesTieredFlow
-        ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-        : usesTieredFlow
-          ? 'Flussbreiten folgen den SDB-Mittelwerten; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).'
-          : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
+  const footnote = publicTierOneOnly
+    ? 'Öffentlich sichtbar: Rohstoffe → Produkt (Tier-1). Verarbeitungs- und Lieferkettenstufen darüber hinaus sind nicht freigegeben.'
+    : 'Flussbreiten folgen den deklarierten Anteilen; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).';
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
@@ -81,20 +60,7 @@ export function TraceabilitySection({
         </div>
       </header>
       <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
-        {publicTierOneOnly && tierOneMaterialSankey ? (
-          <CompositionFlowchart
-            nodes={tierOneMaterialSankey.nodes}
-            links={tierOneMaterialSankey.links}
-            height={460}
-            variant="traceability"
-          />
-        ) : publicTierOneOnly && tieredModel ? (
-          <TraceabilityTierOneList model={tieredModel} />
-        ) : tieredModel ? (
-          <TraceabilityTieredFlowchart model={tieredModel} />
-        ) : graph ? (
-          <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />
-        ) : null}
+        <TraceabilityTieredFlowchart model={tieredModel} />
         <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
       </div>
     </section>

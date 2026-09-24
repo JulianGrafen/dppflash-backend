@@ -2,40 +2,58 @@ import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
 import { TraceabilityTieredFlowchart } from '@/app/components/dpp/traceability/TraceabilityTieredFlowchart';
 import { tryTraceabilitySankeyFromRaw } from '@/app/domain/dpp/materialCompositionToSankey';
-import { buildTraceabilityTieredFlowFromRaw } from '@/app/domain/dpp/traceability/traceabilityTieredFlowModel';
+import {
+  buildTraceabilityTieredFlowFromRaw,
+  clampTraceabilityModelToMaxTier,
+} from '@/app/domain/dpp/traceability/traceabilityTieredFlowModel';
+import { TraceabilityTierOneList } from './TraceabilityTierOneList';
 
 type TraceabilitySectionProps = {
   /** Product passport fields (needs `regulatoryExtraction`, `materialComposition`, `chemicalComposition`). */
   readonly raw: Record<string, unknown>;
   readonly productDisplayName: string;
+  readonly maxDisclosureTier?: 1 | 2 | 3;
 };
 
 /**
  * Rückverfolgbarkeit: 3-Stufen-Materialfluss (Rohstoff → Herkunft/Verarbeitung → Endprodukt).
  */
-export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySectionProps) {
-  const tieredModel = buildTraceabilityTieredFlowFromRaw(raw, productDisplayName);
+export function TraceabilitySection({
+  raw,
+  productDisplayName,
+  maxDisclosureTier = 3,
+}: TraceabilitySectionProps) {
+  const fullTieredModel = buildTraceabilityTieredFlowFromRaw(raw, productDisplayName);
+  const tieredModel =
+    fullTieredModel !== null
+      ? clampTraceabilityModelToMaxTier(fullTieredModel, maxDisclosureTier)
+      : null;
   const { graph, source } = tryTraceabilitySankeyFromRaw(raw, productDisplayName);
 
   if (!tieredModel && !graph) {
     return null;
   }
 
-  const usesTieredFlow = tieredModel !== null;
+  const publicTierOneOnly = maxDisclosureTier === 1 && tieredModel !== null;
+  const usesTieredFlow = tieredModel !== null && !publicTierOneOnly;
 
   const chainSubtitle =
-    source === 'regulatory' && !usesTieredFlow
-      ? 'Herkunftskette — Lieferkette'
-      : usesTieredFlow
-        ? 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung'
-        : 'Herkunftskette — aus Materialanteilen (%)';
+    publicTierOneOnly
+      ? 'Öffentliche Angabe · ESPR Tier-1 Rohstoffe'
+      : source === 'regulatory' && !usesTieredFlow
+        ? 'Herkunftskette — Lieferkette'
+        : usesTieredFlow
+          ? 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung'
+          : 'Herkunftskette — aus Materialanteilen (%)';
 
   const footnote =
-    source === 'regulatory' && !usesTieredFlow
-      ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
-      : usesTieredFlow
-        ? 'Flussbreiten folgen den SDB-Mittelwerten; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).'
-        : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
+    publicTierOneOnly
+      ? 'Öffentlich sichtbar sind nur Rohstoffanteile (Tier-1). Verarbeitungs- und Endproduktstufen sind in diesem Pass nicht freigegeben.'
+      : source === 'regulatory' && !usesTieredFlow
+        ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
+        : usesTieredFlow
+          ? 'Flussbreiten folgen den SDB-Mittelwerten; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).'
+          : 'Fluss aus den Materialprozenten im Digitalen Produktpass (Kernfelder): strukturierte materialComposition oder Textfeld materialZusammensetzung.';
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
@@ -54,7 +72,9 @@ export function TraceabilitySection({ raw, productDisplayName }: TraceabilitySec
         </div>
       </header>
       <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
-        {tieredModel ? (
+        {publicTierOneOnly && tieredModel ? (
+          <TraceabilityTierOneList model={tieredModel} />
+        ) : tieredModel ? (
           <TraceabilityTieredFlowchart model={tieredModel} />
         ) : graph ? (
           <CompositionFlowchart nodes={graph.nodes} links={graph.links} height={460} variant="traceability" />

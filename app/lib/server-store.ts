@@ -5,6 +5,7 @@
  * Auf Vercel: Supabase Storage als persistenter Fallback (serverless-safe).
  */
 
+import { createDemoBatteryPublicPassport } from '@/app/fixtures/demoBatteryPublicPassport';
 import { ProductPassport } from '../types/dpp-types';
 import { supabase, STORAGE_BUCKETS } from './supabase';
 
@@ -59,6 +60,7 @@ if (!globalThis.__dpp_store__) {
         ],
       },
     },
+    createDemoBatteryPublicPassport(),
     {
       id: 'tex-2027',
       type: 'TEXTILE',

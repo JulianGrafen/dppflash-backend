@@ -1562,7 +1562,15 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
           displayProductName={displayProductName}
         />
 
-        <TraceabilitySection raw={raw as Record<string, unknown>} productDisplayName={displayProductName} />
+        <TraceabilitySection
+          raw={raw as Record<string, unknown>}
+          productDisplayName={displayProductName}
+          maxDisclosureTier={
+            typeof raw.traceabilityMaxPublicTier === 'number'
+              ? (raw.traceabilityMaxPublicTier as 1 | 2 | 3)
+              : 3
+          }
+        />
 
         {chemicalCompositionSankey ? (
           <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />

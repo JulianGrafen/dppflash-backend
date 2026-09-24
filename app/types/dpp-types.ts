@@ -56,6 +56,11 @@ export interface BaseDPP {
   attachments?: readonly ComplianceSourceDocument[];
   /** Alias für ältere Clients / Orchestrator-Mapping */
   downloadableDocuments?: readonly ComplianceSourceDocument[];
+  /**
+   * Max. Traceability-Stufe auf der öffentlichen Pass-Seite (1 = nur Rohstoffe).
+   * Default 3 = voller 3-Stufen-Flow.
+   */
+  traceabilityMaxPublicTier?: 1 | 2 | 3;
   [key: string]: any; // Dynamische Felder
 }
 

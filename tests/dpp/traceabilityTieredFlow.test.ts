@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { calculateBezierPath, calculateFlowRibbonPath } from '@/app/domain/dpp/traceability/calculateBezierPath';
 import { computeTraceabilityTieredLayout } from '@/app/domain/dpp/traceability/computeTraceabilityTieredLayout';
+import { createDemoBatteryPublicPassport } from '@/app/fixtures/demoBatteryPublicPassport';
 import {
+  buildTraceabilityTieredFlowFromRaw,
   buildTraceabilityTieredFlowModel,
+  clampTraceabilityModelToMaxTier,
   resolveProcessingNodeId,
   TRACEABILITY_PROCESSING_ASIA,
   TRACEABILITY_PROCESSING_EU,
@@ -81,5 +84,38 @@ describe('computeTraceabilityTieredLayout', () => {
     expect(layout.flows.length).toBe(model!.links.length);
     expect(layout.viewBoxHeight).toBe(380);
     expect(layout.flows.every((flow) => flow.strokeWidth >= 4 && flow.strokeWidth <= 20)).toBe(true);
+  });
+});
+
+describe('clampTraceabilityModelToMaxTier', () => {
+  it('keeps only tier-1 nodes and drops links when maxTier is 1', () => {
+    const model = buildTraceabilityTieredFlowModel({
+      materials: HENKEL_LIKE_MATERIALS,
+      productLabel: 'Cimsec Fliesen Kleber S1 Flex',
+    });
+    expect(model).not.toBeNull();
+
+    const clamped = clampTraceabilityModelToMaxTier(model!, 1);
+    expect(clamped.nodes.every((node) => node.tier === 1)).toBe(true);
+    expect(clamped.nodes).toHaveLength(5);
+    expect(clamped.links).toHaveLength(0);
+    expect(clamped.nodes.some((node) => node.tier === 2 || node.tier === 3)).toBe(false);
+  });
+});
+
+describe('demo battery public passport traceability', () => {
+  it('builds tier-1 material rows from fixture materialComposition', () => {
+    const passport = createDemoBatteryPublicPassport();
+    const model = buildTraceabilityTieredFlowFromRaw(
+      passport as unknown as Record<string, unknown>,
+      passport.productName,
+    );
+    expect(model).not.toBeNull();
+    expect(model!.nodes.filter((node) => node.tier === 1)).toHaveLength(7);
+
+    const publicModel = clampTraceabilityModelToMaxTier(model!, 1);
+    expect(publicModel.nodes).toHaveLength(7);
+    expect(publicModel.links).toHaveLength(0);
+    expect(publicModel.nodes.some((node) => node.label.includes('Nickel'))).toBe(true);
   });
 });

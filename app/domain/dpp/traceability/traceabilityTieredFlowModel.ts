@@ -203,3 +203,25 @@ export function buildTraceabilityTieredFlowFromRaw(
 
   return null;
 }
+
+/** Limit traceability disclosure on public passports (e.g. Tier-1 raw materials only). */
+export function clampTraceabilityModelToMaxTier(
+  model: TraceabilityTieredFlowModel,
+  maxTier: TraceabilityFlowTier,
+): TraceabilityTieredFlowModel {
+  if (maxTier >= 3) {
+    return model;
+  }
+
+  const nodes = model.nodes.filter((node) => node.tier <= maxTier);
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const links = model.links.filter(
+    (link) => nodeIds.has(link.sourceId) && nodeIds.has(link.targetId),
+  );
+
+  return {
+    ...model,
+    nodes,
+    links,
+  };
+}

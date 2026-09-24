@@ -1,7 +1,10 @@
 import { Truck } from 'lucide-react';
 import { CompositionFlowchart } from '@/app/components/dpp/CompositionFlowchart';
 import { TraceabilityTieredFlowchart } from '@/app/components/dpp/traceability/TraceabilityTieredFlowchart';
-import { tryTraceabilitySankeyFromRaw } from '@/app/domain/dpp/materialCompositionToSankey';
+import {
+  tryMaterialCompositionToSankeyFromRaw,
+  tryTraceabilitySankeyFromRaw,
+} from '@/app/domain/dpp/materialCompositionToSankey';
 import {
   buildTraceabilityTieredFlowFromRaw,
   clampTraceabilityModelToMaxTier,
@@ -35,6 +38,10 @@ export function TraceabilitySection({
   }
 
   const publicTierOneOnly = maxDisclosureTier === 1 && tieredModel !== null;
+  const tierOneMaterialSankey =
+    publicTierOneOnly
+      ? tryMaterialCompositionToSankeyFromRaw(raw, productDisplayName)
+      : null;
   const usesTieredFlow = tieredModel !== null && !publicTierOneOnly;
 
   const chainSubtitle =
@@ -48,7 +55,9 @@ export function TraceabilitySection({
 
   const footnote =
     publicTierOneOnly
-      ? 'Öffentlich sichtbar sind nur Rohstoffanteile (Tier-1). Verarbeitungs- und Endproduktstufen sind in diesem Pass nicht freigegeben.'
+      ? tierOneMaterialSankey
+        ? 'Öffentlich sichtbar: Rohstoffe → Produkt (Tier-1). Verarbeitungs- und Lieferkettenstufen darüber hinaus sind nicht freigegeben.'
+        : 'Öffentlich sichtbar sind nur Rohstoffanteile (Tier-1). Verarbeitungs- und Endproduktstufen sind in diesem Pass nicht freigegeben.'
       : source === 'regulatory' && !usesTieredFlow
         ? 'Daten aus strukturierter Extraktion (Seitenbelege im regulatorischen Datensatz).'
         : usesTieredFlow
@@ -72,7 +81,14 @@ export function TraceabilitySection({
         </div>
       </header>
       <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
-        {publicTierOneOnly && tieredModel ? (
+        {publicTierOneOnly && tierOneMaterialSankey ? (
+          <CompositionFlowchart
+            nodes={tierOneMaterialSankey.nodes}
+            links={tierOneMaterialSankey.links}
+            height={460}
+            variant="traceability"
+          />
+        ) : publicTierOneOnly && tieredModel ? (
           <TraceabilityTierOneList model={tieredModel} />
         ) : tieredModel ? (
           <TraceabilityTieredFlowchart model={tieredModel} />

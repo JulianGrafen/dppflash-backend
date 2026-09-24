@@ -1,15 +1,11 @@
 import QRCode from 'qrcode';
+import { buildPublicDppPassportUrl } from '@/app/lib/publicDppUrl';
 
 /**
  * QR-Code Service – Generiert und validiert QR-Codes für DPP-Links.
- * 
- * Strategien:
- * - Standard DPP Link: https://dpp-flash.de/p/{productId}
- * - GS1 Digital Link: https://gs1.example.com/01/{gtin}/...
- * - Fallback zu localhost für lokale Tests
+ *
+ * URLs always use the configured public DPP origin (`NEXT_PUBLIC_DPP_URL`).
  */
-
-const BASE_URL = process.env.NEXT_PUBLIC_DPP_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 /**
  * Generiert einen QR-Code als DataURL (Base64 PNG).
@@ -92,13 +88,10 @@ export async function generateQRCodeAsFile(
  */
 function constructDppUrl(productId: string, gtin?: string): string {
   if (gtin) {
-    // GS1 Digital Link Format (zukünftig)
-    // Beispiel: https://gs1.example.com/01/{gtin}/
-    return `${BASE_URL}/p/${encodeURIComponent(productId)}?gtin=${encodeURIComponent(gtin)}`;
+    return `${buildPublicDppPassportUrl(productId)}?gtin=${encodeURIComponent(gtin)}`;
   }
 
-  // Standard DPP-Link
-  return `${BASE_URL}/p/${encodeURIComponent(productId)}`;
+  return buildPublicDppPassportUrl(productId);
 }
 
 /**

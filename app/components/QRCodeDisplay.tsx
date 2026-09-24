@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Download, Share2, Copy, Check, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { buildPublicDppPassportPath, getPublicDppBaseUrl } from '@/app/lib/publicDppUrl';
 
 interface QRCodeDisplayProps {
   productId: string;
@@ -32,9 +33,7 @@ export default function QRCodeDisplay({
   const [qrUrl, setQrUrl] = useState<string | null>(qrCodeDataUrl || null);
   const [isLoading, setIsLoading] = useState(!qrCodeDataUrl);
 
-  const baseUrl = typeof window !== 'undefined'
-    ? window.location.origin
-    : (process.env.NEXT_PUBLIC_DPP_URL || 'http://localhost:3000');
+  const baseUrl = getPublicDppBaseUrl();
 
   // In stateless/serverless mode without Supabase persistence, add compact
   // fallback payload so /p/[id] can still render instead of 404.
@@ -62,7 +61,7 @@ export default function QRCodeDisplay({
     ? `?d=${encodeURIComponent(JSON.stringify(compactFallbackPayload))}`
     : '';
 
-  const dppPath = `/p/${productId}${fallbackQuery}`;
+  const dppPath = buildPublicDppPassportPath(productId, fallbackQuery);
 
   const dppLink = `${baseUrl}${dppPath}`;
 

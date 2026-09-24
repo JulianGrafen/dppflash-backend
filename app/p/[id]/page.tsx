@@ -10,6 +10,7 @@ import type { EsprProductData } from '../../types/espr';
 import {
   coerceMaterialCompositionArray,
   tryChemicalCompositionToSankey,
+  tryMaterialCompositionToSankeyFromRaw,
 } from '@/app/domain/dpp/materialCompositionToSankey';
 import { normalizeGhsPictogramCodeList } from '@/app/domain/rag/ghsPictogramCodes';
 import {
@@ -33,6 +34,7 @@ import {
 import { RagProvenanceSection } from './RagProvenanceSection';
 import { TraceabilitySection } from './TraceabilitySection';
 import { ChemicalCompositionFlowSection } from './ChemicalCompositionFlowSection';
+import { MaterialCompositionFlowSection } from './MaterialCompositionFlowSection';
 import { IsccPlusSection } from './IsccPlusSection';
 import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
 import { HumanReviewStatusBar } from './HumanReviewStatusBar';
@@ -1331,6 +1333,14 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
     raw.chemicalComposition,
     displayProductName,
   );
+  const traceabilityMaxPublicTier =
+    typeof raw.traceabilityMaxPublicTier === 'number'
+      ? (raw.traceabilityMaxPublicTier as 1 | 2 | 3)
+      : 3;
+  const materialCompositionSankey =
+    chemicalCompositionSankey === null && traceabilityMaxPublicTier !== 1
+      ? tryMaterialCompositionToSankeyFromRaw(raw as Record<string, unknown>, displayProductName)
+      : null;
   const enrichmentReview = asRecord(raw.enrichmentReview);
   const enrichmentFields = asStringArray(enrichmentReview?.enrichedFields);
   const enrichmentSources = asStringArray(enrichmentReview?.sourceUrls);
@@ -1565,15 +1575,13 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
         <TraceabilitySection
           raw={raw as Record<string, unknown>}
           productDisplayName={displayProductName}
-          maxDisclosureTier={
-            typeof raw.traceabilityMaxPublicTier === 'number'
-              ? (raw.traceabilityMaxPublicTier as 1 | 2 | 3)
-              : 3
-          }
+          maxDisclosureTier={traceabilityMaxPublicTier}
         />
 
         {chemicalCompositionSankey ? (
           <ChemicalCompositionFlowSection graph={chemicalCompositionSankey} />
+        ) : materialCompositionSankey ? (
+          <MaterialCompositionFlowSection graph={materialCompositionSankey} />
         ) : null}
 
         <EnvironmentalFootprintSection raw={raw as Record<string, unknown>} carbonFootprint={p.carbonFootprint} />

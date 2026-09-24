@@ -44,7 +44,14 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: projectRoot,
   serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
   env: {
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_DPP_URL || vercelUrl || "http://localhost:3000",
+    NEXT_PUBLIC_DPP_URL:
+      process.env.NEXT_PUBLIC_DPP_URL ||
+      vercelUrl ||
+      "https://dppflash-backend.onrender.com",
+    NEXT_PUBLIC_APP_URL:
+      process.env.NEXT_PUBLIC_DPP_URL ||
+      vercelUrl ||
+      "https://dppflash-backend.onrender.com",
   },
   rewrites: async () => [
     { source: "/health", destination: "/health.json" },

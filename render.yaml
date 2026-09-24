@@ -49,7 +49,7 @@ services:
       - key: DPP_INBOUND_REPOSITORY
         value: supabase
       - key: NEXT_PUBLIC_DPP_URL
-        sync: false
+        value: https://dppflash-backend.onrender.com
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

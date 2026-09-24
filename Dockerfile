@@ -13,6 +13,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_DPP_URL=https://dppflash-backend.onrender.com
+ENV NEXT_PUBLIC_DPP_URL=${NEXT_PUBLIC_DPP_URL}
 
 RUN npm run build
 

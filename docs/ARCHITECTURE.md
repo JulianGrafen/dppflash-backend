@@ -230,7 +230,7 @@ npm run dev
 | **Fixture** | `app/fixtures/demoBatteryPublicPassport.ts` |
 | **Öffentliche Traceability** | `traceabilityMaxPublicTier: 1` — nur Rohstoffe (ESPR Tier-1); Tier-2/3 werden per `clampTraceabilityModelToMaxTier` ausgeblendet |
 | **Einstieg im UI** | `app/p/page.tsx` — Link + `QRCodeDisplay` |
-| **QR-Link** | `{NEXT_PUBLIC_DPP_URL}/p/battery-demo-public` (Fallback lokal: `http://localhost:3000`) |
+| **QR-Link** | `https://dppflash-backend.onrender.com/p/battery-demo-public` (über `NEXT_PUBLIC_DPP_URL`, auch im Docker-Build) |
 
 Showcase nutzt das **gleiche** öffentliche Layout wie Chemie-Demos (`app/p/[id]/page.tsx`), nicht ein separates Theme.
 

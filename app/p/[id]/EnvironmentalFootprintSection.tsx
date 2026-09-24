@@ -9,6 +9,7 @@ import { FootprintMetricRow } from './FootprintMetricRow';
 type EnvironmentalFootprintSectionProps = {
   readonly raw: Record<string, unknown>;
   readonly carbonFootprint: EsprProductData['carbonFootprint'];
+  readonly layout?: 'card' | 'accordion';
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -37,6 +38,7 @@ function FootprintRow({ label, value }: { readonly label: string; readonly value
 export function EnvironmentalFootprintSection({
   raw,
   carbonFootprint,
+  layout = 'card',
 }: EnvironmentalFootprintSectionProps) {
   const cf = asRecord(raw.carbonFootprint);
   const env = asRecord(raw.environmentalImpact);
@@ -48,23 +50,8 @@ export function EnvironmentalFootprintSection({
   const calculationMethod = cf ? asString(cf.calculationMethod) : undefined;
   const impactNotes = env ? asString(env.impactNotes) : undefined;
 
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
-      <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
-        <div
-          className="flex shrink-0 items-center justify-center rounded-xl bg-white/[0.12] p-2.5"
-          aria-hidden
-        >
-          <Globe2 size={22} strokeWidth={1.75} className="text-emerald-300" />
-        </div>
-        <div className="min-w-0 pt-0.5">
-          <h2 className="text-[15px] font-semibold tracking-tight">Umwelt & CO₂-Fußabdruck</h2>
-          <p className="mt-1 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-slate-400">
-            ESPR · Treibhausgas & Umweltwirkung
-          </p>
-        </div>
-      </header>
-
+  const body = (
+    <>
       <dl className="divide-y divide-slate-100">
         <FootprintMetricRow
           label="CO₂-Fußabdruck"
@@ -83,8 +70,8 @@ export function EnvironmentalFootprintSection({
         ) : null}
       </dl>
 
-      <div className="border-t border-slate-100 bg-gradient-to-b from-emerald-50/40 to-white">
-        <div className="flex items-center gap-2 px-5 pb-1 pt-4">
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mb-2 flex items-center gap-2">
           <Droplets size={16} strokeWidth={1.75} className="text-sky-700" aria-hidden />
           <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Umweltwirkung</h3>
         </div>
@@ -99,6 +86,30 @@ export function EnvironmentalFootprintSection({
           {impactNotes ? <FootprintRow label="Umwelthinweise" value={impactNotes} /> : null}
         </dl>
       </div>
+    </>
+  );
+
+  if (layout === 'accordion') {
+    return <div className="pt-1">{body}</div>;
+  }
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
+      <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
+        <div
+          className="flex shrink-0 items-center justify-center rounded-xl bg-white/[0.12] p-2.5"
+          aria-hidden
+        >
+          <Globe2 size={22} strokeWidth={1.75} className="text-emerald-300" />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <h2 className="text-[15px] font-semibold tracking-tight">Umwelt & CO₂-Fußabdruck</h2>
+          <p className="mt-1 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-slate-400">
+            ESPR · Treibhausgas & Umweltwirkung
+          </p>
+        </div>
+      </header>
+      {body}
     </section>
   );
 }

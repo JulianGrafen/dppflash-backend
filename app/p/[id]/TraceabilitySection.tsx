@@ -11,6 +11,8 @@ type TraceabilitySectionProps = {
   readonly raw: Record<string, unknown>;
   readonly productDisplayName: string;
   readonly maxDisclosureTier?: 1 | 2 | 3;
+  /** `accordion` = body only (inside PassportAccordionPanel). */
+  readonly layout?: 'card' | 'accordion';
 };
 
 /**
@@ -20,6 +22,7 @@ export function TraceabilitySection({
   raw,
   productDisplayName,
   maxDisclosureTier = 3,
+  layout = 'card',
 }: TraceabilitySectionProps) {
   const publicTierOneOnly = maxDisclosureTier === 1;
   const tieredModel = publicTierOneOnly
@@ -43,6 +46,22 @@ export function TraceabilitySection({
     ? 'Öffentlich sichtbar: Rohstoffe → Herkunftsland → Produkt (Tier-1). Detaillierte Verarbeitungsstufen sind nicht freigegeben.'
     : 'Flussbreiten folgen den deklarierten Anteilen; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).';
 
+  const body = (
+    <div className="space-y-3 overflow-x-auto pt-2">
+      <TraceabilityTieredFlowchart model={tieredModel} />
+      <p className="text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
+    </div>
+  );
+
+  if (layout === 'accordion') {
+    return (
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{chainSubtitle}</p>
+        {body}
+      </div>
+    );
+  }
+
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
       <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
@@ -60,8 +79,7 @@ export function TraceabilitySection({
         </div>
       </header>
       <div className="space-y-3 overflow-x-auto bg-gradient-to-b from-slate-50/60 via-white to-white px-2 pb-5 pt-5 sm:px-4 sm:pb-6 sm:pt-5">
-        <TraceabilityTieredFlowchart model={tieredModel} />
-        <p className="px-1 text-center text-[11px] leading-relaxed text-slate-500 sm:text-xs">{footnote}</p>
+        {body}
       </div>
     </section>
   );

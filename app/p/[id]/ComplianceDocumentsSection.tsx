@@ -21,12 +21,48 @@ function documentTypeLabel(type: string): string {
   }
 }
 
-export function ComplianceDocumentsSection({ attachments }: { readonly attachments: unknown }) {
+export function ComplianceDocumentsSection({
+  attachments,
+  layout = 'card',
+}: {
+  readonly attachments: unknown;
+  readonly layout?: 'card' | 'accordion';
+}) {
   const fromAttachments = parseComplianceSourceDocuments(attachments);
   const docs: ComplianceSourceDocument[] = fromAttachments;
 
   if (docs.length === 0) {
     return null;
+  }
+
+  const list = (
+    <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+      {docs.map((doc) => (
+        <li key={doc.url}>
+          <a
+            href={doc.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-3 text-[13px] font-semibold text-[#0c1929] transition hover:bg-slate-50"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700 ring-1 ring-red-100">
+              <FileText className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{doc.title}</span>
+              <span className="mt-0.5 block text-[11px] font-medium text-slate-500">
+                {documentTypeLabel(doc.type)}
+              </span>
+            </span>
+            <Download className="h-4 w-4 shrink-0 text-sky-600" strokeWidth={2} aria-hidden />
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+
+  if (layout === 'accordion') {
+    return <div className="mt-3">{list}</div>;
   }
 
   return (

@@ -1,10 +1,12 @@
 import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
 import {
+  LayoutList,
+  Leaf,
   Menu,
   Recycle,
   ShieldCheck,
-  type LucideIcon,
+  Truck,
 } from 'lucide-react';
 import type { EsprProductData } from '../../types/espr';
 import {
@@ -35,6 +37,11 @@ import { IsccPlusSection } from './IsccPlusSection';
 import { EnvironmentalFootprintSection } from './EnvironmentalFootprintSection';
 import { ProductImageCard } from './ProductImageCard';
 import { Avv170106DisposalDetailCard } from './Avv170106DisposalDetailCard';
+import {
+  PassportAccordionPanel,
+  PassportAccordionShell,
+  PassportKvRow,
+} from './passport/PassportAccordion';
 import { shouldShowAvv170106DisposalDetail } from '@/app/domain/dpp/waste/avv170106DisposalGuidance';
 import { isRagProvenanceEnvelope } from '@/app/domain/rag/mergeRagAuditIntoPassport';
 import { resolveManufacturerPublication } from '@/app/domain/dpp/manufacturerDisplay';
@@ -49,42 +56,6 @@ interface PageProps {
 
 // ─── Presentational helpers ───────────────────────────────────────────────────
 
-function Section({
-  children,
-  title,
-  subtitle,
-  icon: Icon = Recycle,
-}: {
-  children: React.ReactNode;
-  title?: string;
-  subtitle?: string;
-  icon?: LucideIcon;
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_4px_28px_-6px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/[0.04]">
-      {title ? (
-        <header className="flex items-start gap-3 bg-[#0c1929] px-5 py-4 text-white">
-          <div
-            className="flex shrink-0 items-center justify-center rounded-xl bg-white/[0.12] p-2.5"
-            aria-hidden
-          >
-            <Icon size={22} strokeWidth={1.75} className="text-amber-300" />
-          </div>
-          <div className="min-w-0 pt-0.5">
-            <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
-            {subtitle ? (
-              <p className="mt-1 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-slate-400">
-                {subtitle}
-              </p>
-            ) : null}
-          </div>
-        </header>
-      ) : null}
-      <dl className="divide-y divide-slate-100">{children}</dl>
-    </section>
-  );
-}
-
 function Field({
   label,
   value,
@@ -93,46 +64,11 @@ function Field({
 }: {
   label: string;
   value?: string | number;
-  /** Short provenance label, e.g. RAG from indexed PDF */
   sourceBadge?: string;
-  /** SDS-style mehrzeiliger Herstellernachweis (Abschnitt 1) */
   multiline?: boolean;
 }) {
-  if (value === undefined || value === null || value === '') return null;
-  const text = String(value);
-  if (multiline) {
-    return (
-      <div className="flex flex-col gap-1.5 px-5 py-3.5 sm:max-w-none">
-        <dt className="text-[13px] font-medium leading-snug text-slate-500">{label}</dt>
-        <dd className="w-full max-w-none whitespace-pre-line text-[13px] font-semibold leading-relaxed text-slate-900">
-          <span>{text}</span>
-          {sourceBadge ? (
-            <span
-              className="mt-2 inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
-              title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
-            >
-              {sourceBadge}
-            </span>
-          ) : null}
-        </dd>
-      </div>
-    );
-  }
   return (
-    <div className="flex flex-col gap-0.5 px-5 py-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
-      <dt className="text-[13px] font-medium leading-snug text-slate-500 sm:w-[40%] sm:shrink-0">{label}</dt>
-      <dd className="text-[13px] font-semibold leading-snug text-slate-900 sm:max-w-[58%] sm:text-right">
-        <span>{text}</span>
-        {sourceBadge ? (
-          <span
-            className="ml-2 inline-flex align-middle rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-900"
-            title="Aus dem hochgeladenen Dokument (RAG-Index) übernommen"
-          >
-            {sourceBadge}
-          </span>
-        ) : null}
-      </dd>
-    </div>
+    <PassportKvRow label={label} value={value} sourceBadge={sourceBadge} multiline={multiline} />
   );
 }
 
@@ -1430,136 +1366,172 @@ export default async function ProductPage({ params, searchParams }: PageProps) {
 
       <main className="mx-auto max-w-4xl space-y-5 px-4 py-8 sm:px-6 sm:space-y-6">
 
-        {/* ── Identity ── */}
-        <Section>
-          {manufacturerDisplayBlock ? (
-            <Field
-              label="Hersteller / Verantwortlicher"
-              value={manufacturerDisplayBlock}
-              multiline
-            />
-          ) : null}
-          <Field
-            label="Ursprungsland"
-            value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}
-          />
-          <Field label="Herstellungsland"  value={typeof raw.countryOfManufacturing === 'string' ? raw.countryOfManufacturing : undefined} />
-          <Field label="Modell"            value={p.modellname} />
-          <Field label="Seriennummer"      value={p.serialNumber} />
-          <Field label="Chargennummer"     value={p.batchNumber} />
-          <Field label="Herstellungsdatum" value={p.productionDate} />
-          <Field label="Erstellt am"       value={new Date(p.createdAt).toLocaleDateString('de-DE')} />
-        </Section>
-
-        {/* ── Technische Spezifikation ── */}
-        <Section>
-          <Field label="Kapazität"       value={p.capacityKwh !== undefined ? `${p.capacityKwh} kWh` : undefined} />
-          <Field label="Chemisches System" value={p.chemistry} />
-          <Field label="Batterietyp"     value={p.batteryType} />
-          <Field label="Nennspannung"    value={p.nominalVoltageV !== undefined ? `${p.nominalVoltageV} V` : undefined} />
-          <Field label="Gewicht"         value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
-        </Section>
-
         <IsccPlusSection
           raw={raw as Record<string, unknown>}
           productId={p.id}
           displayProductName={displayProductName}
         />
 
-        <TraceabilitySection
-          raw={raw as Record<string, unknown>}
-          productDisplayName={displayProductName}
-          maxDisclosureTier={traceabilityMaxPublicTier}
-        />
-
-        <EnvironmentalFootprintSection raw={raw as Record<string, unknown>} carbonFootprint={p.carbonFootprint} />
-
-        {/* ── DPP Core fields (new extraction schema) ── */}
-        <Section title="Entsorgung" subtitle="ESPR · Abfall & Rückbau">
-          <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
-          <Field
-            label="GTIN"
-            value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
-            sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
-          />
-          <Field
-            label="SKU"
-            value={resolvePassportSku(raw)}
-            sourceBadge={ragSuppliedFields.includes('sku') ? 'RAG' : undefined}
-          />
-          <Field label="Abfallschluessel (EAK)" value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined} />
-          {showAvv170106DisposalDetail ? <Avv170106DisposalDetailCard /> : null}
-          <HazardCodesField
-            label="P-Sätze (Sicherheitshinweise)"
-            codes={productLevelPStatements}
-            sourceBadge={
-              ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements') ? 'RAG' : undefined
-            }
-          />
-          {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
-          {renderChemicalComposition(raw.chemicalComposition)}
-          {renderRecycledContent(raw.recycledContent)}
-          {renderUnifiedHazardousIngredients(raw)}
-          {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
-          {renderCareRepairDurability(raw.careRepairDurability)}
-        </Section>
-
-        <ComplianceDocumentsSection attachments={complianceAttachments} />
-
-        <RagProvenanceSection
-          ragEnrichment={raw.ragEnrichment}
-          attachments={complianceAttachments}
-        />
-
-        {hasRecycledContentSection ? (
-          <Section>
-            <Pct label="Kobalt"   value={p.recycledContent.cobaltPct} />
-            <Pct label="Lithium"  value={p.recycledContent.lithiumPct} />
-            <Pct label="Nickel"   value={p.recycledContent.nickelPct} />
-            <Pct label="Blei"     value={p.recycledContent.leadPct} />
-          </Section>
-        ) : null}
-
-        {hasLifecycleSection ? (
-          <Section>
-            <Field label="Erwartete Ladezyklen"  value={p.lifecycle.expectedCycles} />
-            <Field label="Reparierbarkeitsindex" value={p.lifecycle.repairabilityScore !== undefined ? `${p.lifecycle.repairabilityScore} / 10` : undefined} />
-            <Field label="Ersatzteil-Verfügbarkeit" value={p.lifecycle.sparePartsAvailableYears !== undefined ? `${p.lifecycle.sparePartsAvailableYears} Jahre` : undefined} />
-            <Field label="Garantie"              value={p.lifecycle.warrantyYears !== undefined ? `${p.lifecycle.warrantyYears} Jahre` : undefined} />
-          </Section>
-        ) : null}
-
-        {hasEndOfLifeSection ? (
-          <Section>
-            <Field label="Recyclinganweisungen" value={p.endOfLife.recyclingInstructions} />
-            {p.endOfLife.hazardousSubstances?.length ? (
-              <Field label="Gefahrstoffe" value={p.endOfLife.hazardousSubstances.join(', ')} />
-            ) : null}
-          </Section>
-        ) : null}
-
-        {(() => {
-          const handlingText = pickHandlingInstructionsForDisplay(raw);
-          if (!handlingText) return null;
-          return (
-            <Section>
+        <PassportAccordionShell>
+          <PassportAccordionPanel title="Auf einen Blick" icon={LayoutList} defaultOpen>
+            {manufacturerDisplayBlock ? (
               <Field
-                label="Verarbeitung & Handhabungshinweise"
-                value={handlingText}
+                label="Hersteller / Verantwortlicher"
+                value={manufacturerDisplayBlock}
                 multiline
-                sourceBadge={isHandlingInstructionsFromRag(raw) ? 'RAG' : undefined}
               />
-            </Section>
-          );
-        })()}
+            ) : null}
+            <Field
+              label="Ursprungsland"
+              value={typeof raw.countryOfOrigin === 'string' ? raw.countryOfOrigin : undefined}
+            />
+            <Field
+              label="Herstellungsland"
+              value={typeof raw.countryOfManufacturing === 'string' ? raw.countryOfManufacturing : undefined}
+            />
+            <Field label="Modell" value={p.modellname} />
+            <Field label="Seriennummer" value={p.serialNumber} />
+            <Field label="Chargennummer" value={p.batchNumber} />
+            <Field label="Herstellungsdatum" value={p.productionDate} />
+            <Field label="Erstellt am" value={new Date(p.createdAt).toLocaleDateString('de-DE')} />
+            <Field
+              label="Kapazität"
+              value={p.capacityKwh !== undefined ? `${p.capacityKwh} kWh` : undefined}
+            />
+            <Field label="Chemisches System" value={p.chemistry} />
+            <Field label="Batterietyp" value={p.batteryType} />
+            <Field
+              label="Nennspannung"
+              value={p.nominalVoltageV !== undefined ? `${p.nominalVoltageV} V` : undefined}
+            />
+            <Field label="Gewicht" value={p.weightKg !== undefined ? `${p.weightKg} kg` : undefined} />
+          </PassportAccordionPanel>
 
-        {/* ── Regulatory ── */}
-        <Section>
-          <Field label="Zertifizierungsstelle" value={p.certificationBody} />
-          <Field label="Rechtsgrundlage"        value={p.regulatoryReference} />
-          <Field label="Rechtliche Hinweise"    value={p.legalNotes} />
-          <Field label="Lieferkette"            value={p.supplyChainInfo} />
-        </Section>
+          <PassportAccordionPanel title="Rückverfolgbarkeit" icon={Truck}>
+            <TraceabilitySection
+              raw={raw as Record<string, unknown>}
+              productDisplayName={displayProductName}
+              maxDisclosureTier={traceabilityMaxPublicTier}
+              layout="accordion"
+            />
+          </PassportAccordionPanel>
+
+          <PassportAccordionPanel title="Kohlenstoff-Fußabdruck" icon={Leaf}>
+            <EnvironmentalFootprintSection
+              raw={raw as Record<string, unknown>}
+              carbonFootprint={p.carbonFootprint}
+              layout="accordion"
+            />
+          </PassportAccordionPanel>
+
+          {hasRecycledContentSection || hasLifecycleSection || hasEndOfLifeSection ? (
+            <PassportAccordionPanel title="Haltbarkeit & Kreislauf" icon={Recycle}>
+              {hasRecycledContentSection ? (
+                <>
+                  <Pct label="Kobalt — recycelt" value={p.recycledContent.cobaltPct} />
+                  <Pct label="Lithium — recycelt" value={p.recycledContent.lithiumPct} />
+                  <Pct label="Nickel — recycelt" value={p.recycledContent.nickelPct} />
+                  <Pct label="Blei — recycelt" value={p.recycledContent.leadPct} />
+                </>
+              ) : null}
+              {hasLifecycleSection ? (
+                <>
+                  <Field label="Erwartete Ladezyklen" value={p.lifecycle.expectedCycles} />
+                  <Field
+                    label="Reparierbarkeitsindex"
+                    value={
+                      p.lifecycle.repairabilityScore !== undefined
+                        ? `${p.lifecycle.repairabilityScore} / 10`
+                        : undefined
+                    }
+                  />
+                  <Field
+                    label="Ersatzteil-Verfügbarkeit"
+                    value={
+                      p.lifecycle.sparePartsAvailableYears !== undefined
+                        ? `${p.lifecycle.sparePartsAvailableYears} Jahre`
+                        : undefined
+                    }
+                  />
+                  <Field
+                    label="Garantie"
+                    value={
+                      p.lifecycle.warrantyYears !== undefined ? `${p.lifecycle.warrantyYears} Jahre` : undefined
+                    }
+                  />
+                </>
+              ) : null}
+              {hasEndOfLifeSection ? (
+                <>
+                  <Field label="Recyclinganweisungen" value={p.endOfLife.recyclingInstructions} />
+                  {p.endOfLife.hazardousSubstances?.length ? (
+                    <Field label="Gefahrstoffe" value={p.endOfLife.hazardousSubstances.join(', ')} />
+                  ) : null}
+                </>
+              ) : null}
+            </PassportAccordionPanel>
+          ) : null}
+
+          <PassportAccordionPanel title="Materialien & Entsorgung" icon={Recycle}>
+            <Field label="Produktname" value={typeof raw.productName === 'string' ? raw.productName : undefined} />
+            <Field
+              label="GTIN"
+              value={typeof raw.gtin === 'string' ? raw.gtin : undefined}
+              sourceBadge={ragSuppliedFields.includes('gtin') ? 'RAG' : undefined}
+            />
+            <Field
+              label="SKU"
+              value={resolvePassportSku(raw)}
+              sourceBadge={ragSuppliedFields.includes('sku') ? 'RAG' : undefined}
+            />
+            <Field
+              label="Abfallschlüssel (EAK)"
+              value={typeof raw.wasteCode === 'string' ? raw.wasteCode : undefined}
+            />
+            {showAvv170106DisposalDetail ? <Avv170106DisposalDetailCard /> : null}
+            <HazardCodesField
+              label="P-Sätze (Sicherheitshinweise)"
+              codes={productLevelPStatements}
+              sourceBadge={
+                ragSuppliedFields.includes('pStatements') || hazardFromRagAudit('pStatements')
+                  ? 'RAG'
+                  : undefined
+              }
+            />
+            <div className="divide-y divide-slate-100">
+              {renderMaterialZusammensetzungKernfelder(raw.materialComposition, raw.materialZusammensetzung)}
+              {renderChemicalComposition(raw.chemicalComposition)}
+              {renderRecycledContent(raw.recycledContent)}
+              {renderUnifiedHazardousIngredients(raw)}
+              {renderSupplierAndProcessInformation(raw.supplierAndProcessInformation)}
+              {renderCareRepairDurability(raw.careRepairDurability)}
+            </div>
+            {(() => {
+              const handlingText = pickHandlingInstructionsForDisplay(raw);
+              if (!handlingText) return null;
+              return (
+                <Field
+                  label="Verarbeitung & Handhabungshinweise"
+                  value={handlingText}
+                  multiline
+                  sourceBadge={isHandlingInstructionsFromRag(raw) ? 'RAG' : undefined}
+                />
+              );
+            })()}
+          </PassportAccordionPanel>
+
+          <PassportAccordionPanel title="Compliance & Nachweis" icon={ShieldCheck}>
+            <Field label="Zertifizierungsstelle" value={p.certificationBody} />
+            <Field label="Rechtsgrundlage" value={p.regulatoryReference} />
+            <Field label="Rechtliche Hinweise" value={p.legalNotes} multiline />
+            <Field label="Lieferkette" value={p.supplyChainInfo} multiline />
+            <ComplianceDocumentsSection attachments={complianceAttachments} layout="accordion" />
+            <RagProvenanceSection
+              ragEnrichment={raw.ragEnrichment}
+              attachments={complianceAttachments}
+            />
+          </PassportAccordionPanel>
+        </PassportAccordionShell>
 
       </main>
 

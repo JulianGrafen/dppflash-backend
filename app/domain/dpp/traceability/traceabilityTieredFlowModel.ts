@@ -95,7 +95,34 @@ type BuildTraceabilityTieredFlowModelInput = {
   readonly productLabel: string;
   /** Fallback: ein einzelner Tier-1-Knoten statt EU/Asien-Split. */
   readonly singleProcessingNode?: boolean;
+  /** Öffentliche Tier-1-Ansicht: Anzeige im Herkunftsland-Knoten (Mitte). */
+  readonly originCountryLabel?: string | null;
 };
+
+const ORIGIN_COUNTRY_NODE_ID = 'origin_country';
+
+/** Liest Herkunftsland aus Pass-Kernfeldern (öffentliche Tier-1-Spalte). */
+export function resolveOriginCountryLabelFromRaw(raw: Record<string, unknown>): string | null {
+  const countryOfOrigin = raw.countryOfOrigin;
+  if (typeof countryOfOrigin === 'string' && countryOfOrigin.trim()) {
+    return countryOfOrigin.trim();
+  }
+
+  const countryOfManufacturing = raw.countryOfManufacturing;
+  if (typeof countryOfManufacturing === 'string' && countryOfManufacturing.trim()) {
+    return countryOfManufacturing.trim();
+  }
+
+  const manufacturer = raw.manufacturer;
+  if (manufacturer && typeof manufacturer === 'object' && !Array.isArray(manufacturer)) {
+    const country = (manufacturer as Record<string, unknown>).country;
+    if (typeof country === 'string' && country.trim()) {
+      return country.trim();
+    }
+  }
+
+  return null;
+}
 
 /**
  * **3-Ebenen-Datenmodell**: Rohstoffe → Herkunft/Verarbeitung → Endprodukt.
@@ -180,7 +207,7 @@ export function buildTraceabilityTieredFlowModel(
 }
 
 /**
- * Öffentliche Tier-1-Freigabe: Rohstoffe → Endprodukt (Ribbon-Flow, keine Verarbeitungslane).
+ * Öffentliche Tier-1-Freigabe: Rohstoffe → Herkunftsland → Endprodukt.
  */
 export function buildPublicTierOneTraceabilityFlowModel(
   input: BuildTraceabilityTieredFlowModelInput,
@@ -200,6 +227,15 @@ export function buildPublicTierOneTraceabilityFlowModel(
   }));
 
   const productShare = rawNodes.reduce((sum, node) => sum + node.sharePercent, 0);
+  const originCountry = input.originCountryLabel?.trim();
+  const originNode: TraceabilityFlowNode = {
+    id: ORIGIN_COUNTRY_NODE_ID,
+    label: originCountry ? `Herkunftsland · ${originCountry}` : 'Herkunftsland (Tier-1)',
+    tier: 2,
+    sharePercent: productShare,
+    color: TRACEABILITY_PROCESSING_DEFAULT.color,
+  };
+
   const productNode: TraceabilityFlowNode = {
     id: PRODUCT_NODE_ID,
     label: productLabel,
@@ -208,17 +244,25 @@ export function buildPublicTierOneTraceabilityFlowModel(
     color: TRACEABILITY_PRODUCT_COLOR,
   };
 
-  const links: TraceabilityFlowLink[] = rawNodes.map((raw) => ({
-    id: `link_${raw.id}_${PRODUCT_NODE_ID}`,
+  const tier1ToOriginLinks: TraceabilityFlowLink[] = rawNodes.map((raw) => ({
+    id: `link_${raw.id}_${ORIGIN_COUNTRY_NODE_ID}`,
     sourceId: raw.id,
-    targetId: PRODUCT_NODE_ID,
+    targetId: ORIGIN_COUNTRY_NODE_ID,
     value: raw.sharePercent,
     color: raw.color,
   }));
 
+  const originToProductLink: TraceabilityFlowLink = {
+    id: `link_${ORIGIN_COUNTRY_NODE_ID}_${PRODUCT_NODE_ID}`,
+    sourceId: ORIGIN_COUNTRY_NODE_ID,
+    targetId: PRODUCT_NODE_ID,
+    value: productShare,
+    color: originNode.color,
+  };
+
   return {
-    nodes: [...rawNodes, productNode],
-    links,
+    nodes: [...rawNodes, originNode, productNode],
+    links: [...tier1ToOriginLinks, originToProductLink],
     productLabel,
   };
 }
@@ -227,11 +271,13 @@ export function buildPublicTierOneTraceabilityFlowFromRaw(
   raw: Record<string, unknown>,
   productLabel: string,
 ): TraceabilityTieredFlowModel | null {
+  const originCountryLabel = resolveOriginCountryLabelFromRaw(raw);
   const chemicalRows = extractChemicalCompositionRowsForSankey(raw.chemicalComposition);
   if (chemicalRows.length > 0) {
     return buildPublicTierOneTraceabilityFlowModel({
       materials: [...chemicalRows],
       productLabel,
+      originCountryLabel,
     });
   }
 
@@ -240,6 +286,7 @@ export function buildPublicTierOneTraceabilityFlowFromRaw(
     return buildPublicTierOneTraceabilityFlowModel({
       materials: [...materialRows],
       productLabel,
+      originCountryLabel,
     });
   }
 

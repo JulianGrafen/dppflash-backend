@@ -40,7 +40,7 @@ export function TraceabilitySection({
     : 'Herkunftskette — Inhaltsstoffe · Tier-1 Verarbeitung';
 
   const footnote = publicTierOneOnly
-    ? 'Öffentlich sichtbar: Rohstoffe → Produkt (Tier-1). Verarbeitungs- und Lieferkettenstufen darüber hinaus sind nicht freigegeben.'
+    ? 'Öffentlich sichtbar: Rohstoffe → Herkunftsland → Produkt (Tier-1). Detaillierte Verarbeitungsstufen sind nicht freigegeben.'
     : 'Flussbreiten folgen den deklarierten Anteilen; fehlende Anteile als „Nicht deklarationspflichtige Stoffe“. Zwischenstufe simuliert EU-/Asien-Herkunft (ESPR Tier-1).';
 
   return (

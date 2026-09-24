@@ -114,8 +114,11 @@ describe('demo battery public passport traceability', () => {
     expect(publicModel).not.toBeNull();
     expect(publicModel!.nodes.filter((node) => node.tier === 1)).toHaveLength(7);
     expect(publicModel!.nodes.some((node) => node.tier === 3)).toBe(true);
-    expect(publicModel!.nodes.filter((node) => node.tier === 2)).toHaveLength(0);
-    expect(publicModel!.links).toHaveLength(7);
+    expect(publicModel!.nodes.filter((node) => node.tier === 2)).toHaveLength(1);
+    expect(publicModel!.nodes.some((node) => node.label.includes('Herkunftsland · Deutschland'))).toBe(
+      true,
+    );
+    expect(publicModel!.links).toHaveLength(8);
     expect(publicModel!.nodes.some((node) => node.label.includes('Nickel'))).toBe(true);
   });
 });

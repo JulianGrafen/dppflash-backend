@@ -1,0 +1,906 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "EU battery passport field list",
+  "version": "2026-08-10",
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "attribution": "PassPer (passper.eu)",
+  "source": "https://www.passper.eu/battery-passport-field-list.html",
+  "basedOn": [
+    "Regulation (EU) 2023/1542, Article 77 and Annex XIII",
+    "DIN DKE SPEC 99100:2025"
+  ],
+  "appliesFrom": "2027-02-18",
+  "counts": {
+    "total": 110,
+    "mandatory": 94,
+    "byAccessTier": {
+      "Public": 82,
+      "Authorities only": 2,
+      "Legitimate interest": 26
+    }
+  },
+  "disclaimer": "Reference reconciliation for planning purposes, not legal advice. Field detail may change as implementing guidance is finalised.",
+  "fields": [
+    {
+      "key": "battery.passportIdentifier",
+      "label": "Battery passport identifier",
+      "note": "DIN 6.1.2.1 — unique id of this battery passport.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "battery.uniqueId",
+      "label": "Unique battery identifier",
+      "note": "DIN 6.1.2.2 / Annex XIII 1(a) — unambiguous battery id.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "operator.responsibleOperatorId",
+      "label": "Responsible economic operator identifier",
+      "note": "DIN 6.1.2.3 — operator id (EOID/EORI); required for EU registry registration.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.manufacturer",
+      "label": "Manufacturer identification",
+      "note": "DIN 6.1.2.4 / Art 38(7).",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "manufacturing.place",
+      "label": "Manufacturing place",
+      "note": "DIN 6.1.3.1 — geographical location of the manufacturing facility.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "manufacturing.facilityId",
+      "label": "Manufacturing facility identifier",
+      "note": "Unique facility identifier supporting DIN 6.1.3.1.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "battery.manufacturingDate",
+      "label": "Manufacturing date",
+      "note": "DIN 6.1.3.2 — month and year of manufacture (YYYY-MM).",
+      "datatype": "DATE",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.commissioningDate",
+      "label": "Date of putting into service",
+      "note": "DIN 6.1.3.3 — date the battery was put into service (YYYY-MM).",
+      "datatype": "DATE",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.warrantyPeriod",
+      "label": "Warranty period",
+      "note": "DIN 6.1.3.4 — warranty period of the battery.",
+      "datatype": "DATE",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.category",
+      "label": "Battery category",
+      "note": "DIN 6.1.3.5 / Art 38(6).",
+      "datatype": "ENUM",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.weight",
+      "label": "Battery mass",
+      "note": "DIN 6.1.3.6 — battery mass in kg.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.status",
+      "label": "Lifecycle status",
+      "note": "DIN 6.1.3.7 / Annex XIII 4(c) — dynamic lifecycle status.",
+      "datatype": "ENUM",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "battery.rechargeable",
+      "label": "Rechargeable",
+      "note": "Whether the battery is rechargeable (governs recycled-content applicability).",
+      "datatype": "BOOLEAN",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "labelling.separateCollectionSymbol",
+      "label": "Separate-collection symbol",
+      "note": "DIN 6.2.2 / Art 13(3) — crossed-out wheeled-bin symbol present.",
+      "datatype": "BOOLEAN",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "labelling.heavyMetalSymbol",
+      "label": "Cadmium / lead symbols",
+      "note": "DIN 6.2.3 / Art 13(4) — Cd/Pb chemical symbols where thresholds exceeded.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "labelling.carbonFootprintLabel",
+      "label": "Carbon footprint label",
+      "note": "DIN 6.2.4 — carbon-footprint label/graphic.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "labelling.extinguishingAgent",
+      "label": "Suitable extinguishing agent",
+      "note": "DIN 6.2.5 / Annex VI A — suitable extinguishing agent.",
+      "datatype": "STRING",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "labelling.meaningOfLabels",
+      "label": "Meaning of labels and symbols",
+      "note": "DIN 6.2.6 / Art 74(1)(e).",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "conformity.euDeclaration",
+      "label": "EU declaration of conformity",
+      "note": "DIN 6.2.7 / Annex XIII 1(r) / Art 18.",
+      "datatype": "DOCUMENT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "compliance.testReports",
+      "label": "Test reports proving compliance",
+      "note": "DIN 6.2.8 / Annex XIII 3(a) — notified bodies & market surveillance only.",
+      "datatype": "DOCUMENT list",
+      "accessTier": "Authorities only",
+      "status": "Mandatory"
+    },
+    {
+      "key": "compliance.notifiedBody",
+      "label": "Notified body",
+      "note": "Notified body responsible for conformity assessment.",
+      "datatype": "STRING",
+      "accessTier": "Authorities only",
+      "status": "Recommended"
+    },
+    {
+      "key": "carbonFootprint.total",
+      "label": "Carbon footprint per functional unit",
+      "note": "DIN 6.3.2 / Art 7 — total CF per kWh over service life.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.stageRawMaterial",
+      "label": "CF — raw-material acquisition & pre-processing",
+      "note": "DIN 6.3.3 — CF contribution of the raw-material/pre-processing stage.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.stageProduction",
+      "label": "CF — main production / manufacturing",
+      "note": "DIN 6.3.4.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.stageDistribution",
+      "label": "CF — distribution",
+      "note": "DIN 6.3.5.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.stageEndOfLife",
+      "label": "CF — end of life & recycling",
+      "note": "DIN 6.3.6.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.performanceClass",
+      "label": "Carbon footprint performance class",
+      "note": "DIN 6.3.7 — CF performance class (EV).",
+      "datatype": "ENUM",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.studyUrl",
+      "label": "Web link to public CF study",
+      "note": "DIN 6.3.8.",
+      "datatype": "REFERENCE",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.studyRef",
+      "label": "Carbon footprint study (document)",
+      "note": "Verified CF study document backing DIN 6.3.8.",
+      "datatype": "DOCUMENT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "carbonFootprint.absolute",
+      "label": "Absolute battery carbon footprint",
+      "note": "DIN 6.3.10 — absolute CF in tCO2e.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "dueDiligence.report",
+      "label": "Due diligence report",
+      "note": "DIN 6.4.2 / Art 52(3).",
+      "datatype": "DOCUMENT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "dueDiligence.policyUrl",
+      "label": "Due diligence policy (web link)",
+      "note": "Public due-diligence policy supporting Art 52.",
+      "datatype": "REFERENCE",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "dueDiligence.thirdPartyAssurance",
+      "label": "Third-party assurance (certifications)",
+      "note": "DIN 6.4.3 — recognised-scheme assurance.",
+      "datatype": "DOCUMENT",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "dueDiligence.supplyChainIndices",
+      "label": "Supply chain indices",
+      "note": "DIN 6.4.4.",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "material.composition",
+      "label": "Battery chemistry",
+      "note": "DIN 6.5.2 / Annex XIII 1(b) — battery chemistry & general composition.",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "material.criticalRawMaterials",
+      "label": "Critical raw materials",
+      "note": "DIN 6.5.3.",
+      "datatype": "TEXT list",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "material.activeMaterials",
+      "label": "Materials in cathode / anode / electrolyte",
+      "note": "DIN 6.5.4.",
+      "datatype": "TEXT list",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "hazardous.substances",
+      "label": "Hazardous substances",
+      "note": "DIN 6.5.5 — hazardous substances (substance, CAS, concentration, location).",
+      "datatype": "TEXT list",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "hazardous.substanceImpact",
+      "label": "Impact of substances on environment / health / safety",
+      "note": "DIN 6.5.6 / Art 74(1)(f).",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "material.detailedComposition",
+      "label": "Detailed composition",
+      "note": "Annex XIII 2(a) — full materials breakdown for persons with a legitimate interest.",
+      "datatype": "TEXT list",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.cobalt",
+      "label": "Recycled cobalt content (total)",
+      "note": "Annex XIII 1(e) / Art 8 — total recycled cobalt share.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.nickel",
+      "label": "Recycled nickel content (total)",
+      "note": "Annex XIII 1(e) — total recycled nickel share.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.lithium",
+      "label": "Recycled lithium content (total)",
+      "note": "Annex XIII 1(e) — total recycled lithium share (min from 2031).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.lead",
+      "label": "Recycled lead content (total)",
+      "note": "Annex XIII 1(e) — total recycled lead share.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.preNickel",
+      "label": "Pre-consumer recycled nickel share",
+      "note": "DIN 6.6.2.3.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.preCobalt",
+      "label": "Pre-consumer recycled cobalt share",
+      "note": "DIN 6.6.2.4.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.preLithium",
+      "label": "Pre-consumer recycled lithium share",
+      "note": "DIN 6.6.2.5.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.preLead",
+      "label": "Pre-consumer recycled lead share",
+      "note": "DIN 6.6.2.6.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.postNickel",
+      "label": "Post-consumer recycled nickel share",
+      "note": "DIN 6.6.2.7.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.postCobalt",
+      "label": "Post-consumer recycled cobalt share",
+      "note": "DIN 6.6.2.8.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.postLithium",
+      "label": "Post-consumer recycled lithium share",
+      "note": "DIN 6.6.2.9.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "recycledContent.postLead",
+      "label": "Post-consumer recycled lead share",
+      "note": "DIN 6.6.2.10.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "renewableContent.share",
+      "label": "Renewable content share",
+      "note": "DIN 6.6.2.11 / Annex XIII 1(f).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "repair.disassemblyInstructions",
+      "label": "Dismantling / disassembly manuals",
+      "note": "DIN 6.6.1.2 / Annex XIII 2(c).",
+      "datatype": "DOCUMENT",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "repair.partNumbers",
+      "label": "Part numbers for components",
+      "note": "DIN 6.6.1.3 / Annex XIII 2(b).",
+      "datatype": "TEXT list",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "repair.spareParts",
+      "label": "Sources of spare parts",
+      "note": "DIN 6.6.1.4 / Annex XIII 2(b).",
+      "datatype": "TEXT list",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "repair.safetyInstructions",
+      "label": "Safety measures",
+      "note": "DIN 6.6.1.5 / Annex XIII 2(d).",
+      "datatype": "DOCUMENT",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "endOfLife.roleWastePrevention",
+      "label": "Role of end-users in waste prevention",
+      "note": "DIN 6.6.3.2 / Art 74(1)(a).",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "endOfLife.roleSeparateCollection",
+      "label": "Role of end-users in separate collection",
+      "note": "DIN 6.6.3.3 / Art 74(1)(b).",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "endOfLife.collectionInfo",
+      "label": "Collection, second-life & end-of-life treatment",
+      "note": "DIN 6.6.3.4 / Art 74(1)(c).",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "endOfLife.safetyInstructions",
+      "label": "End-of-life safety instructions",
+      "note": "Art 74(1)(d) — safety instructions at end of life.",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "endOfLife.recyclingEfficiency",
+      "label": "Recycling efficiency / recoverability",
+      "note": "Recyclability / recovery rate (expected delegated detail).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Draft expected"
+    },
+    {
+      "key": "performance.ratedCapacity",
+      "label": "Rated capacity",
+      "note": "DIN 6.7.2.2 / Annex XIII 1(g).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.capacityFade",
+      "label": "Capacity fade",
+      "note": "DIN 6.7.2.4.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.certifiedUsableEnergy",
+      "label": "Certified usable battery energy",
+      "note": "DIN 6.7.2.5.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "performance.energy",
+      "label": "Energy",
+      "note": "Total energy of the battery (kWh).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.minVoltage",
+      "label": "Minimum voltage",
+      "note": "DIN 6.7.2.9 / Annex XIII 1(h).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.maxVoltage",
+      "label": "Maximum voltage",
+      "note": "DIN 6.7.2.10 / Annex XIII 1(h).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.nominalVoltage",
+      "label": "Nominal voltage",
+      "note": "DIN 6.7.2.11 / Annex XIII 1(h).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.powerCapability",
+      "label": "Original power capability",
+      "note": "DIN 6.7.3.2 / Annex XIII 1(i).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.powerFade",
+      "label": "Power fade",
+      "note": "DIN 6.7.3.4.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.maxPermittedPower",
+      "label": "Maximum permitted battery power",
+      "note": "DIN 6.7.3.5.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.powerToEnergyRatio",
+      "label": "Ratio nominal power : energy",
+      "note": "DIN 6.7.3.6.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "performance.roundTripEfficiency",
+      "label": "Initial round-trip energy efficiency",
+      "note": "DIN 6.7.4.2 / Annex XIII 1(n).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.rtEfficiencyAt50",
+      "label": "Round-trip efficiency at 50% of cycle-life",
+      "note": "DIN 6.7.4.3.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.rtEfficiencyFade",
+      "label": "Energy round-trip efficiency fade",
+      "note": "DIN 6.7.4.5.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.initialSelfDischarge",
+      "label": "Initial self-discharge rate",
+      "note": "DIN 6.7.4.6.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "performance.internalResistancePack",
+      "label": "Initial internal resistance — pack",
+      "note": "DIN 6.7.5.2 / Annex XIII 1(o).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.internalResistanceCell",
+      "label": "Initial internal resistance — cell",
+      "note": "DIN 6.7.5.2.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.internalResistanceModule",
+      "label": "Initial internal resistance — module",
+      "note": "DIN 6.7.5.2.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "durability.internalResistanceIncreasePack",
+      "label": "Internal resistance increase — pack",
+      "note": "DIN 6.7.5.3.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.internalResistanceIncreaseCell",
+      "label": "Internal resistance increase — cell",
+      "note": "DIN 6.7.5.3.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Recommended"
+    },
+    {
+      "key": "performance.temperatureRangeMin",
+      "label": "Temperature range idle — lower boundary",
+      "note": "DIN 6.7.7.3 / Annex XIII 1(l).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.temperatureRangeMax",
+      "label": "Temperature range idle — upper boundary",
+      "note": "DIN 6.7.7.4 / Annex XIII 1(l).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.expectedLifetimeYears",
+      "label": "Expected lifetime — calendar years",
+      "note": "DIN 6.7.6.2 / Annex XIII 1(k).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.expectedLifetime",
+      "label": "Expected lifetime — charge/discharge cycles",
+      "note": "DIN 6.7.6.3 / Annex XIII 1(j).",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.cycleLifeReferenceTest",
+      "label": "Cycle-life reference test",
+      "note": "DIN 6.7.6.5 — reference test for cycle-life figures.",
+      "datatype": "TEXT",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.cRate",
+      "label": "C-rate of relevant cycle-life test",
+      "note": "DIN 6.7.6.6.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "performance.capacityThreshold",
+      "label": "Capacity threshold for exhaustion",
+      "note": "DIN 6.7.6.9.",
+      "datatype": "QUANTITY",
+      "accessTier": "Public",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.remainingCapacity",
+      "label": "Remaining capacity",
+      "note": "DIN 6.7.2.3 (dynamic, individual battery).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.remainingUsableEnergy",
+      "label": "Remaining usable battery energy",
+      "note": "DIN 6.7.2.6 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Recommended"
+    },
+    {
+      "key": "durability.stateOfCertifiedEnergy",
+      "label": "State of certified energy (SOCE)",
+      "note": "DIN 6.7.2.7 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.stateOfCharge",
+      "label": "State of charge (SoC)",
+      "note": "DIN 6.7.2.8 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.remainingPowerCapability",
+      "label": "Remaining power capability",
+      "note": "DIN 6.7.3.3 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.remainingRtEfficiency",
+      "label": "Remaining round-trip efficiency",
+      "note": "DIN 6.7.4.4 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.currentSelfDischarge",
+      "label": "Current self-discharge rate",
+      "note": "DIN 6.7.4.7 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Recommended"
+    },
+    {
+      "key": "durability.selfDischargeEvolution",
+      "label": "Evolution of self-discharge rates",
+      "note": "DIN 6.7.4.8 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.fullCycleCount",
+      "label": "Number of full charge/discharge cycles",
+      "note": "DIN 6.7.6.4 (dynamic).",
+      "datatype": "NUMBER",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.energyThroughput",
+      "label": "Energy throughput",
+      "note": "DIN 6.7.6.7 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.capacityThroughput",
+      "label": "Capacity throughput",
+      "note": "DIN 6.7.6.8 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.temperatureInformation",
+      "label": "Temperature information",
+      "note": "DIN 6.7.7.2 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.timeExtremeTempAbove",
+      "label": "Time in extreme temperatures above boundary",
+      "note": "DIN 6.7.7.5 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.timeExtremeTempBelow",
+      "label": "Time in extreme temperatures below boundary",
+      "note": "DIN 6.7.7.6 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.timeChargingExtremeAbove",
+      "label": "Time charging in extreme temps above boundary",
+      "note": "DIN 6.7.7.7 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.timeChargingExtremeBelow",
+      "label": "Time charging in extreme temps below boundary",
+      "note": "DIN 6.7.7.8 (dynamic).",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.deepDischargeEvents",
+      "label": "Number of deep-discharge events",
+      "note": "DIN 6.7.8.2 (dynamic).",
+      "datatype": "NUMBER",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.overchargeEvents",
+      "label": "Number of overcharge events",
+      "note": "DIN 6.7.8.3 (dynamic).",
+      "datatype": "NUMBER",
+      "accessTier": "Legitimate interest",
+      "status": "Recommended"
+    },
+    {
+      "key": "durability.accidentInfo",
+      "label": "Information on accidents",
+      "note": "DIN 6.7.8.4 (dynamic) — incidents affecting the battery.",
+      "datatype": "TEXT list",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.stateOfHealth",
+      "label": "State of health (SoH)",
+      "note": "Annex XIII 4(b) / Art 14 / Annex VII — current state of health.",
+      "datatype": "QUANTITY",
+      "accessTier": "Legitimate interest",
+      "status": "Mandatory"
+    },
+    {
+      "key": "durability.usageData",
+      "label": "Information and data from use",
+      "note": "Annex XIII 4(d) — information and data resulting from the battery's use.",
+      "datatype": "TEXT list",
+      "accessTier": "Legitimate interest",
+      "status": "Recommended"
+    }
+  ],
+  "doi": "10.5281/zenodo.23110971"
+}

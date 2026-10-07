@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { AlertTriangle, Eye } from 'lucide-react';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
@@ -61,13 +60,6 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
         <div className="flex min-w-0 flex-1 items-start gap-4">
           <PassportEditorProductImage passId={passId} productName={draft.productName} />
           <div className="min-w-0 space-y-2">
-          <nav className="text-xs text-muted-foreground" aria-label="Breadcrumb">
-            <Link href="/dashboard/v2/produktpaesse" className="hover:text-foreground">
-              Workspace
-            </Link>
-            <span className="mx-1.5">›</span>
-            <span className="text-foreground/80">Produktpässe</span>
-          </nav>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold tracking-tight text-foreground">{draft.productName}</h1>
             <Badge variant="outline" className="gap-1 font-normal">
@@ -125,7 +117,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
         draft={draft}
         criticalOk={passportSummary.criticalOk}
         onPublished={(url) => {
-          setPublishFeedback(`Veröffentlicht — öffentlicher Pass: ${url}`);
+          setPublishFeedback(`Veröffentlicht. Öffentlicher Pass: ${url}`);
         }}
       />
 

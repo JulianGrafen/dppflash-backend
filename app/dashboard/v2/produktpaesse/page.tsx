@@ -1,13 +1,16 @@
-import { PassportDraftList } from '@/app/dashboard/v2/components/PassportDraftList';
+import { Suspense } from 'react';
+import { ProduktpassHub } from '@/app/dashboard/v2/components/ProduktpassHub';
 import { V2SectionShell } from '@/app/dashboard/v2/components/V2SectionShell';
 
 export default function ProduktpaessePage() {
   return (
     <V2SectionShell
       title="Produktpässe"
-      description="Alle Digitalen Produktpässe in Bearbeitung und veröffentlicht."
+      description="Pässe, Produkte, Vollständigkeit und Lieferanten an einem Ort."
     >
-      <PassportDraftList showPublished newPassCta />
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Laden…</p>}>
+        <ProduktpassHub />
+      </Suspense>
     </V2SectionShell>
   );
 }

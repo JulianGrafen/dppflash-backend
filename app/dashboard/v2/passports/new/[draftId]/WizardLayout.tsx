@@ -1,7 +1,9 @@
 'use client';
 
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
+import { firstIncompleteWizardStep, isWizardStepReachable } from '@/app/dashboard/v2/lib/wizardStepAccess';
 import { CompletenessPanel } from '@/app/dashboard/v2/components/CompletenessPanel';
 import { WizardStepper } from '@/app/dashboard/v2/components/WizardStepper';
 import type { WizardStep } from '@/app/dashboard/v2/mock/types';
@@ -18,8 +20,19 @@ function stepFromPath(pathname: string): WizardStep {
 export function WizardLayout({ children }: { readonly children: React.ReactNode }) {
   const params = useParams<{ draftId: string }>();
   const pathname = usePathname();
+  const router = useRouter();
   const { draft, summary } = useDraft();
   const step = stepFromPath(pathname ?? '');
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    if (!isWizardStepReachable(draft.visitedSteps, step)) {
+      const fallback = firstIncompleteWizardStep(draft.visitedSteps);
+      router.replace(`/dashboard/v2/passports/new/${params.draftId}/${fallback}`);
+    }
+  }, [draft, params.draftId, router, step]);
 
   if (!draft) {
     return <p className="text-sm text-slate-500">Entwurf wird geladen…</p>;

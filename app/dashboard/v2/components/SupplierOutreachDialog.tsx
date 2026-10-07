@@ -61,8 +61,8 @@ export function SupplierOutreachDialog({
     : `DPP-Datenanfrage: ${field?.label}`;
 
   const intro = isBulk
-    ? `Für ${bulkCount} Pflichtfelder fehlen noch Angaben. DPP-Flash hat eine konsolidierte Anfrage vorbereitet — Sie prüfen und senden.`
-    : `Für ${field?.label} fehlen noch Angaben. DPP-Flash hat die Anfrage vorbereitet — Sie prüfen und senden.`;
+    ? `Für ${bulkCount} Pflichtfelder fehlen noch Angaben. DPP-Flash hat eine konsolidierte Anfrage vorbereitet. Bitte prüfen und senden.`
+    : `Für ${field?.label} fehlen noch Angaben. DPP-Flash hat die Anfrage vorbereitet. Bitte prüfen und senden.`;
 
   const body = isBulk
     ? `Guten Tag,\n\nfür unseren Produktpass benötigen wir noch Informationen zu folgenden Pflichtfeldern:\n\n${bulkFieldList}\n\nBitte ergänzen Sie die Daten über diesen Link:\n${link}\n\nVielen Dank,\nIhr Kunde über DPP-Flash`
@@ -80,7 +80,7 @@ export function SupplierOutreachDialog({
           {isBulk ? intro : (
             <>
               Für <strong className="text-foreground">{field?.label}</strong> fehlen noch Angaben.
-              DPP-Flash hat die Anfrage vorbereitet — Sie prüfen und senden.
+              DPP-Flash hat die Anfrage vorbereitet. Bitte prüfen und senden.
             </>
           )}
         </p>

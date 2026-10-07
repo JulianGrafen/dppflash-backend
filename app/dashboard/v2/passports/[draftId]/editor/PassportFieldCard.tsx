@@ -240,8 +240,8 @@ export function PassportFieldCard({
             {isBlocker ? (
               <p className="text-xs font-medium text-red-700">
                 {contentLocale === 'de'
-                  ? 'Pflichtfeld fehlt — Publish-Blocker.'
-                  : 'Mandatory field missing — blocks publish.'}
+                  ? 'Pflichtfeld fehlt. Freigabe blockiert.'
+                  : 'Mandatory field missing. Blocks publish.'}
               </p>
             ) : null}
 

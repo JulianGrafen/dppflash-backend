@@ -90,7 +90,7 @@ export function PassportReadinessRail({ layout = 'page' }: PassportReadinessRail
         const description = def
           ? passportFieldNote(def, locale)
           : locale === 'de'
-            ? 'Pflichtangabe fehlt — Publish nicht möglich.'
+            ? 'Pflichtangabe fehlt. Freigabe nicht möglich.'
             : 'A mandatory value is required before this passport can be published.';
         const fieldState = draft?.passportFields?.[b.key];
         const pendingSupplier = fieldState?.provenance === 'pending_supplier';

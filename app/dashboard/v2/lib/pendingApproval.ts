@@ -1,3 +1,4 @@
+import { draftUsesPassportEditor, passportEditorHref } from '@/app/dashboard/v2/lib/editorDraftHref';
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
 import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
@@ -24,6 +25,9 @@ export function listDraftsPendingApproval(drafts: readonly DraftPassport[]): Dra
 }
 
 export function draftApprovalHref(draft: DraftPassport): string {
+  if (draftUsesPassportEditor(draft)) {
+    return passportEditorHref(draft.id);
+  }
   if (draft.visitedSteps.includes('publish')) {
     return `/dashboard/v2/passports/new/${draft.id}/publish`;
   }

@@ -37,7 +37,7 @@ Your customer via DPP-Flash`;
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Bulk Magic Link — Supplier Outreach</DialogTitle>
+          <DialogTitle>Bulk Magic Link: Lieferantenanfragen</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-slate-600">
           Simulated campaign to{' '}
@@ -48,7 +48,7 @@ Your customer via DPP-Flash`;
         <div className="space-y-2">
           <Label>Betreff</Label>
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-            DPP-Flash — Missing compliance data ({CATALOG_SUMMARY.gapsIdentified} SKUs)
+            DPP-Flash: fehlende Compliance-Daten ({CATALOG_SUMMARY.gapsIdentified} SKUs)
           </p>
         </div>
         <div className="space-y-2">

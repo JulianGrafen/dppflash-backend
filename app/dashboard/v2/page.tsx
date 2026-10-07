@@ -31,8 +31,8 @@ export default function DashboardV2HubPage() {
   const pendingApproval = useMemo(() => listDraftsPendingApproval(drafts), [drafts]);
   const subtitle =
     activeDrafts.length > 0
-      ? `${stats.openGaps} Angaben fehlen noch — Kennzahlen und offene Schritte für Ihre Produktpässe.`
-      : 'Starten Sie mit einem neuen Digitalen Produktpass — Schwerpunkt Dokument-Upload mit KI-Extraktion (Mock).';
+      ? `${stats.openGaps} Angaben fehlen noch. Kennzahlen und offene Schritte für Ihre Produktpässe.`
+      : 'Starten Sie mit einem neuen Digitalen Produktpass. Schwerpunkt: Dokument-Upload mit KI-Extraktion (Mock).';
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -54,7 +54,7 @@ export default function DashboardV2HubPage() {
         <Card variant="elevated" className="border-amber-200 bg-amber-50/50">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
             <p className="text-sm text-amber-950">
-              Integrationen unvollständig — SAP, PIM und Datenimport im Onboarding abschließen.
+              Integrationen unvollständig. SAP, PIM und Datenimport im Onboarding abschließen.
             </p>
             <LinkButton href="/dashboard/v2/onboarding" variant="outline" className="cursor-pointer">
               Onboarding öffnen

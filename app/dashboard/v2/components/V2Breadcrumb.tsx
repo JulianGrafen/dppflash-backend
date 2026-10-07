@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { buildV2Breadcrumbs } from '@/app/dashboard/v2/lib/v2Breadcrumbs';
 import { loadDraft } from '@/app/dashboard/v2/mock/storage';
@@ -10,15 +10,12 @@ import { cn } from 'cn';
 
 export function V2Breadcrumb({ className }: { readonly className?: string }) {
   const pathname = usePathname() ?? '';
-  const [editorProductName, setEditorProductName] = useState<string | null>(null);
-
-  useEffect(() => {
+  const editorProductName = useMemo(() => {
     const match = pathname.match(/\/dashboard\/v2\/passports\/([^/]+)\/editor/);
     if (!match) {
-      setEditorProductName(null);
-      return;
+      return null;
     }
-    setEditorProductName(loadDraft(match[1])?.productName ?? null);
+    return loadDraft(match[1])?.productName ?? null;
   }, [pathname]);
 
   const crumbs = useMemo(
@@ -38,7 +35,7 @@ export function V2Breadcrumb({ className }: { readonly className?: string }) {
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1;
         return (
-          <span key={`${crumb.label}-${index}`} className="inline-flex items-center gap-1">
+          <span key={`${crumb.href ?? crumb.label}-${index}`} className="inline-flex items-center gap-1">
             {index > 0 ? (
               <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
             ) : null}

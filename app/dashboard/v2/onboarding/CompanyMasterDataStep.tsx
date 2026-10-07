@@ -96,6 +96,9 @@ export function CompanyMasterDataStep({
               placeholder="Musterstraße 12"
               autoComplete="street-address"
             />
+            <p className="text-xs text-muted-foreground">
+              Geplant: Validierung über einen Adressdienst (z. B. Mapbox).
+            </p>
           </div>
 
           <div className="space-y-2">

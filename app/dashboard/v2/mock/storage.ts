@@ -139,7 +139,7 @@ export function saveAllDrafts(drafts: DraftPassport[]): void {
 }
 
 export function loadDraft(id: string): DraftPassport | null {
-  return readDraftsRaw().find((d) => d.id === id) ?? null;
+  return loadAllDrafts().find((d) => d.id === id) ?? null;
 }
 
 export function upsertDraft(draft: DraftPassport): void {

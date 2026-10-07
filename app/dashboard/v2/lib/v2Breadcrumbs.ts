@@ -5,6 +5,37 @@ export type V2BreadcrumbItem = {
   href?: string;
 };
 
+export type ProduktpassHubTab = 'paesse' | 'produkte' | 'readiness' | 'lieferanten';
+
+export function produktpassHubTabFromPath(pathname: string): ProduktpassHubTab | null {
+  if (pathname === '/dashboard/v2/produktpaesse') {
+    return 'paesse';
+  }
+  if (pathname === '/dashboard/v2/produkte' || pathname.startsWith('/dashboard/v2/produkte/')) {
+    return 'produkte';
+  }
+  if (pathname === '/dashboard/v2/readiness') {
+    return 'readiness';
+  }
+  if (pathname === '/dashboard/v2/lieferanten') {
+    return 'lieferanten';
+  }
+  return null;
+}
+
+function produktpassTabLabel(tab: ProduktpassHubTab): string {
+  switch (tab) {
+    case 'produkte':
+      return 'Produkte';
+    case 'readiness':
+      return 'Vollständigkeit';
+    case 'lieferanten':
+      return 'Lieferanten';
+    default:
+      return 'Produktpässe';
+  }
+}
+
 const WIZARD_STEP_LABELS: Record<string, string> = {
   upload: 'Upload',
   'review-data': 'Daten prüfen',
@@ -47,10 +78,21 @@ export function buildV2Breadcrumbs(
 
   const editorMatch = pathname.match(/^\/dashboard\/v2\/passports\/([^/]+)\/editor/);
   if (editorMatch) {
+    const draftId = editorMatch[1];
     crumbs.push({ label: 'Produktpässe', href: '/dashboard/v2/produktpaesse' });
     crumbs.push({
       label: editorProductName?.trim() || 'Pass bearbeiten',
+      href: `/dashboard/v2/passports/${draftId}/editor`,
     });
+    return crumbs;
+  }
+
+  const produktpassTab = produktpassHubTabFromPath(pathname);
+  if (produktpassTab) {
+    crumbs.push({ label: 'Produktpässe', href: '/dashboard/v2/produktpaesse' });
+    if (produktpassTab !== 'paesse') {
+      crumbs.push({ label: produktpassTabLabel(produktpassTab) });
+    }
     return crumbs;
   }
 

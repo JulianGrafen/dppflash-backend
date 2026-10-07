@@ -21,7 +21,7 @@ export function IntegrationsStep({ connected, onConnect, onBack, onNext }: Integ
     <Card className="border-slate-200/90 shadow-md">
       <CardHeader>
         <CardTitle className="text-xl">Connect your PIM &amp; ERP</CardTitle>
-        <CardDescription>1-Click OAuth connections. No IT skills required.</CardDescription>
+        <CardDescription>OAuth-Anbindung per Klick.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,3 +1,4 @@
+import { draftUsesPassportEditor, passportEditorHref } from '@/app/dashboard/v2/lib/editorDraftHref';
 import { computeCompleteness } from '@/app/dashboard/v2/mock/completeness';
 import type { DraftPassport, WizardStep } from '@/app/dashboard/v2/mock/types';
 import { WIZARD_STEPS } from '@/app/dashboard/v2/mock/types';
@@ -35,6 +36,10 @@ export function computeHubStats(drafts: readonly DraftPassport[]): HubStats {
 }
 
 export function draftResumeHref(draft: DraftPassport): string {
+  if (draftUsesPassportEditor(draft)) {
+    return passportEditorHref(draft.id);
+  }
+
   const wizardHasData =
     draft.fields.length > 0 ||
     draft.status === 'published' ||
@@ -43,7 +48,7 @@ export function draftResumeHref(draft: DraftPassport): string {
     draft.visitedSteps.includes('publish');
 
   if (wizardHasData) {
-    return `/dashboard/v2/passports/${draft.id}/editor`;
+    return passportEditorHref(draft.id);
   }
   const lastVisited = draft.visitedSteps.at(-1);
   const step: WizardStep =

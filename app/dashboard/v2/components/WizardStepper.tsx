@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { isWizardStepReachable } from '@/app/dashboard/v2/lib/wizardStepAccess';
 import { WIZARD_STEPS, type WizardStep } from '@/app/dashboard/v2/mock/types';
 
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -21,7 +22,7 @@ export function WizardStepper({ draftId, current, visited }: WizardStepperProps)
   return (
     <nav aria-label="Fortschritt" className="mb-6 flex flex-wrap gap-2">
       {WIZARD_STEPS.map((step) => {
-        const allowed = visited.includes(step) || step === current;
+        const allowed = isWizardStepReachable(visited, step);
         const active = step === current;
         const href = `/dashboard/v2/passports/new/${draftId}/${step}`;
         if (!allowed) {

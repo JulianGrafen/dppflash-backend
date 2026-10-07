@@ -1,13 +1,10 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
-  Boxes,
   FileText,
   Package,
   QrCode,
   Settings,
-  ShieldCheck,
-  Truck,
   Users,
 } from 'lucide-react';
 
@@ -25,32 +22,18 @@ export const V2_DASHBOARD_NAV: V2NavItem[] = [
     icon: Package,
     match: (p) =>
       p === '/dashboard/v2/produktpaesse' ||
+      p === '/dashboard/v2/produkte' ||
+      p.startsWith('/dashboard/v2/produkte/') ||
+      p === '/dashboard/v2/readiness' ||
+      p === '/dashboard/v2/lieferanten' ||
       p.startsWith('/dashboard/v2/passports/new') ||
       /\/dashboard\/v2\/passports\/[^/]+\/editor/.test(p),
-  },
-  {
-    href: '/dashboard/v2/produkte',
-    label: 'Produkte',
-    icon: Boxes,
-    match: (p) => p === '/dashboard/v2/produkte' || p.startsWith('/dashboard/v2/produkte/'),
   },
   {
     href: '/dashboard/v2/dokumente',
     label: 'Dokumente',
     icon: FileText,
     match: (p) => p === '/dashboard/v2/dokumente',
-  },
-  {
-    href: '/dashboard/v2/lieferanten',
-    label: 'Lieferanten',
-    icon: Truck,
-    match: (p) => p === '/dashboard/v2/lieferanten',
-  },
-  {
-    href: '/dashboard/v2/readiness',
-    label: 'Readiness',
-    icon: ShieldCheck,
-    match: (p) => p === '/dashboard/v2/readiness',
   },
   {
     href: '/dashboard/v2/qr-codes',

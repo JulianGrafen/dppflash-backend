@@ -6,6 +6,7 @@ import { V2SectionShell } from '@/app/dashboard/v2/components/V2SectionShell';
 import { draftResumeHref, formatDraftDate } from '@/app/dashboard/v2/lib/hubStats';
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
 import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
+import { filterVisibleDrafts } from '@/app/dashboard/v2/lib/discardableStubDraft';
 import { loadAllDrafts } from '@/app/dashboard/v2/mock/storage';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
 import { Badge } from '@/components/ui/badge';
@@ -39,10 +40,12 @@ function creationMethodLabel(method: DraftPassport['creationMethod']): string {
 }
 
 export default function ProduktePage() {
-  const [drafts, setDrafts] = useState<DraftPassport[]>([]);
+  const [drafts, setDrafts] = useState<DraftPassport[]>(() =>
+    typeof window !== 'undefined' ? filterVisibleDrafts(loadAllDrafts()) : [],
+  );
 
   useEffect(() => {
-    setDrafts(loadAllDrafts());
+    setDrafts(filterVisibleDrafts(loadAllDrafts()));
   }, []);
 
   return (

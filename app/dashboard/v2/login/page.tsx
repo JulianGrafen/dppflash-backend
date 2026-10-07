@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { EnterMotion } from '@/components/ui/enter-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, Database, ShieldCheck, Sparkles } from 'lucide-react';
+import { DppflashLegalLinks } from '@/app/dashboard/v2/components/DppflashLegalLinks';
 
 const DEMO_PASSWORD_HINT = 'Demo: mind. 8 Zeichen (z. B. demo-pass)';
 
@@ -179,20 +180,10 @@ export default function DashboardV2LoginPage() {
             </p>
           ) : null}
 
-          <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            <a
-              href="https://dppflash.de/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-foreground"
-            >
-              dppflash.de
-            </a>
-            {' · '}
-            <span className="underline">Impressum</span>
-            {' · '}
-            <span className="underline">Datenschutz</span>
-          </p>
+          <DppflashLegalLinks
+            showMarketingHome
+            className="mt-6 text-center text-[11px]"
+          />
         </div>
       </section>
     </div>

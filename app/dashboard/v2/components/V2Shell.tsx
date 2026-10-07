@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { V2BrandLogo } from '@/app/dashboard/v2/components/V2BrandLogo';
+import { V2Breadcrumb } from '@/app/dashboard/v2/components/V2Breadcrumb';
 import { V2Sidebar } from '@/app/dashboard/v2/components/V2Sidebar';
 
 export function V2Shell({ children }: { readonly children: React.ReactNode }) {
@@ -20,7 +21,10 @@ export function V2Shell({ children }: { readonly children: React.ReactNode }) {
         <header className="flex h-14 items-center border-b border-border bg-card px-4 md:hidden">
           <V2BrandLogo />
         </header>
-        <main className="flex-1 p-5 sm:p-8">{children}</main>
+        <main className="flex-1 p-5 sm:p-8">
+          <V2Breadcrumb className="mb-5 sm:mb-6" />
+          {children}
+        </main>
       </div>
     </div>
   );

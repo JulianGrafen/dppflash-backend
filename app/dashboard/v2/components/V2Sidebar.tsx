@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { DppflashLegalLinks } from '@/app/dashboard/v2/components/DppflashLegalLinks';
 import { V2BrandLogo } from '@/app/dashboard/v2/components/V2BrandLogo';
 import { useTheme } from '@/components/theme-provider';
 import { Switch } from '@/components/ui/switch';
@@ -148,13 +149,7 @@ export function V2Sidebar() {
         </div>
 
         {!collapsed ? (
-          <p className="mb-2 text-center text-[10px] text-muted-foreground">
-            <span className="underline">Impressum</span>
-            {' · '}
-            <span className="underline">Datenschutz</span>
-            {' · '}
-            <span className="underline">AGB</span>
-          </p>
+          <DppflashLegalLinks className="mb-2 text-center text-[10px]" />
         ) : null}
 
         <Separator className={cn('my-3', collapsed && 'my-2')} />

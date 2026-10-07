@@ -7,6 +7,7 @@ import { draftResumeHref, formatDraftDate } from '@/app/dashboard/v2/lib/hubStat
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
 import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
 import { DEMO_READY_100_DRAFT_ID } from '@/app/dashboard/v2/mock/demoReady100Passport';
+import { filterVisibleDrafts } from '@/app/dashboard/v2/lib/discardableStubDraft';
 import { loadAllDrafts } from '@/app/dashboard/v2/mock/storage';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
 import { Badge } from '@/components/ui/badge';
@@ -27,11 +28,28 @@ type PassportDraftListProps = {
   readonly newPassCta?: boolean;
 };
 
+function loadVisibleDrafts(): DraftPassport[] {
+  return filterVisibleDrafts(loadAllDrafts());
+}
+
 export function PassportDraftList({ showPublished = false, newPassCta = true }: PassportDraftListProps) {
-  const [drafts, setDrafts] = useState<DraftPassport[]>([]);
+  const [drafts, setDrafts] = useState<DraftPassport[]>(() =>
+    typeof window !== 'undefined' ? loadVisibleDrafts() : [],
+  );
 
   useEffect(() => {
-    setDrafts(loadAllDrafts());
+    function refresh() {
+      setDrafts(loadVisibleDrafts());
+    }
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('storage', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('storage', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, []);
 
   const activeDrafts = drafts.filter((d) => d.status !== 'published');

@@ -8,6 +8,7 @@ import { computeHubStats, formatDraftDate } from '@/app/dashboard/v2/lib/hubStat
 import { draftApprovalHref, listDraftsPendingApproval } from '@/app/dashboard/v2/lib/pendingApproval';
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
 import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
+import { filterVisibleDrafts } from '@/app/dashboard/v2/lib/discardableStubDraft';
 import { loadAllDrafts } from '@/app/dashboard/v2/mock/storage';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +20,7 @@ export default function DashboardV2HubPage() {
   const [drafts, setDrafts] = useState<DraftPassport[]>([]);
 
   useEffect(() => {
-    setDrafts(loadAllDrafts());
+    setDrafts(filterVisibleDrafts(loadAllDrafts()));
   }, []);
 
   const firstName = session?.email.split('@')[0] ?? 'Nutzer';

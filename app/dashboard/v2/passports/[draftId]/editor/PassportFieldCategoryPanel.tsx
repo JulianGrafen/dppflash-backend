@@ -54,7 +54,7 @@ export function PassportFieldCategoryPanel({
       className={cn(
         'rounded-xl border shadow-sm',
         isTelemetry
-          ? 'border-sky-300/50 bg-gradient-to-b from-sky-500/10 to-card dark:border-sky-800/50 dark:from-sky-950/40'
+          ? 'border-sky-300/50 bg-gradient-to-b from-sky-500/10 to-card'
           : 'border-border bg-card text-card-foreground',
       )}
     >
@@ -63,10 +63,10 @@ export function PassportFieldCategoryPanel({
           <div className="min-w-0">
             {isTelemetry ? (
               <div className="mb-2 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-800 dark:text-sky-200">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-800">
                   <Activity className="h-4 w-4" aria-hidden />
                 </span>
-                <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-900 dark:text-sky-100">
+                <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-900">
                   BMS · API
                 </Badge>
               </div>

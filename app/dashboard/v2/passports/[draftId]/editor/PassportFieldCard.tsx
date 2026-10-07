@@ -36,7 +36,7 @@ function FieldComplianceCheck({ compliant }: { readonly compliant: boolean }) {
   }
   return (
     <span
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800"
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80"
       title="Vollständig & compliant"
       aria-label="Compliant"
     >
@@ -71,7 +71,7 @@ function FieldStatusPills({
         </Badge>
       ) : null}
       {isAiSuggestion ? (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-violet-700">
           <Sparkles className="h-3 w-3" aria-hidden />
           {surface === 'expanded' ? `AI ${Math.round(state.confidence * 100)}%` : 'AI'}
         </span>
@@ -86,13 +86,13 @@ function fieldCardSurfaceClass(
   isAiSuggestion: boolean,
 ): string {
   if (isBlocker) {
-    return 'border-red-400 dark:border-red-500/70';
+    return 'border-red-400';
   }
   if (isCompliant) {
-    return 'border-emerald-200/90 bg-emerald-50/20 dark:border-emerald-800/60 dark:bg-emerald-950/20';
+    return 'border-emerald-200/90 bg-emerald-50/20';
   }
   if (isAiSuggestion) {
-    return 'border-violet-200 bg-violet-50/30 dark:border-violet-800/50 dark:bg-violet-950/25';
+    return 'border-violet-200 bg-violet-50/30';
   }
   return 'border-border bg-card';
 }
@@ -238,7 +238,7 @@ export function PassportFieldCard({
             )}
 
             {isBlocker ? (
-              <p className="text-xs font-medium text-red-700 dark:text-red-400">
+              <p className="text-xs font-medium text-red-700">
                 {contentLocale === 'de'
                   ? 'Pflichtfeld fehlt — Publish-Blocker.'
                   : 'Mandatory field missing — blocks publish.'}

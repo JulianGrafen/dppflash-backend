@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, LogOut, Moon, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, Settings } from 'lucide-react';
 import { useSession } from '@/app/dashboard/v2/context/SessionProvider';
 import { V2_DASHBOARD_NAV } from '@/app/dashboard/v2/lib/navItems';
 import { cn } from 'cn';
@@ -20,17 +20,13 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DppflashLegalLinks } from '@/app/dashboard/v2/components/DppflashLegalLinks';
 import { V2BrandLogo } from '@/app/dashboard/v2/components/V2BrandLogo';
-import { useTheme } from '@/components/theme-provider';
-import { Switch } from '@/components/ui/switch';
 
 const SIDEBAR_COLLAPSED_KEY = 'dppflash_v2_sidebar_collapsed';
 
 export function V2Sidebar() {
   const pathname = usePathname() ?? '';
   const { session, logout } = useSession();
-  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
-  const isDark = theme === 'dark';
 
   useEffect(() => {
     try {
@@ -126,28 +122,6 @@ export function V2Sidebar() {
       </nav>
 
       <div className={cn('mt-auto border-t border-border', collapsed ? 'p-2' : 'p-4')}>
-        <div
-          className={cn(
-            'mb-3 flex items-center rounded-lg border border-border bg-muted/30',
-            collapsed ? 'justify-center px-2 py-2' : 'justify-between gap-2 px-3 py-2',
-          )}
-        >
-          {!collapsed ? (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Moon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Dark Mode
-            </span>
-          ) : null}
-          <Switch
-            size="sm"
-            checked={isDark}
-            onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-            aria-label={isDark ? 'Dark Mode aktiv' : 'Dark Mode aus'}
-            title={isDark ? 'Zu hellem Modus wechseln' : 'Zu Dark Mode wechseln'}
-            className="cursor-pointer"
-          />
-        </div>
-
         {!collapsed ? (
           <DppflashLegalLinks className="mb-2 text-center text-[10px]" />
         ) : null}

@@ -51,7 +51,7 @@ export default function DashboardV2HubPage() {
 
       {integrationOpen ? (
         <EnterMotion delayMs={enterMotionDelay(3)}>
-        <Card variant="elevated" className="border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/30">
+        <Card variant="elevated" className="border-amber-200 bg-amber-50/50">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
             <p className="text-sm text-amber-950">
               Integrationen unvollständig — SAP, PIM und Datenimport im Onboarding abschließen.
@@ -67,7 +67,7 @@ export default function DashboardV2HubPage() {
       <EnterMotion delayMs={enterMotionDelay(4)}>
       <Card
         variant="elevated"
-        className="border-sky-200 bg-gradient-to-br from-sky-50/80 to-card dark:border-sky-900/50 dark:from-sky-950/40 dark:to-card"
+        className="border-sky-200 bg-gradient-to-br from-sky-50/80 to-card"
       >
         <CardHeader>
           <CardTitle className="text-lg">Schnellstart</CardTitle>

@@ -110,7 +110,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
       </header>
       {publishFeedback ? (
         <p
-          className={`mx-4 mb-2 text-sm sm:mx-6 ${publishFeedback.startsWith('Veröffentlicht') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}
+          className={`mx-4 mb-2 text-sm sm:mx-6 ${publishFeedback.startsWith('Veröffentlicht') ? 'text-emerald-700' : 'text-red-700'}`}
           role="status"
         >
           {publishFeedback}

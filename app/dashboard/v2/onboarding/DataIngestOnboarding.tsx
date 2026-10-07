@@ -14,7 +14,6 @@ import { CompanyMasterDataStep } from './CompanyMasterDataStep';
 import { toIntegrationsPatch } from './companyMasterData';
 import { IntegrationsStep } from './IntegrationsStep';
 import { useGlobalOnboardingFlow } from './useGlobalOnboardingFlow';
-
 export function DataIngestOnboarding() {
   const router = useRouter();
   const { session, updateSession } = useSession();
@@ -44,7 +43,7 @@ export function DataIngestOnboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-[#eef1f6] px-4 py-8 sm:px-8">
+    <div className="min-h-screen bg-[#eef1f6] text-slate-900 [color-scheme:light] px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-4xl space-y-8">
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
           <V2BrandLogo href="/dashboard/v2/onboarding" onDarkBackground priority />

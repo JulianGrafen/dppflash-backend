@@ -1,6 +1,6 @@
-/** Semantic surfaces for Dashboard v2 (light + dark via CSS variables). */
+/** Semantic surfaces for Dashboard v2. */
 export const v2GridShell =
-  'rounded-xl border border-border bg-muted/30 text-foreground dark:bg-muted/20';
+  'rounded-xl border border-border bg-muted/30 text-foreground';
 
 export const v2Panel =
   'border-border bg-card text-card-foreground';

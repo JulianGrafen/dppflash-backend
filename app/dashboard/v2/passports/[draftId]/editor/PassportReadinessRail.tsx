@@ -240,7 +240,7 @@ export function PassportReadinessRail({ layout = 'page' }: PassportReadinessRail
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {locale === 'de' ? 'Unvollständige Pflichtfelder' : 'Incomplete mandatory fields'}
                 </p>
-                <p className="text-xl font-bold tabular-nums text-red-600 dark:text-red-400">
+                <p className="text-xl font-bold tabular-nums text-red-600">
                   {passportSummary.missingCount}
                 </p>
               </div>

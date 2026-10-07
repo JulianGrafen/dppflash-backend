@@ -1,9 +1,7 @@
-import {
-  getPassportFieldPrefix,
-  type PassportFieldDefinition,
-  type PassportSectionDefinition,
-} from '@/app/domain/battery/passportFieldCatalog';
+import type { PassportFieldDefinition, PassportSectionDefinition } from '@/app/domain/battery/passportFieldCatalog';
+import { passportFieldHasValue } from '@/app/dashboard/v2/mock/passportFieldLocalization';
 import type { PassportFieldValueState } from '@/app/dashboard/v2/mock/types';
+import { categoryPrefixForField } from './telemetryFields';
 
 export type PassportFieldCategoryGroup = {
   prefix: string;
@@ -12,8 +10,9 @@ export type PassportFieldCategoryGroup = {
 
 export function isFieldPublishBlocker(
   state: PassportFieldValueState | undefined,
+  def: PassportFieldDefinition,
 ): boolean {
-  return Boolean(state?.mandatory && !state.value?.trim());
+  return Boolean(state?.mandatory && state && !passportFieldHasValue(state, def));
 }
 
 function sortFieldsBlockersFirst(
@@ -24,7 +23,7 @@ function sortFieldsBlockersFirst(
   const rest: PassportFieldDefinition[] = [];
 
   for (const field of fields) {
-    if (isFieldPublishBlocker(fieldStates[field.key])) {
+    if (isFieldPublishBlocker(fieldStates[field.key], field)) {
       blockers.push(field);
     } else {
       rest.push(field);
@@ -38,7 +37,7 @@ function categoryHasBlocker(
   group: PassportFieldCategoryGroup,
   fieldStates: Record<string, PassportFieldValueState>,
 ): boolean {
-  return group.fields.some((field) => isFieldPublishBlocker(fieldStates[field.key]));
+  return group.fields.some((field) => isFieldPublishBlocker(fieldStates[field.key], field));
 }
 
 export function groupFieldsByCategoryPrefix(
@@ -49,13 +48,26 @@ export function groupFieldsByCategoryPrefix(
   const byPrefix = new Map<string, PassportFieldDefinition[]>();
 
   for (const field of fields) {
-    const prefix = getPassportFieldPrefix(field.key);
+    const prefix = categoryPrefixForField(field);
     const list = byPrefix.get(prefix) ?? [];
     list.push(field);
     byPrefix.set(prefix, list);
   }
 
-  const groups: PassportFieldCategoryGroup[] = section.prefixes
+  const orderedPrefixes: string[] = [];
+  for (const prefix of section.prefixes) {
+    if (!orderedPrefixes.includes(prefix)) {
+      orderedPrefixes.push(prefix);
+    }
+    if (prefix === 'durability' && byPrefix.has('telemetry')) {
+      orderedPrefixes.push('telemetry');
+    }
+  }
+  if (byPrefix.has('telemetry') && !orderedPrefixes.includes('telemetry')) {
+    orderedPrefixes.push('telemetry');
+  }
+
+  const groups: PassportFieldCategoryGroup[] = orderedPrefixes
     .filter((prefix) => byPrefix.has(prefix))
     .map((prefix) => ({
       prefix,

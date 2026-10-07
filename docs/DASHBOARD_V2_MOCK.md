@@ -15,7 +15,7 @@ Legacy inbound flows remain at `/dashboard/inbound` and `/dashboard/create`. The
 1. Run the app locally (`npm run dev`).
 2. Open `/dashboard/v2/login`.
 3. Register or log in with a **company** address, e.g. `user@acme.de` or `user@firma.de`.
-4. Complete **Global Data Onboarding & PIM Integration** (4 steps): PIM/ERP connect → Compliance Inbox → AI Sync (3 progress bars) → Global Catalog (4,250 SKUs) → bulk Magic Links dialog → **Zum Dashboard**.
+4. Complete **Global Data Onboarding & PIM Integration** (5 steps): company master data → PIM/ERP connect → Compliance Inbox → AI Sync (3 progress bars) → Global Catalog (4,250 SKUs) → bulk Magic Links dialog → **Zum Dashboard**.
 5. Hub → **Neuen Produktpass erstellen** → choose **Dokumente hochladen** (recommended) or SAP/PIM shortcuts if integrations were configured earlier in settings.
 5. Walk through: Upload → Daten → Lücken → Prüfung → Veröffentlichen.
 
@@ -69,7 +69,7 @@ Or clear site data for localhost / your preview URL.
 ## Onboarding: Global PIM & Catalog (mock)
 
 - Route: `/dashboard/v2/onboarding` (required until `onboarding.completedAt` is set).
-- Steps: **Integrationen** (Akeneo, Xentral, Shopify, Zapier) → **Inbox** (`import-data@{domain}.dppflash.com`) → **Sync** (3 parallel progress bars) → **Katalog** (master table + bulk Magic Links).
+- Steps: **Stammdaten** (Firma, Adresse, USt-IdNr.) → **Integrationen** (Akeneo, Xentral, Shopify, Zapier) → **Inbox** (`import-data@{domain}.dppflash.com`) → **Sync** (3 parallel progress bars) → **Katalog** (master table + bulk Magic Links). Stammdaten landen in `session.integrations`.
 - Mock data: `app/dashboard/v2/onboarding/globalCatalogMock.ts`.
 - **Zum Dashboard** seeds `createGlobalCatalogSeedDraft` and sets `integrations.onboardingDraftId`.
 
@@ -93,6 +93,39 @@ Nach dem Wizard (oder direkt über **Weiter bearbeiten** auf der Produktpässe-L
 - **Veröffentlichen** schreibt den gemappten Pass in den Server-Store (`voltstride-720`)
 
 Referenzpass: [dppflash.de/p/voltstride-720](https://dppflash.de/p/voltstride-720/)
+
+## Demo-DPP mit 100 % Readiness (manuell deployen)
+
+Vorkonfigurierter Pass **PowerCell Demo 100 %** — alle 110 Felder bestätigt, Status `review`, Pass-ID `demo-ready-100`.
+
+**Server (öffentliche Seite `/p/demo-ready-100`):**
+
+```bash
+npm run dev
+npm run deploy:demo-dpp
+# oder: curl -X POST http://localhost:3000/api/dashboard/v2/demo-deploy
+```
+
+Der Demo-Entwurf wird beim ersten Laden von **Produktpässe** / Hub automatisch in `dppflash_v2_drafts` angelegt (Badge **Demo 100 %**), sofern er noch nicht existiert.
+
+**Optional — manuell per API (überschreibt nichts im Browser, liefert `seedDraft`):** Nach Login, in den DevTools auf der App-Origin:
+
+```js
+fetch('/api/dashboard/v2/demo-deploy', { method: 'POST' })
+  .then((r) => r.json())
+  .then(({ seedDraft }) => {
+    const existing = JSON.parse(localStorage.getItem('dppflash_v2_drafts') || '[]');
+    const drafts = [seedDraft, ...existing.filter((d) => d.id !== seedDraft.id)];
+    localStorage.setItem('dppflash_v2_drafts', JSON.stringify(drafts));
+    location.reload();
+  });
+```
+
+| | |
+|--|--|
+| Pass-ID | `demo-ready-100` |
+| Editor | `/dashboard/v2/passports/draft-demo-ready-100/editor` |
+| Mock-Code | `app/dashboard/v2/mock/demoReady100Passport.ts` |
 
 ## Implementation map
 

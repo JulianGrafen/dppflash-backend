@@ -9,11 +9,15 @@ import {
 } from '@/app/domain/battery/passportFieldCatalog';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
 import { passportFieldNeedsReview } from '@/app/dashboard/v2/mock/passportFields';
-import { Progress } from '@/components/ui/progress';
+import { passportFieldLabel, passportFieldNote } from '@/app/domain/battery/passportFieldI18n';
+import { useEditorContentLocale } from './EditorContentLocaleContext';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ReadinessBlockerFieldCard } from './ReadinessBlockerFieldCard';
 
 export function PassportReadinessRail() {
   const { draft, passportSummary } = useDraft();
+  const { locale } = useEditorContentLocale();
   const params = useParams<{ draftId: string }>();
 
   const defByKey = new Map(PASSPORT_FIELD_DEFINITIONS.map((d) => [d.key, d]));
@@ -34,17 +38,22 @@ export function PassportReadinessRail() {
   const ringOffset = ringCircumference * (1 - readinessPercent / 100);
 
   return (
-    <div className="sticky top-4 space-y-4">
-      <div className="rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-[#0c1929]">Completion rail</h3>
-        <div className="mt-3 flex items-center gap-4">
+    <div className="flex min-h-0 flex-col gap-4">
+      <Card className="shrink-0 border-slate-200/90 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-[#0c1929]">
+            {locale === 'de' ? 'Completion Rail' : 'Completion rail'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+        <div className="flex items-center gap-4">
           <div
-            className="relative flex h-16 w-16 shrink-0 items-center justify-center"
+            className="relative flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center"
             role="img"
             aria-label={`Readiness ${readinessPercent} Prozent`}
           >
             <svg
-              className="absolute inset-0 h-16 w-16 -rotate-90"
+              className="absolute inset-0 h-[4.5rem] w-[4.5rem] -rotate-90"
               viewBox="0 0 64 64"
               aria-hidden
             >
@@ -74,25 +83,23 @@ export function PassportReadinessRail() {
               {readinessPercent}%
             </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-slate-600">Readiness</p>
-            <Progress value={0} className="mt-1 h-2" aria-hidden />
-          </div>
+          <p className="text-xs font-medium text-slate-600">
+            {locale === 'de' ? 'Bereitschaft' : 'Readiness'}
+          </p>
         </div>
-        <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 py-2 text-center">
-          <p className="text-[10px] font-semibold uppercase text-slate-500">Fields open</p>
+        <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-left">
+          <p className="text-[10px] font-semibold uppercase text-slate-500">
+            {locale === 'de' ? 'Offene Felder' : 'Fields open'}
+          </p>
           <p className="text-xl font-bold tabular-nums text-slate-800">{remainingFields}</p>
         </div>
 
-        <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase text-slate-500">AI · niedrige Confidence</p>
-            <span className="text-lg font-bold tabular-nums text-slate-800">
-              {passportSummary.needsReviewCount}
-            </span>
-          </div>
+        <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-left">
+          <p className="text-[10px] font-semibold uppercase text-slate-500">AI · niedrige Confidence</p>
+          <p className="text-xl font-bold tabular-nums text-slate-800">{passportSummary.needsReviewCount}</p>
           {aiLowConfidenceFields.length > 0 ? (
-            <ul className="mt-2 max-h-44 space-y-1.5 overflow-y-auto text-left">
+            <ScrollArea className="mt-2 max-h-44">
+            <ul className="space-y-1.5 pr-2 text-left">
               {aiLowConfidenceFields.map(({ def, state }) => {
                 const targetSection = getSectionIdForFieldKey(def.key);
                 return (
@@ -101,7 +108,7 @@ export function PassportReadinessRail() {
                       href={`/dashboard/v2/passports/${params.draftId}/editor?section=${targetSection}#field-${def.key}`}
                       className="flex items-start justify-between gap-2 rounded-md px-1 py-0.5 text-[11px] font-medium text-slate-800 hover:bg-slate-100/80"
                     >
-                      <span className="min-w-0 leading-snug">{def.label}</span>
+                      <span className="min-w-0 leading-snug">{passportFieldLabel(def, locale)}</span>
                       <span className="shrink-0 tabular-nums text-slate-600">
                         {Math.round(state.confidence * 100)}%
                       </span>
@@ -110,36 +117,38 @@ export function PassportReadinessRail() {
                 );
               })}
             </ul>
+            </ScrollArea>
           ) : null}
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {passportSummary.blockers.length > 0 ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2 px-0.5">
+          <div className="flex shrink-0 items-baseline justify-between gap-2 px-0.5">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Blockers · Pflichtfeld
+              {locale === 'de' ? 'Blocker · Pflichtfeld' : 'Blockers · mandatory'}
             </p>
-            <span className="text-sm font-bold tabular-nums text-red-700">
-              {passportSummary.missingCount}
-            </span>
+            <p className="text-xl font-bold tabular-nums text-red-700">{passportSummary.missingCount}</p>
           </div>
-          <ul className="max-h-[min(28rem,50vh)] space-y-3 overflow-y-auto">
+          <ul className="space-y-3 pb-2">
             {passportSummary.blockers.map((b) => {
               const targetSection = getSectionIdForFieldKey(b.key);
               const def = defByKey.get(b.key);
               const sectionTitle = sectionTitleById.get(targetSection) ?? 'Publish blocker';
-              const description =
-                def?.note?.trim() ||
-                'A mandatory value is required before this passport can be published.';
+              const description = def
+                ? passportFieldNote(def, locale)
+                : locale === 'de'
+                  ? 'Pflichtangabe fehlt — Publish nicht möglich.'
+                  : 'A mandatory value is required before this passport can be published.';
               return (
                 <li key={b.key}>
                   <ReadinessBlockerFieldCard
                     href={`/dashboard/v2/passports/${params.draftId}/editor?section=${targetSection}#field-${b.key}`}
-                    title={def?.label ?? b.label}
+                    title={def ? passportFieldLabel(def, locale) : b.label}
                     categoryLabel={sectionTitle}
                     description={description}
-                    statusLabel="Blocked"
+                    statusLabel={locale === 'de' ? 'Blockiert' : 'Blocked'}
                   />
                 </li>
               );

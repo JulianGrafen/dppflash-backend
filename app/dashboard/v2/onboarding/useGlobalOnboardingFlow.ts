@@ -1,17 +1,30 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import {
+  type CompanyMasterDataForm,
+  companyMasterDataFromIntegrations,
+} from './companyMasterData';
 import type { IntegrationId } from './globalCatalogMock';
+import type { V2IntegrationsState } from '@/app/dashboard/v2/mock/storage';
 
-export type GlobalOnboardingStep = 0 | 1 | 2 | 3;
+export type GlobalOnboardingStep = 0 | 1 | 2 | 3 | 4;
+
+type FlowInit = {
+  companyDomain: string;
+  integrations?: V2IntegrationsState;
+};
 
 const SYNC_DURATION_MS = 4500;
 const SYNC_STAGGER_MS = 400;
 
 type SyncProgress = { pim: number; llm: number; merge: number };
 
-export function useGlobalOnboardingFlow() {
+export function useGlobalOnboardingFlow({ companyDomain, integrations }: FlowInit) {
   const [step, setStep] = useState<GlobalOnboardingStep>(0);
+  const [companyMasterData, setCompanyMasterData] = useState<CompanyMasterDataForm>(() =>
+    companyMasterDataFromIntegrations(integrations, companyDomain),
+  );
   const [connected, setConnected] = useState<Partial<Record<IntegrationId, boolean>>>({});
   const [inboxFiles, setInboxFiles] = useState<File[]>([]);
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({ pim: 0, llm: 0, merge: 0 });
@@ -26,13 +39,13 @@ export function useGlobalOnboardingFlow() {
   }, []);
 
   const startGlobalSync = useCallback(() => {
-    setStep(2);
+    setStep(3);
     setSyncRunning(true);
     setSyncProgress({ pim: 0, llm: 0, merge: 0 });
   }, []);
 
   useEffect(() => {
-    if (step !== 2 || !syncRunning) {
+    if (step !== 3 || !syncRunning) {
       return;
     }
 
@@ -49,7 +62,7 @@ export function useGlobalOnboardingFlow() {
         window.clearInterval(tick);
         setSyncProgress({ pim: 100, llm: 100, merge: 100 });
         setSyncRunning(false);
-        setStep(3);
+        setStep(4);
       }
     }, 80);
 
@@ -64,7 +77,7 @@ export function useGlobalOnboardingFlow() {
   }, []);
 
   const goNext = useCallback(() => {
-    setStep((s) => Math.min(3, s + 1) as GlobalOnboardingStep);
+    setStep((s) => Math.min(4, s + 1) as GlobalOnboardingStep);
   }, []);
 
   const goBack = useCallback(() => {
@@ -73,6 +86,8 @@ export function useGlobalOnboardingFlow() {
 
   return {
     step,
+    companyMasterData,
+    setCompanyMasterData,
     connected,
     hasConnection,
     inboxFiles,

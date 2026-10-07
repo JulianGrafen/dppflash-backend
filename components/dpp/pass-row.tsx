@@ -68,7 +68,8 @@ export function PassRow({
     valueNode = (
       <Link
         href={href}
-        className={passTokens.rowActionBtn}
+        className={cn(passTokens.rowActionBtn, 'line-clamp-1')}
+        title={value}
         {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       >
         {value}
@@ -84,11 +85,11 @@ export function PassRow({
     return (
       <Tag
         className={cn(
-          'flex flex-row items-center justify-between gap-3 py-2.5',
+          'flex flex-row items-start justify-between gap-3 py-2.5',
           className,
         )}
       >
-        <span className={cn(passTokens.textLabel, 'min-w-0 flex-1 text-pretty')}>{label}</span>
+        <span className={cn(passTokens.textLabel, 'min-w-0 flex-1 text-pretty pr-1')}>{label}</span>
         {valueNode}
       </Tag>
     );

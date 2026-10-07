@@ -6,14 +6,12 @@ export type HubStats = {
   activePasses: number;
   openGaps: number;
   openReviews: number;
-  openTasks: number;
   publishedCount: number;
 };
 
 export function computeHubStats(drafts: readonly DraftPassport[]): HubStats {
   let openGaps = 0;
   let openReviews = 0;
-  let openTasks = 0;
   let publishedCount = 0;
 
   for (const draft of drafts) {
@@ -24,7 +22,6 @@ export function computeHubStats(drafts: readonly DraftPassport[]): HubStats {
     const summary = computeCompleteness(draft.fields);
     openGaps += summary.missingCount;
     openReviews += summary.needsReviewCount;
-    openTasks += summary.missingCount + summary.needsReviewCount;
   }
 
   const activePasses = drafts.filter((d) => d.status !== 'published').length;
@@ -33,7 +30,6 @@ export function computeHubStats(drafts: readonly DraftPassport[]): HubStats {
     activePasses,
     openGaps,
     openReviews,
-    openTasks,
     publishedCount,
   };
 }

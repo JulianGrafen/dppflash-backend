@@ -4,7 +4,9 @@ import {
   getFieldsForSection,
   type PassportSectionId,
 } from '@/app/domain/battery/passportFieldCatalog';
+import type { PassportFieldDefinition } from '@/app/domain/battery/passportFieldCatalog';
 import type { PassportFieldValueState } from './types';
+import { passportFieldHasValue } from './passportFieldLocalization';
 import { passportFieldNeedsReview } from './passportFields';
 
 export type SectionCompleteness = {
@@ -24,8 +26,8 @@ export type PassportCompletenessSummary = {
   blockers: readonly { key: string; label: string }[];
 };
 
-function isFilled(state: PassportFieldValueState): boolean {
-  return Boolean(state.value?.trim()) && state.provenance !== 'missing';
+function isFilled(state: PassportFieldValueState, def: PassportFieldDefinition): boolean {
+  return passportFieldHasValue(state, def);
 }
 
 export function computePassportCompleteness(
@@ -45,7 +47,7 @@ export function computePassportCompleteness(
         }
         continue;
       }
-      if (isFilled(state)) {
+      if (isFilled(state, def)) {
         filled += 1;
       } else if (state.mandatory) {
         missingMandatory += 1;
@@ -71,8 +73,14 @@ export function computePassportCompleteness(
   const labelByKey = new Map(PASSPORT_FIELD_DEFINITIONS.map((d) => [d.key, d.label]));
   const blockers: { key: string; label: string }[] = [];
 
+  const defByKey = new Map(PASSPORT_FIELD_DEFINITIONS.map((d) => [d.key, d]));
+
   for (const [key, state] of Object.entries(fields)) {
-    if (isFilled(state)) {
+    const def = defByKey.get(key);
+    if (!def) {
+      continue;
+    }
+    if (isFilled(state, def)) {
       filledCount += 1;
     } else if (state.mandatory) {
       missingMandatory += 1;

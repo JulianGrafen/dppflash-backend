@@ -6,6 +6,7 @@ import { PASSPORT_SECTIONS } from '@/app/domain/battery/passportFieldCatalog';
 import type { PassportSectionId } from '@/app/domain/battery/passportFieldCatalog';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
 import { cn } from 'cn';
+import { useEditorContentLocale } from './EditorContentLocaleContext';
 import { sectionNavLabel, sectionProgressTone } from './editorUi';
 
 export function PassportSectionNav() {
@@ -13,11 +14,14 @@ export function PassportSectionNav() {
   const searchParams = useSearchParams();
   const active = (searchParams.get('section') as PassportSectionId) ?? 'identity';
   const { passportSummary } = useDraft();
+  const { locale } = useEditorContentLocale();
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-100 px-4 py-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Overall readiness</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          {locale === 'de' ? 'Gesamt-Readiness' : 'Overall readiness'}
+        </p>
         <div className="mt-2 flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
             <div
@@ -62,7 +66,7 @@ export function PassportSectionNav() {
                         isActive ? 'text-[#0c1929]' : 'text-slate-700',
                       )}
                     >
-                      {sectionNavLabel(section.title)}
+                      {locale === 'en' ? sectionNavLabel(section.title) : section.title}
                     </span>
                     <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
                       {filled}/{total}

@@ -11,6 +11,7 @@
     "start": "next start",
     "start:localhost": "next start",
     "lint": "eslint",
+    "deploy:demo-dpp": "node scripts/deploy-demo-ready-dpp.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

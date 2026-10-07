@@ -248,6 +248,25 @@ export const SAMPLE_DPP_PASSES: Record<string, SampleDppPass> = {
 };
 
 export function getSampleDppPass(slug: string): SampleDppPass | undefined {
+  if (slug === 'demo-ready-100') {
+    const base = SAMPLE_DPP_PASSES['voltstride-720'];
+    if (!base) {
+      return undefined;
+    }
+    return {
+      ...base,
+      slug: 'demo-ready-100',
+      title: 'PowerCell Demo 100 %',
+      shortDescription:
+        'Vollständig ausgefüllter EU-Batteriepass (Mock) — 100 % Readiness, manuell deploybar für Demos.',
+      serialNumber: 'DEMO-100-DE-00001',
+      batteryStatusPercent: 100,
+      batteryStatusNote: 'Demo · alle Pflichtfelder bestätigt',
+      profileStatusHint: 'Demo · 100 % Readiness',
+      verifiedFieldsCount: 110,
+      dataAsOf: 'Demo-Deploy',
+    };
+  }
   return SAMPLE_DPP_PASSES[slug];
 }
 

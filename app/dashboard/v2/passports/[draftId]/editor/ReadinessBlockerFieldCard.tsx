@@ -35,17 +35,15 @@ export function ReadinessBlockerFieldCard({
           <AlertTriangle className="h-4 w-4 text-red-600" strokeWidth={2} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-semibold leading-snug text-[#0c1929]">{title}</p>
-            <span
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700"
-            >
-              <CircleX className="h-3 w-3" aria-hidden />
-              {statusLabel}
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs text-slate-500">{categoryLabel}</p>
-          <p className="mt-2 text-xs leading-relaxed text-slate-600">{description}</p>
+          <span
+            className="mb-1.5 inline-flex w-fit max-w-full items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold leading-none text-red-700"
+          >
+            <CircleX className="h-3 w-3 shrink-0" aria-hidden />
+            {statusLabel}
+          </span>
+          <p className="text-sm font-semibold leading-snug text-[#0c1929] break-words">{title}</p>
+          <p className="mt-1 text-xs leading-snug text-slate-500 break-words">{categoryLabel}</p>
+          <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-600 break-words">{description}</p>
         </div>
       </div>
     </Link>

@@ -7,6 +7,7 @@ import { SupplierRequestDetailDialog } from '@/app/dashboard/v2/components/Suppl
 import { SupplierRequestStatusBar } from '@/app/dashboard/v2/components/SupplierRequestStatusBar';
 import { loadAllDrafts, patchDraftField } from '@/app/dashboard/v2/mock/storage';
 import type { DraftField } from '@/app/dashboard/v2/mock/types';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from 'cn';
 
@@ -58,23 +59,36 @@ export default function LieferantenPage() {
               Keine Lieferantenanfragen — Lücken im Wizard mit „Lieferanten anfragen“ öffnen.
             </p>
           ) : (
-            rows.map((row) => (
-              <button
-                key={`${row.draftId}-${row.field.path}`}
-                type="button"
-                className={cn(
-                  'w-full cursor-pointer px-6 py-4 text-left transition-colors hover:bg-slate-50/80',
-                  selected?.draftId === row.draftId && selected?.field.path === row.field.path && 'bg-slate-50',
-                )}
-                onClick={() => setSelected(row)}
-              >
-                <p className="font-medium text-slate-900">{row.field.supplierHint ?? 'Lieferant'}</p>
-                <p className="text-sm text-slate-600">
-                  {row.productName} · {row.field.label}
-                </p>
-                <SupplierRequestStatusBar field={row.field} />
-              </button>
-            ))
+            rows.map((row) => {
+              const isActive =
+                selected?.draftId === row.draftId && selected?.field.path === row.field.path;
+              return (
+                <div
+                  key={`${row.draftId}-${row.field.path}`}
+                  className={cn(
+                    'flex items-start justify-between gap-4 px-6 py-4 transition-colors',
+                    isActive && 'bg-slate-50',
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-900">{row.field.supplierHint ?? 'Lieferant'}</p>
+                    <p className="text-sm text-slate-600">
+                      {row.productName} · {row.field.label}
+                    </p>
+                    <SupplierRequestStatusBar field={row.field} />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-0.5 shrink-0 cursor-pointer"
+                    onClick={() => setSelected(row)}
+                  >
+                    Details
+                  </Button>
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>

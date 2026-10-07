@@ -1,4 +1,5 @@
 import type { PassportFieldAccessTier } from '@/app/domain/battery/passportFieldCatalog';
+import type { EditorPassportLocale } from '@/app/domain/battery/passportFieldI18n';
 
 export function sectionProgressTone(filled: number, total: number, missingMandatory: number): string {
   if (total === 0) {
@@ -23,25 +24,48 @@ export function accessTierShort(tier: PassportFieldAccessTier): string {
   return 'L';
 }
 
-export function categoryGroupLabel(prefix: string): string {
-  const labels: Record<string, string> = {
-    battery: 'Battery',
-    operator: 'Operator',
-    manufacturing: 'Manufacturing',
-    labelling: 'Labelling',
-    conformity: 'Conformity',
-    compliance: 'Compliance',
-    carbonFootprint: 'Carbon footprint',
-    dueDiligence: 'Due diligence',
-    material: 'Material composition',
-    hazardous: 'Hazardous substances',
-    repair: 'Repair',
-    recycledContent: 'Recycled content',
-    renewableContent: 'Renewable content',
-    endOfLife: 'End of life',
-    performance: 'Performance',
-    durability: 'Durability',
-  };
+const CATEGORY_LABELS_EN: Record<string, string> = {
+  battery: 'Battery',
+  operator: 'Operator',
+  manufacturing: 'Manufacturing',
+  labelling: 'Labelling',
+  conformity: 'Conformity',
+  compliance: 'Compliance',
+  carbonFootprint: 'Carbon footprint',
+  dueDiligence: 'Due diligence',
+  material: 'Material composition',
+  hazardous: 'Hazardous substances',
+  repair: 'Repair',
+  recycledContent: 'Recycled content',
+  renewableContent: 'Renewable content',
+  endOfLife: 'End of life',
+  performance: 'Performance',
+  durability: 'Durability',
+  telemetry: 'Telemetry (dynamic)',
+};
+
+const CATEGORY_LABELS_DE: Record<string, string> = {
+  battery: 'Batterie',
+  operator: 'Wirtschaftsbeteiligter',
+  manufacturing: 'Herstellung',
+  labelling: 'Kennzeichnung',
+  conformity: 'Konformität',
+  compliance: 'Compliance',
+  carbonFootprint: 'CO₂-Fußabdruck',
+  dueDiligence: 'Sorgfaltspflicht',
+  material: 'Materialzusammensetzung',
+  hazardous: 'Gefahrstoffe',
+  repair: 'Reparatur',
+  recycledContent: 'Recycelte Inhalte',
+  renewableContent: 'Erneuerbare Inhalte',
+  endOfLife: 'Lebensende',
+  performance: 'Leistung',
+  durability: 'Haltbarkeit',
+  telemetry: 'Telemetrie (dynamisch)',
+};
+
+export function categoryGroupLabel(prefix: string, locale: EditorPassportLocale = 'en'): string {
+  const labels = locale === 'de' ? CATEGORY_LABELS_DE : CATEGORY_LABELS_EN;
   return labels[prefix] ?? prefix;
 }
 

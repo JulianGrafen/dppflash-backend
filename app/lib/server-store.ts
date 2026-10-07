@@ -6,6 +6,7 @@
  */
 
 import { createDemoBatteryPublicPassport } from '@/app/fixtures/demoBatteryPublicPassport';
+import { createVoltstride720PublicPassport } from '@/app/fixtures/voltstride720PublicPassport';
 import { ProductPassport } from '../types/dpp-types';
 import { supabase, STORAGE_BUCKETS } from './supabase';
 
@@ -61,6 +62,7 @@ if (!globalThis.__dpp_store__) {
       },
     },
     createDemoBatteryPublicPassport(),
+    createVoltstride720PublicPassport(),
     {
       id: 'tex-2027',
       type: 'TEXTILE',

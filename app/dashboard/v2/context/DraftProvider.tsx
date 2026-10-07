@@ -9,13 +9,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { VOLTSTRIDE_720_ID } from '@/app/fixtures/voltstride720PublicPassport';
 import { createEmptyDraft, applyExtractionToDraft } from '@/app/dashboard/v2/mock/batteryWizardFixture';
 import { computeCompleteness } from '@/app/dashboard/v2/mock/completeness';
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
+import { PASSPORT_FIELD_DEFINITIONS } from '@/app/domain/battery/passportFieldCatalog';
 import {
-  defaultPublishedPassId,
+  fieldSupportsLocalization,
+  passportFieldHasValue,
+} from '@/app/dashboard/v2/mock/passportFieldLocalization';
+import {
   ensurePassportFieldsOnDraft,
+  resolveDraftPublishPassId,
 } from '@/app/dashboard/v2/mock/passportFields';
 import { resolvePassportFieldSource } from '@/app/dashboard/v2/mock/passportFieldSource';
 import { loadDraft, upsertDraft } from '@/app/dashboard/v2/mock/storage';
@@ -28,7 +32,7 @@ type DraftContextValue = {
   load: (id: string) => void;
   replace: (draft: DraftPassport) => void;
   updateField: (path: string, patch: Partial<DraftField>) => void;
-  updatePassportField: (key: string, value: string) => void;
+  updatePassportField: (key: string, value: string, locale?: 'de' | 'en') => void;
   confirmPassportField: (key: string) => void;
   confirmField: (path: string) => void;
   markSupplierPending: (path: string) => void;
@@ -88,7 +92,7 @@ export function DraftProvider({
     });
   }, []);
 
-  const updatePassportField = useCallback((key: string, value: string) => {
+  const updatePassportField = useCallback((key: string, value: string, locale?: 'de' | 'en') => {
     setDraft((current) => {
       if (!current) {
         return current;
@@ -98,12 +102,26 @@ export function DraftProvider({
       if (!prev) {
         return current;
       }
-      const provenance = value.trim() ? 'ai' : 'empty';
-      const nextState = {
-        ...prev,
-        value,
+      const def = PASSPORT_FIELD_DEFINITIONS.find((d) => d.key === key);
+      let nextState = { ...prev };
+      if (locale === 'de') {
+        nextState = { ...nextState, valueDe: value, value };
+      } else if (locale === 'en') {
+        nextState = { ...nextState, valueEn: value };
+      } else {
+        nextState = { ...nextState, value };
+      }
+
+      const hasValue =
+        def && fieldSupportsLocalization(def)
+          ? passportFieldHasValue(nextState, def)
+          : Boolean(value.trim());
+
+      const provenance = hasValue ? 'ai' : 'empty';
+      nextState = {
+        ...nextState,
         provenance: provenance as typeof prev.provenance,
-        confidence: value.trim() ? 0.75 : 0,
+        confidence: hasValue ? 0.75 : 0,
       };
       passportFields[key] = {
         ...nextState,
@@ -139,32 +157,41 @@ export function DraftProvider({
     });
   }, [updateField]);
 
-  const syncPreview = useCallback(async (): Promise<string | null> => {
+  const pushPassportToServer = useCallback(async (): Promise<{ publicUrl: string; passId: string } | null> => {
     if (!draft?.passportFields) {
       return null;
     }
+    const passId = resolveDraftPublishPassId(draft);
     const res = await fetch('/api/dashboard/v2/passport-publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         passportFields: draft.passportFields,
         productName: draft.productName,
-        passId: draft.publishedPassId ?? VOLTSTRIDE_720_ID,
+        passId,
       }),
     });
     if (!res.ok) {
       return null;
     }
-    const data = (await res.json()) as { publicUrl?: string };
-    return data.publicUrl ?? null;
+    const data = (await res.json()) as { publicUrl?: string; passId?: string };
+    const publishedId = data.passId ?? passId;
+    const publicUrl =
+      data.publicUrl ??
+      (typeof window !== 'undefined' ? `${window.location.origin}/p/${publishedId}` : `/p/${publishedId}`);
+    return { publicUrl, passId: publishedId };
   }, [draft]);
 
+  const syncPreview = useCallback(async (): Promise<string | null> => {
+    const result = await pushPassportToServer();
+    return result?.publicUrl ?? null;
+  }, [pushPassportToServer]);
+
   const publish = useCallback(async () => {
-    const publicUrl = await syncPreview();
-    if (!publicUrl) {
+    const result = await pushPassportToServer();
+    if (!result) {
       return null;
     }
-    const passId = defaultPublishedPassId();
     setDraft((current) => {
       if (!current) {
         return current;
@@ -172,13 +199,13 @@ export function DraftProvider({
       return persist({
         ...current,
         status: 'published',
-        publishedPassId: passId,
-        publishedUrl: publicUrl,
+        publishedPassId: result.passId,
+        publishedUrl: result.publicUrl,
         visitedSteps: [...new Set([...current.visitedSteps, 'publish'])],
       });
     });
-    return { publicUrl };
-  }, [syncPreview]);
+    return { publicUrl: result.publicUrl };
+  }, [pushPassportToServer]);
 
   const summary = computeCompleteness(draft?.fields ?? []);
   const passportSummary = computePassportCompleteness(draft?.passportFields ?? {});

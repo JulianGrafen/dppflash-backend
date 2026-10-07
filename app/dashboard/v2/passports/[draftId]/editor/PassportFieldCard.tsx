@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Sparkles } from 'lucide-react';
 import type { PassportFieldDefinition } from '@/app/domain/battery/passportFieldCatalog';
+import { passportFieldLabel, passportFieldNote } from '@/app/domain/battery/passportFieldI18n';
 import type { PassportFieldValueState } from '@/app/dashboard/v2/mock/types';
 import { passportFieldNeedsReview } from '@/app/dashboard/v2/mock/passportFields';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { cn } from 'cn';
+import type { EditorContentLocale } from './EditorContentLocaleContext';
+import {
+  fieldSupportsLocalization,
+  fieldValueForContentLocale,
+  localizedFieldMissingLocales,
+  passportFieldHasValue,
+} from '@/app/dashboard/v2/mock/passportFieldLocalization';
 import { resolvePassportFieldSource } from '@/app/dashboard/v2/mock/passportFieldSource';
 import { PassportFieldAuditTrail } from './PassportFieldAuditTrail';
 import { accessTierShort } from './editorUi';
@@ -22,7 +30,28 @@ type FieldStatusPillsProps = {
   readonly surface: 'collapsed' | 'expanded';
 };
 
-function FieldStatusPills({ def, state, isAiSuggestion, surface }: FieldStatusPillsProps) {
+function FieldComplianceCheck({ compliant }: { readonly compliant: boolean }) {
+  if (!compliant) {
+    return null;
+  }
+  return (
+    <span
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80"
+      title="Vollständig & compliant"
+      aria-label="Compliant"
+    >
+      <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+    </span>
+  );
+}
+
+function FieldStatusPills({
+  def,
+  state,
+  isAiSuggestion,
+  surface,
+  contentLocale,
+}: FieldStatusPillsProps & { contentLocale: EditorContentLocale }) {
   const tierSurface = surface === 'expanded' ? 'bg-white' : 'bg-slate-50';
 
   return (
@@ -37,18 +66,15 @@ function FieldStatusPills({ def, state, isAiSuggestion, surface }: FieldStatusPi
         {accessTierShort(def.accessTier)}
       </span>
       {state.mandatory ? (
-        <Badge variant="secondary" className="shrink-0 text-[10px]">Mandatory</Badge>
+        <Badge variant="secondary" className="shrink-0 text-[10px]">
+          {contentLocale === 'de' ? 'Pflichtfeld' : 'Mandatory'}
+        </Badge>
       ) : null}
       {isAiSuggestion ? (
         <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-violet-700">
           <Sparkles className="h-3 w-3" aria-hidden />
           {surface === 'expanded' ? `AI ${Math.round(state.confidence * 100)}%` : 'AI'}
         </span>
-      ) : null}
-      {state.provenance === 'confirmed' ? (
-        <Badge className="shrink-0 bg-emerald-100 text-[10px] text-emerald-900 hover:bg-emerald-100">
-          OK
-        </Badge>
       ) : null}
     </div>
   );
@@ -57,15 +83,17 @@ function FieldStatusPills({ def, state, isAiSuggestion, surface }: FieldStatusPi
 type PassportFieldCardProps = {
   readonly def: PassportFieldDefinition;
   readonly state: PassportFieldValueState;
+  readonly contentLocale: EditorContentLocale;
   readonly sectionDetailsOpen: boolean;
   readonly onCloseSectionDetails: () => void;
-  readonly onUpdate: (value: string) => void;
+  readonly onUpdate: (value: string, locale?: 'de' | 'en') => void;
   readonly onConfirm: () => void;
 };
 
 export function PassportFieldCard({
   def,
   state,
+  contentLocale,
   sectionDetailsOpen,
   onCloseSectionDetails,
   onUpdate,
@@ -75,7 +103,16 @@ export function PassportFieldCard({
   const [userExpanded, setUserExpanded] = useState(false);
   const needsReview = passportFieldNeedsReview(state);
   const isAiSuggestion = needsReview && state.provenance === 'ai';
-  const isBlocker = state.mandatory && !state.value?.trim();
+  const isLocalized = fieldSupportsLocalization(def);
+  const isBlocker = state.mandatory && !passportFieldHasValue(state, def);
+  const missingLocales = localizedFieldMissingLocales(state, def);
+  const isCompliant = passportFieldHasValue(state, def) && !passportFieldNeedsReview(state);
+  const activeLocale = fieldSupportsLocalization(def) ? contentLocale : undefined;
+  const displayValue = activeLocale
+    ? fieldValueForContentLocale(state, activeLocale)
+    : state.value;
+  const fieldLabel = passportFieldLabel(def, contentLocale);
+  const fieldNote = passportFieldNote(def, contentLocale);
   const inputId = `field-${def.key.replace(/\./g, '-')}`;
   const fieldAnchorId = `field-${def.key}`;
 
@@ -135,18 +172,22 @@ export function PassportFieldCard({
           'scroll-mt-28 cursor-pointer rounded-xl border px-4 py-3 transition-colors bg-white hover:bg-slate-50/90',
           isBlocker
             ? 'border-red-400'
-            : isAiSuggestion
-              ? 'border-violet-200 bg-violet-50/30'
-              : 'border-slate-200/90',
+            : isCompliant
+              ? 'border-emerald-200/90 bg-emerald-50/20'
+              : isAiSuggestion
+                ? 'border-violet-200 bg-violet-50/30'
+                : 'border-slate-200/90',
         )}
       >
         <div className="flex items-center gap-3">
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{def.label}</span>
+          <FieldComplianceCheck compliant={isCompliant} />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{fieldLabel}</span>
           <FieldStatusPills
             def={def}
             state={state}
             isAiSuggestion={isAiSuggestion}
             surface="collapsed"
+            contentLocale={contentLocale}
           />
         </div>
       </article>
@@ -161,20 +202,24 @@ export function PassportFieldCard({
         'scroll-mt-28 rounded-xl border p-4 transition-colors bg-slate-50/30',
         isBlocker
           ? 'border-red-400'
-          : isAiSuggestion
-            ? 'border-violet-200 bg-violet-50/40'
-            : 'border-slate-200/90',
+          : isCompliant
+            ? 'border-emerald-200/90 bg-emerald-50/25'
+            : isAiSuggestion
+              ? 'border-violet-200 bg-violet-50/40'
+              : 'border-slate-200/90',
       )}
     >
       <div className="mb-2 flex items-center gap-2">
+        <FieldComplianceCheck compliant={isCompliant} />
         <Label htmlFor={inputId} className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
-          {def.label}
+          {fieldLabel}
         </Label>
         <FieldStatusPills
           def={def}
           state={state}
           isAiSuggestion={isAiSuggestion}
           surface="expanded"
+          contentLocale={contentLocale}
         />
         <Button
           type="button"
@@ -188,32 +233,36 @@ export function PassportFieldCard({
         </Button>
       </div>
 
-      <p className="mb-3 text-xs leading-relaxed text-slate-500">{def.note}</p>
+      <p className="mb-3 text-xs leading-relaxed text-slate-500">{fieldNote}</p>
 
       {def.datatype === 'TEXT list' ? (
         <Textarea
           id={inputId}
           rows={3}
           className="bg-white"
-          value={state.value}
-          onChange={(e) => onUpdate(e.target.value)}
+          value={displayValue}
+          onChange={(e) => onUpdate(e.target.value, activeLocale)}
         />
       ) : (
         <Input
           id={inputId}
           className="bg-white"
-          value={state.value}
-          onChange={(e) => onUpdate(e.target.value)}
+          value={displayValue}
+          onChange={(e) => onUpdate(e.target.value, activeLocale)}
         />
       )}
 
       {isBlocker ? (
-        <p className="mt-2 text-xs font-medium text-red-700">Pflichtfeld fehlt — Publish-Blocker.</p>
+        <p className="mt-2 text-xs font-medium text-red-700">
+          {isLocalized && missingLocales.length > 0
+            ? `Pflichtfeld — ${missingLocales.map((l) => l.toUpperCase()).join(' und ')} über Umschalter oben ausfüllen.`
+            : 'Pflichtfeld fehlt — Publish-Blocker.'}
+        </p>
       ) : null}
 
       {auditSource ? (
         <PassportFieldAuditTrail
-          fieldLabel={def.label}
+          fieldLabel={fieldLabel}
           source={auditSource}
           confidence={state.confidence}
         />
@@ -237,7 +286,7 @@ export function PassportFieldCard({
             size="sm"
             variant="ghost"
             className="cursor-pointer text-slate-600"
-            onClick={() => onUpdate('')}
+            onClick={() => onUpdate('', activeLocale)}
           >
             Dismiss
           </Button>

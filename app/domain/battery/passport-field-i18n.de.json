@@ -1,0 +1,332 @@
+{
+  "battery.passportIdentifier": {
+    "label": "Kennung des Batteriepasses"
+  },
+  "battery.uniqueId": {
+    "label": "Eindeutige Batteriekennung"
+  },
+  "operator.responsibleOperatorId": {
+    "label": "Kennung des verantwortlichen Wirtschaftsbeteiligten"
+  },
+  "battery.manufacturer": {
+    "label": "Herstellerkennung"
+  },
+  "manufacturing.place": {
+    "label": "Herstellungsort"
+  },
+  "manufacturing.facilityId": {
+    "label": "Kennung der Produktionsstätte"
+  },
+  "battery.manufacturingDate": {
+    "label": "Herstellungsdatum"
+  },
+  "battery.commissioningDate": {
+    "label": "Datum der Inbetriebnahme"
+  },
+  "battery.warrantyPeriod": {
+    "label": "Gewährleistungszeitraum"
+  },
+  "battery.category": {
+    "label": "Batteriekategorie"
+  },
+  "battery.weight": {
+    "label": "Batteriemasse"
+  },
+  "battery.status": {
+    "label": "Lebenszyklusstatus"
+  },
+  "battery.rechargeable": {
+    "label": "Wiederaufladbar"
+  },
+  "labelling.separateCollectionSymbol": {
+    "label": "Symbol für getrennte Sammlung"
+  },
+  "labelling.heavyMetalSymbol": {
+    "label": "Cadmium- / Bleisymbole"
+  },
+  "labelling.carbonFootprintLabel": {
+    "label": "CO₂-Fußabdruck-Kennzeichnung"
+  },
+  "labelling.extinguishingAgent": {
+    "label": "Geeignetes Löschmittel"
+  },
+  "labelling.meaningOfLabels": {
+    "label": "Bedeutung von Kennzeichnungen und Symbolen"
+  },
+  "conformity.euDeclaration": {
+    "label": "EU-Konformitätserklärung"
+  },
+  "compliance.testReports": {
+    "label": "Prüfberichte zur Konformität"
+  },
+  "compliance.notifiedBody": {
+    "label": "Benannte Stelle"
+  },
+  "carbonFootprint.total": {
+    "label": "CO₂-Fußabdruck je Funktionseinheit"
+  },
+  "carbonFootprint.stageRawMaterial": {
+    "label": "CF — Rohstoffgewinnung & Vorverarbeitung"
+  },
+  "carbonFootprint.stageProduction": {
+    "label": "CF — Hauptproduktion / Fertigung"
+  },
+  "carbonFootprint.stageDistribution": {
+    "label": "CF — Vertrieb"
+  },
+  "carbonFootprint.stageEndOfLife": {
+    "label": "CF — Lebensende & Recycling"
+  },
+  "carbonFootprint.performanceClass": {
+    "label": "Performanceklasse CO₂-Fußabdruck"
+  },
+  "carbonFootprint.studyUrl": {
+    "label": "Weblink zur öffentlichen CF-Studie"
+  },
+  "carbonFootprint.studyRef": {
+    "label": "CO₂-Fußabdruckstudie (Dokument)"
+  },
+  "carbonFootprint.absolute": {
+    "label": "Absoluter CO₂-Fußabdruck der Batterie"
+  },
+  "dueDiligence.report": {
+    "label": "Sorgfaltspflichtbericht"
+  },
+  "dueDiligence.policyUrl": {
+    "label": "Sorgfaltspflichtrichtlinie (Weblink)"
+  },
+  "dueDiligence.thirdPartyAssurance": {
+    "label": "Unabhängige Prüfung (Zertifizierungen)"
+  },
+  "dueDiligence.supplyChainIndices": {
+    "label": "Lieferkettenindizes"
+  },
+  "material.composition": {
+    "label": "Batteriechemie"
+  },
+  "material.criticalRawMaterials": {
+    "label": "Kritische Rohstoffe"
+  },
+  "material.activeMaterials": {
+    "label": "Materialien in Kathode / Anode / Elektrolyt"
+  },
+  "hazardous.substances": {
+    "label": "Gefahrstoffe"
+  },
+  "hazardous.substanceImpact": {
+    "label": "Auswirkungen auf Umwelt / Gesundheit / Sicherheit"
+  },
+  "material.detailedComposition": {
+    "label": "Detaillierte Zusammensetzung"
+  },
+  "recycledContent.cobalt": {
+    "label": "Recycelter Kobaltanteil (gesamt)"
+  },
+  "recycledContent.nickel": {
+    "label": "Recycelter Nickelanteil (gesamt)"
+  },
+  "recycledContent.lithium": {
+    "label": "Recycelter Lithiumanteil (gesamt)"
+  },
+  "recycledContent.lead": {
+    "label": "Recycelter Bleianteil (gesamt)"
+  },
+  "recycledContent.preNickel": {
+    "label": "Pre-Consumer-Recyclinganteil Nickel"
+  },
+  "recycledContent.preCobalt": {
+    "label": "Pre-Consumer-Recyclinganteil Kobalt"
+  },
+  "recycledContent.preLithium": {
+    "label": "Pre-Consumer-Recyclinganteil Lithium"
+  },
+  "recycledContent.preLead": {
+    "label": "Pre-Consumer-Recyclinganteil Blei"
+  },
+  "recycledContent.postNickel": {
+    "label": "Post-Consumer-Recyclinganteil Nickel"
+  },
+  "recycledContent.postCobalt": {
+    "label": "Post-Consumer-Recyclinganteil Kobalt"
+  },
+  "recycledContent.postLithium": {
+    "label": "Post-Consumer-Recyclinganteil Lithium"
+  },
+  "recycledContent.postLead": {
+    "label": "Post-Consumer-Recyclinganteil Blei"
+  },
+  "renewableContent.share": {
+    "label": "Anteil erneuerbarer Inhaltsstoffe"
+  },
+  "repair.disassemblyInstructions": {
+    "label": "Demontage- / Zerlegungsanleitungen"
+  },
+  "repair.partNumbers": {
+    "label": "Teilenummern der Komponenten"
+  },
+  "repair.spareParts": {
+    "label": "Quellen für Ersatzteile"
+  },
+  "repair.safetyInstructions": {
+    "label": "Sicherheitsmaßnahmen"
+  },
+  "endOfLife.roleWastePrevention": {
+    "label": "Rolle der Endnutzer bei Abfallvermeidung"
+  },
+  "endOfLife.roleSeparateCollection": {
+    "label": "Rolle der Endnutzer bei getrennter Sammlung"
+  },
+  "endOfLife.collectionInfo": {
+    "label": "Sammlung, Zweitnutzung & Behandlung am Lebensende"
+  },
+  "endOfLife.safetyInstructions": {
+    "label": "Sicherheitshinweise am Lebensende"
+  },
+  "endOfLife.recyclingEfficiency": {
+    "label": "Recyclingeffizienz / Rückgewinnbarkeit"
+  },
+  "performance.ratedCapacity": {
+    "label": "Nennkapazität"
+  },
+  "durability.capacityFade": {
+    "label": "Kapazitätsverlust"
+  },
+  "performance.certifiedUsableEnergy": {
+    "label": "Zertifizierte nutzbare Batterieenergie"
+  },
+  "performance.energy": {
+    "label": "Energie"
+  },
+  "performance.minVoltage": {
+    "label": "Mindestspannung"
+  },
+  "performance.maxVoltage": {
+    "label": "Höchstspannung"
+  },
+  "performance.nominalVoltage": {
+    "label": "Nennspannung"
+  },
+  "performance.powerCapability": {
+    "label": "Ursprüngliche Leistungsfähigkeit"
+  },
+  "durability.powerFade": {
+    "label": "Leistungsverlust"
+  },
+  "performance.maxPermittedPower": {
+    "label": "Maximal zulässige Batterieleistung"
+  },
+  "performance.powerToEnergyRatio": {
+    "label": "Verhältnis Nennleistung : Energie"
+  },
+  "performance.roundTripEfficiency": {
+    "label": "Anfänglicher Round-Trip-Wirkungsgrad"
+  },
+  "performance.rtEfficiencyAt50": {
+    "label": "Round-Trip-Wirkungsgrad bei 50 % der Zyklenlebensdauer"
+  },
+  "performance.rtEfficiencyFade": {
+    "label": "Abnahme des Energie-Round-Trip-Wirkungsgrads"
+  },
+  "performance.initialSelfDischarge": {
+    "label": "Anfängliche Selbstentladerate"
+  },
+  "performance.internalResistancePack": {
+    "label": "Anfänglicher Innenwiderstand — Pack"
+  },
+  "performance.internalResistanceCell": {
+    "label": "Anfänglicher Innenwiderstand — Zelle"
+  },
+  "performance.internalResistanceModule": {
+    "label": "Anfänglicher Innenwiderstand — Modul"
+  },
+  "durability.internalResistanceIncreasePack": {
+    "label": "Zunahme Innenwiderstand — Pack"
+  },
+  "durability.internalResistanceIncreaseCell": {
+    "label": "Zunahme Innenwiderstand — Zelle"
+  },
+  "performance.temperatureRangeMin": {
+    "label": "Temperaturbereich Ruhezustand — untere Grenze"
+  },
+  "performance.temperatureRangeMax": {
+    "label": "Temperaturbereich Ruhezustand — obere Grenze"
+  },
+  "durability.expectedLifetimeYears": {
+    "label": "Erwartete Lebensdauer — Kalenderjahre"
+  },
+  "durability.expectedLifetime": {
+    "label": "Erwartete Lebensdauer — Lade-/Entladezyklen"
+  },
+  "durability.cycleLifeReferenceTest": {
+    "label": "Referenztest Zyklenlebensdauer"
+  },
+  "performance.cRate": {
+    "label": "C-Rate des relevanten Zyklenlebensdauer-Tests"
+  },
+  "performance.capacityThreshold": {
+    "label": "Kapazitätsschwelle für Erschöpfung"
+  },
+  "durability.remainingCapacity": {
+    "label": "Restkapazität"
+  },
+  "durability.remainingUsableEnergy": {
+    "label": "Verbleibende nutzbare Batterieenergie"
+  },
+  "durability.stateOfCertifiedEnergy": {
+    "label": "Zertifizierter Energiezustand (SOCE)"
+  },
+  "durability.stateOfCharge": {
+    "label": "Ladezustand (SoC)"
+  },
+  "durability.remainingPowerCapability": {
+    "label": "Verbleibende Leistungsfähigkeit"
+  },
+  "durability.remainingRtEfficiency": {
+    "label": "Verbleibender Round-Trip-Wirkungsgrad"
+  },
+  "durability.currentSelfDischarge": {
+    "label": "Aktuelle Selbstentladerate"
+  },
+  "durability.selfDischargeEvolution": {
+    "label": "Entwicklung der Selbstentladeraten"
+  },
+  "durability.fullCycleCount": {
+    "label": "Anzahl vollständiger Lade-/Entladezyklen"
+  },
+  "durability.energyThroughput": {
+    "label": "Energiedurchsatz"
+  },
+  "durability.capacityThroughput": {
+    "label": "Kapazitätsdurchsatz"
+  },
+  "durability.temperatureInformation": {
+    "label": "Temperaturinformationen"
+  },
+  "durability.timeExtremeTempAbove": {
+    "label": "Zeit in extremen Temperaturen oberhalb der Grenze"
+  },
+  "durability.timeExtremeTempBelow": {
+    "label": "Zeit in extremen Temperaturen unterhalb der Grenze"
+  },
+  "durability.timeChargingExtremeAbove": {
+    "label": "Ladezeit bei extremen Temperaturen oberhalb der Grenze"
+  },
+  "durability.timeChargingExtremeBelow": {
+    "label": "Ladezeit bei extremen Temperaturen unterhalb der Grenze"
+  },
+  "durability.deepDischargeEvents": {
+    "label": "Anzahl Tiefentlade-Ereignisse"
+  },
+  "durability.overchargeEvents": {
+    "label": "Anzahl Überlade-Ereignisse"
+  },
+  "durability.accidentInfo": {
+    "label": "Informationen zu Unfällen"
+  },
+  "durability.stateOfHealth": {
+    "label": "Gesundheitszustand (SoH)"
+  },
+  "durability.usageData": {
+    "label": "Informationen und Daten aus der Nutzung"
+  }
+}

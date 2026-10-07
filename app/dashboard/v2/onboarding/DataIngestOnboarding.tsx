@@ -10,13 +10,18 @@ import { BulkMagicLinkDialog } from './BulkMagicLinkDialog';
 import { ComplianceInboxStep } from './ComplianceInboxStep';
 import { GlobalCatalogStep } from './GlobalCatalogStep';
 import { inboxEmailForDomain } from './globalCatalogMock';
+import { CompanyMasterDataStep } from './CompanyMasterDataStep';
+import { toIntegrationsPatch } from './companyMasterData';
 import { IntegrationsStep } from './IntegrationsStep';
 import { useGlobalOnboardingFlow } from './useGlobalOnboardingFlow';
 
 export function DataIngestOnboarding() {
   const router = useRouter();
   const { session, updateSession } = useSession();
-  const flow = useGlobalOnboardingFlow();
+  const flow = useGlobalOnboardingFlow({
+    companyDomain: session?.companyDomain ?? 'yourcompany',
+    integrations: session?.integrations,
+  });
 
   const inboxEmail = inboxEmailForDomain(session?.companyDomain ?? 'yourcompany');
 
@@ -32,8 +37,7 @@ export function DataIngestOnboarding() {
       },
       integrations: {
         onboardingDraftId: draft.id,
-        companyName: session?.integrations.companyName ?? 'B2B Import GmbH',
-        industry: 'Multi-category Importer',
+        ...toIntegrationsPatch(flow.companyMasterData),
       },
     });
     router.push('/dashboard/v2');
@@ -52,14 +56,27 @@ export function DataIngestOnboarding() {
         <OnboardingStepper currentStep={flow.step} />
 
         {flow.step === 0 && (
-          <IntegrationsStep
-            connected={flow.connected}
-            onConnect={flow.connectIntegration}
-            onNext={flow.goNext}
+          <CompanyMasterDataStep
+            companyDomain={session?.companyDomain ?? 'yourcompany'}
+            data={flow.companyMasterData}
+            onChange={flow.setCompanyMasterData}
+            onNext={() => {
+              updateSession({ integrations: toIntegrationsPatch(flow.companyMasterData) });
+              flow.goNext();
+            }}
           />
         )}
 
         {flow.step === 1 && (
+          <IntegrationsStep
+            connected={flow.connected}
+            onConnect={flow.connectIntegration}
+            onBack={flow.goBack}
+            onNext={flow.goNext}
+          />
+        )}
+
+        {flow.step === 2 && (
           <ComplianceInboxStep
             inboxEmail={inboxEmail}
             files={flow.inboxFiles}
@@ -69,9 +86,9 @@ export function DataIngestOnboarding() {
           />
         )}
 
-        {flow.step === 2 && <AiSyncMergeStep progress={flow.syncProgress} />}
+        {flow.step === 3 && <AiSyncMergeStep progress={flow.syncProgress} />}
 
-        {flow.step === 3 && (
+        {flow.step === 4 && (
           <GlobalCatalogStep
             bulkRequestSent={flow.bulkRequestSent}
             onTriggerMagicLinks={flow.openBulkMagic}

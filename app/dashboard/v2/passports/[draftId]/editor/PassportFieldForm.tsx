@@ -8,7 +8,9 @@ import {
   type PassportSectionId,
 } from '@/app/domain/battery/passportFieldCatalog';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
+import { useEditorContentLocale } from './EditorContentLocaleContext';
 import { PassportFieldCategoryPanel } from './PassportFieldCategoryPanel';
+import { sectionNavLabel } from './editorUi';
 import { groupFieldsByCategoryPrefix } from './passportFieldGroups';
 
 export function PassportFieldForm() {
@@ -16,6 +18,7 @@ export function PassportFieldForm() {
   const sectionId = (searchParams.get('section') as PassportSectionId) ?? 'identity';
   const section = PASSPORT_SECTIONS.find((s) => s.id === sectionId);
   const { draft, updatePassportField, confirmPassportField } = useDraft();
+  const { locale } = useEditorContentLocale();
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -33,10 +36,14 @@ export function PassportFieldForm() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200/90 bg-white px-6 py-5 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-          Section {String(sectionIndex).padStart(2, '0')}
-        </p>
-        <h2 className="mt-1 text-xl font-semibold text-[#0c1929]">{section.title}</h2>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            {locale === 'de' ? 'Sektion' : 'Section'} {String(sectionIndex).padStart(2, '0')}
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-[#0c1929]">
+            {locale === 'en' ? sectionNavLabel(section.title) : section.title}
+          </h2>
+        </div>
       </div>
 
       {categoryGroups.map((group) => (

@@ -1,4 +1,5 @@
 import { tenantIdFromDomain } from '@/app/dashboard/v2/lib/tenantId';
+import { createDemoReady100Draft, DEMO_READY_100_DRAFT_ID } from './demoReady100Passport';
 import type { DraftField, DraftPassport } from './types';
 
 const DRAFTS_KEY = 'dppflash_v2_drafts';
@@ -16,6 +17,11 @@ export type V2IntegrationsState = {
   pimWebhookSecret?: string;
   companyName?: string;
   industry?: string;
+  street?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  vatId?: string;
   onboardingDraftId?: string;
 };
 
@@ -85,20 +91,31 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
+function ensureBuiltinDemoDrafts(drafts: DraftPassport[]): DraftPassport[] {
+  if (drafts.some((d) => d.id === DEMO_READY_100_DRAFT_ID)) {
+    return drafts;
+  }
+  const demo = createDemoReady100Draft();
+  const next = [demo, ...drafts];
+  saveAllDrafts(next);
+  return next;
+}
+
 export function loadAllDrafts(): DraftPassport[] {
   if (!canUseStorage()) {
     return [];
   }
+  let drafts: DraftPassport[] = [];
   try {
     const raw = localStorage.getItem(DRAFTS_KEY);
-    if (!raw) {
-      return [];
+    if (raw) {
+      const parsed = JSON.parse(raw) as DraftPassport[];
+      drafts = Array.isArray(parsed) ? parsed : [];
     }
-    const parsed = JSON.parse(raw) as DraftPassport[];
-    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];
+    drafts = [];
   }
+  return ensureBuiltinDemoDrafts(drafts);
 }
 
 export function saveAllDrafts(drafts: DraftPassport[]): void {
@@ -116,6 +133,13 @@ export function upsertDraft(draft: DraftPassport): void {
   const drafts = loadAllDrafts().filter((d) => d.id !== draft.id);
   drafts.unshift(draft);
   saveAllDrafts(drafts);
+}
+
+/** Legt den 100 %-Demo-Entwurf in `dppflash_v2_drafts` ab (Browser). */
+export function seedDemoReady100Draft(): DraftPassport {
+  const draft = createDemoReady100Draft();
+  upsertDraft(draft);
+  return draft;
 }
 
 export function deleteDraft(id: string): void {

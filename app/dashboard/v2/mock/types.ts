@@ -22,6 +22,10 @@ export type PassportFieldSourceAttribution = {
 
 export type PassportFieldValueState = {
   value: string;
+  /** Öffentliche Pass-Ansicht DE (Fallback: `value`). */
+  valueDe?: string;
+  /** Öffentliche Pass-Ansicht EN. */
+  valueEn?: string;
   provenance: PassportFieldProvenance;
   confidence: number;
   mandatory: boolean;

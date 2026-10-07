@@ -1,8 +1,12 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import QRCodeDisplay from '@/app/components/QRCodeDisplay';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
+import { PublishDistributionDialog } from '@/app/dashboard/v2/components/PublishDistributionDialog';
+import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
+import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
 import { WizardLayout } from '../WizardLayout';
 import { canPublish } from '@/app/dashboard/v2/mock/completeness';
 import { LinkButton } from '@/app/dashboard/v2/components/LinkButton';
@@ -10,13 +14,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function PublishStepPage() {
-  const { draft, summary, publish } = useDraft();
+  const { draft, summary } = useDraft();
   const params = useParams<{ draftId: string }>();
-  const router = useRouter();
+  const [publishOpen, setPublishOpen] = useState(false);
   const ready = canPublish(summary);
   const published = draft?.status === 'published';
+  const passportSummary = draft
+    ? computePassportCompleteness(ensurePassportFieldsOnDraft(draft))
+    : null;
 
-  if (!draft) {
+  if (!draft || !passportSummary) {
     return null;
   }
 
@@ -50,13 +57,9 @@ export default function PublishStepPage() {
             <Button
               type="button"
               size="lg"
-              disabled={!ready}
+              disabled={!ready || !passportSummary.criticalOk}
               className="cursor-pointer"
-              onClick={() => {
-                void publish().then(() => {
-                  router.push(`/dashboard/v2/passports/${params.draftId}/editor`);
-                });
-              }}
+              onClick={() => setPublishOpen(true)}
             >
               Produktpass veröffentlichen
             </Button>
@@ -79,6 +82,14 @@ export default function PublishStepPage() {
               >
                 Öffentlichen Pass öffnen
               </LinkButton>
+              <Button
+                type="button"
+                variant="outline"
+                className="cursor-pointer"
+                onClick={() => setPublishOpen(true)}
+              >
+                Erneut an Schnittstellen senden
+              </Button>
               <LinkButton
                 href={`/dashboard/v2/passports/${params.draftId}/editor`}
                 className="cursor-pointer"
@@ -89,6 +100,13 @@ export default function PublishStepPage() {
           )}
         </CardContent>
       </Card>
+
+      <PublishDistributionDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        draft={draft}
+        criticalOk={passportSummary.criticalOk}
+      />
 
       <div className="mt-4">
         <LinkButton

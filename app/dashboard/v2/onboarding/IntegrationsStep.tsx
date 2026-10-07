@@ -10,10 +10,11 @@ import { cn } from 'cn';
 type IntegrationsStepProps = {
   connected: Partial<Record<IntegrationId, boolean>>;
   onConnect: (id: IntegrationId) => void;
+  onBack: () => void;
   onNext: () => void;
 };
 
-export function IntegrationsStep({ connected, onConnect, onNext }: IntegrationsStepProps) {
+export function IntegrationsStep({ connected, onConnect, onBack, onNext }: IntegrationsStepProps) {
   const anyConnected = Object.values(connected).some(Boolean);
 
   return (
@@ -69,9 +70,14 @@ export function IntegrationsStep({ connected, onConnect, onNext }: IntegrationsS
             );
           })}
         </div>
-        <Button type="button" className="w-full cursor-pointer" disabled={!anyConnected} onClick={onNext}>
-          Weiter
-        </Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="cursor-pointer" onClick={onBack}>
+            Zurück
+          </Button>
+          <Button type="button" className="cursor-pointer sm:min-w-40" disabled={!anyConnected} onClick={onNext}>
+            Weiter
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

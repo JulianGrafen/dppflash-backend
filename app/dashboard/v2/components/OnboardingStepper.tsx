@@ -1,6 +1,6 @@
 import { cn } from 'cn';
 
-const STEPS = ['Integrationen', 'Inbox', 'Sync', 'Katalog'] as const;
+const STEPS = ['Stammdaten', 'Integrationen', 'Inbox', 'Sync', 'Katalog'] as const;
 
 export function OnboardingStepper({ currentStep }: { readonly currentStep: number }) {
   return (

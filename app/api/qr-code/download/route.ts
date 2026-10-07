@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateQRCodeAsFile } from '@/app/services/qrCodeService';
+import { generateQRCode, generateQRCodeAsFile } from '@/app/services/qrCodeService';
 import { assertSafeProductId, sanitizeFilenameToken } from '@/app/lib/security/safeProductId';
 
 /**
@@ -8,14 +8,15 @@ import { assertSafeProductId, sanitizeFilenameToken } from '@/app/lib/security/s
  * 
  * Body:
  * {
- *   productId: string
+ *   productId: string,
+ *   format?: "png" | "svg"
  * }
  * 
- * Response: PNG Binary (application/octet-stream)
+ * Response: PNG or SVG attachment
  */
 export async function POST(request: NextRequest) {
   try {
-    const { productId } = await request.json();
+    const { productId, format = 'png' } = await request.json();
 
     if (!productId || typeof productId !== 'string') {
       return NextResponse.json(
@@ -32,8 +33,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ungültige productId' }, { status: 400 });
     }
 
-    const buffer = await generateQRCodeAsFile(safeId);
     const fileToken = sanitizeFilenameToken(safeId);
+
+    if (format !== 'png' && format !== 'svg') {
+      return NextResponse.json({ error: 'format muss png oder svg sein' }, { status: 400 });
+    }
+
+    if (format === 'svg') {
+      const svg = await generateQRCode(safeId, { format: 'svg', size: 512 });
+      return new NextResponse(svg, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/svg+xml; charset=utf-8',
+          'Content-Disposition': `attachment; filename="dpp-${fileToken}-qr.svg"`,
+        },
+      });
+    }
+
+    const buffer = await generateQRCodeAsFile(safeId);
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

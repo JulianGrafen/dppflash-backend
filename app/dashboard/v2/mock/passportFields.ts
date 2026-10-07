@@ -5,7 +5,7 @@ import {
 import { buildVoltstridePassportFieldSeed } from '@/app/domain/battery/voltstrideFieldSeed';
 import { VOLTSTRIDE_720_ID } from '@/app/fixtures/voltstride720PublicPassport';
 import { attachAuditSourcesToPassportFields } from './passportFieldSource';
-import type { DraftField, PassportFieldValueState } from './types';
+import type { DraftField, DraftPassport, PassportFieldValueState } from './types';
 
 const REVIEW_THRESHOLD = 0.85;
 
@@ -75,6 +75,18 @@ export function ensurePassportFieldsOnDraft(
 
 export function defaultPublishedPassId(): string {
   return VOLTSTRIDE_720_ID;
+}
+
+export function resolveDraftPublishPassId(draft: DraftPassport): string {
+  const fromDraft = draft.publishedPassId?.trim();
+  if (fromDraft) {
+    return fromDraft;
+  }
+  const fromPassport = draft.passportFields?.['battery.passportIdentifier']?.value?.trim();
+  if (fromPassport) {
+    return fromPassport;
+  }
+  return defaultPublishedPassId();
 }
 
 export function passportFieldNeedsReview(state: PassportFieldValueState): boolean {

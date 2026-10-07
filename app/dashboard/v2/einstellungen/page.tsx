@@ -60,6 +60,18 @@ export default function EinstellungenPage() {
               {integrations?.companyName ?? '—'}
             </p>
             <p>
+              <strong className="text-slate-900">Branche:</strong> {integrations?.industry ?? '—'}
+            </p>
+            <p>
+              <strong className="text-slate-900">Adresse:</strong>{' '}
+              {[integrations?.street, integrations?.postalCode, integrations?.city, integrations?.country]
+                .filter(Boolean)
+                .join(', ') || '—'}
+            </p>
+            <p>
+              <strong className="text-slate-900">USt-IdNr.:</strong> {integrations?.vatId ?? '—'}
+            </p>
+            <p>
               <strong className="text-slate-900">Domain:</strong> {session?.companyDomain ?? '—'}
             </p>
             <p>

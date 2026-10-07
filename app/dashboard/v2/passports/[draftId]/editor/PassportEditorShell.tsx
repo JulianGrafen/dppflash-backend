@@ -16,6 +16,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { formatSkuEanSubtitle } from '@/app/dashboard/v2/mock/draftProductIdentifiers';
+import { EditorLocaleSwitcher } from './EditorContentLocaleContext';
+import { PublishDistributionDialog } from '@/app/dashboard/v2/components/PublishDistributionDialog';
 import { PassportEditorProductImage } from './PassportEditorProductImage';
 
 type PassportEditorShellProps = {
@@ -23,10 +25,12 @@ type PassportEditorShellProps = {
 };
 
 export function PassportEditorShell({ children }: PassportEditorShellProps) {
-  const { draft, passportSummary, syncPreview, publish } = useDraft();
+  const { draft, passportSummary, syncPreview } = useDraft();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [publishFeedback, setPublishFeedback] = useState<string | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
   const passId = draft?.publishedPassId ?? VOLTSTRIDE_720_ID;
 
   async function openPreview() {
@@ -40,10 +44,9 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
     setPreviewOpen(true);
   }
 
-  async function handlePublish() {
-    setBusy(true);
-    await publish();
-    setBusy(false);
+  function openPublishDialog() {
+    setPublishFeedback(null);
+    setPublishOpen(true);
   }
 
   if (!draft) {
@@ -84,6 +87,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <EditorLocaleSwitcher />
           <Button
             type="button"
             variant="outline"
@@ -98,14 +102,32 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
             type="button"
             className="cursor-pointer"
             disabled={busy || !passportSummary.criticalOk}
-            onClick={() => void handlePublish()}
+            onClick={openPublishDialog}
           >
-            Publish
+            {draft.status === 'published' ? 'Erneut veröffentlichen' : 'Publish'}
           </Button>
         </div>
       </header>
+      {publishFeedback ? (
+        <p
+          className={`mx-4 mb-2 text-sm sm:mx-6 ${publishFeedback.startsWith('Veröffentlicht') ? 'text-emerald-800' : 'text-red-700'}`}
+          role="status"
+        >
+          {publishFeedback}
+        </p>
+      ) : null}
 
       <div className="px-2 sm:px-4">{children}</div>
+
+      <PublishDistributionDialog
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+        draft={draft}
+        criticalOk={passportSummary.criticalOk}
+        onPublished={(url) => {
+          setPublishFeedback(`Veröffentlicht — öffentlicher Pass: ${url}`);
+        }}
+      />
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent

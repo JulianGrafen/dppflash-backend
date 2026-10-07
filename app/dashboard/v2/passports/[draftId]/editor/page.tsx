@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
+import { EditorContentLocaleProvider } from './EditorContentLocaleContext';
 import { PassportEditorShell } from './PassportEditorShell';
 import { PassportFieldForm } from './PassportFieldForm';
 import { PassportReadinessRail } from './PassportReadinessRail';
@@ -8,9 +9,12 @@ import { PassportSectionNav } from './PassportSectionNav';
 
 function EditorBody() {
   return (
+    <EditorContentLocaleProvider>
     <PassportEditorShell>
-      <div className="grid gap-0 overflow-hidden rounded-xl border border-slate-200/90 bg-[#f4f5f7] lg:grid-cols-[minmax(240px,280px)_1fr_minmax(260px,300px)]">
-        <aside className="hidden max-h-[calc(100vh-11rem)] border-r border-slate-200/90 bg-white lg:block">
+      <div className="grid gap-0 rounded-xl border border-slate-200/90 bg-[#f4f5f7] lg:grid-cols-[minmax(240px,280px)_1fr_minmax(260px,300px)]">
+        <aside
+          className="hidden border-r border-slate-200/90 bg-white lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto"
+        >
           <PassportSectionNav />
         </aside>
 
@@ -21,7 +25,9 @@ function EditorBody() {
           <PassportFieldForm />
         </div>
 
-        <aside className="hidden border-l border-slate-200/90 bg-[#fafbfc] p-4 lg:block">
+        <aside
+          className="hidden border-l border-slate-200/90 p-4 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto"
+        >
           <PassportReadinessRail />
         </aside>
       </div>
@@ -30,6 +36,7 @@ function EditorBody() {
         <PassportReadinessRail />
       </div>
     </PassportEditorShell>
+    </EditorContentLocaleProvider>
   );
 }
 

@@ -6,6 +6,7 @@ import { LinkButton } from '@/app/dashboard/v2/components/LinkButton';
 import { draftResumeHref, formatDraftDate } from '@/app/dashboard/v2/lib/hubStats';
 import { computePassportCompleteness } from '@/app/dashboard/v2/mock/passportCompleteness';
 import { ensurePassportFieldsOnDraft } from '@/app/dashboard/v2/mock/passportFields';
+import { DEMO_READY_100_DRAFT_ID } from '@/app/dashboard/v2/mock/demoReady100Passport';
 import { loadAllDrafts } from '@/app/dashboard/v2/mock/storage';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
 import { Badge } from '@/components/ui/badge';
@@ -81,6 +82,9 @@ export function PassportDraftList({ showPublished = false, newPassCta = true }: 
                           <Badge className="bg-primary/15 text-[11px] text-primary hover:bg-primary/15">
                             NEU
                           </Badge>
+                        ) : null}
+                        {draft.id === DEMO_READY_100_DRAFT_ID ? (
+                          <Badge className="bg-sky-100 text-sky-900 hover:bg-sky-100">Demo 100 %</Badge>
                         ) : null}
                         <Badge variant="secondary">{statusLabel(draft.status)}</Badge>
                       </div>

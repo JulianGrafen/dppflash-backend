@@ -1,5 +1,7 @@
 import { getProductById } from '../../lib/mock-data';
 import { notFound } from 'next/navigation';
+import { usesDppFlashPassLayout } from '@/app/domain/dpp/resolveSamplePassForProduct';
+import { DppFlashPassPage } from './DppFlashPassPage';
 import {
   LayoutList,
   Leaf,
@@ -1077,6 +1079,10 @@ function docReferencesProductHints(
 export default async function ProductPage({ params, searchParams }: PageProps) {
   const { id } = await params;
   const { d } = await searchParams;
+
+  if (usesDppFlashPassLayout(id)) {
+    return <DppFlashPassPage passId={id} />;
+  }
 
   // Primary: store lookup
   let raw: Record<string, unknown> | undefined = await getProductById(id) as unknown as Record<string, unknown> | undefined;

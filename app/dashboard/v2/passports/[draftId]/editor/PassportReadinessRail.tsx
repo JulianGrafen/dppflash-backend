@@ -10,7 +10,8 @@ import {
 } from '@/app/domain/battery/passportFieldCatalog';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
 import { passportFieldNeedsReview } from '@/app/dashboard/v2/mock/passportFields';
-import { passportFieldLabel, passportFieldNote } from '@/app/domain/battery/passportFieldI18n';
+import { passportFieldEditorNote } from '@/app/domain/battery/passportFieldEditorNote';
+import { passportFieldLabel } from '@/app/domain/battery/passportFieldI18n';
 import { useEditorContentLocale } from './EditorContentLocaleContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -88,7 +89,10 @@ export function PassportReadinessRail({ layout = 'page' }: PassportReadinessRail
         const def = defByKey.get(b.key);
         const sectionTitle = sectionTitleById.get(targetSection) ?? 'Publish blocker';
         const description = def
-          ? passportFieldNote(def, locale)
+          ? passportFieldEditorNote(def, locale) ||
+            (locale === 'de'
+              ? 'Pflichtangabe fehlt. Freigabe nicht möglich.'
+              : 'A mandatory value is required before this passport can be published.')
           : locale === 'de'
             ? 'Pflichtangabe fehlt. Freigabe nicht möglich.'
             : 'A mandatory value is required before this passport can be published.';
@@ -101,7 +105,6 @@ export function PassportReadinessRail({ layout = 'page' }: PassportReadinessRail
               title={def ? passportFieldLabel(def, locale) : b.label}
               categoryLabel={sectionTitle}
               description={description}
-              statusLabel={locale === 'de' ? 'Blockiert' : 'Blocked'}
               action={
                 <Button
                   type="button"

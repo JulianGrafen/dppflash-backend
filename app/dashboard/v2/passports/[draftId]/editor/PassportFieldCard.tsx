@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Sparkles } from 'lucide-react';
 import type { PassportFieldDefinition } from '@/app/domain/battery/passportFieldCatalog';
-import { passportFieldLabel, passportFieldNote } from '@/app/domain/battery/passportFieldI18n';
+import { passportFieldEditorNote } from '@/app/domain/battery/passportFieldEditorNote';
+import { passportFieldLabel } from '@/app/domain/battery/passportFieldI18n';
 import type { PassportFieldValueState } from '@/app/dashboard/v2/mock/types';
 import { passportFieldNeedsReview } from '@/app/dashboard/v2/mock/passportFields';
 import { Badge } from '@/components/ui/badge';
@@ -126,7 +127,7 @@ export function PassportFieldCard({
     ? fieldValueForContentLocale(state, activeLocale)
     : state.value;
   const fieldLabel = passportFieldLabel(def, contentLocale);
-  const fieldNote = passportFieldNote(def, contentLocale);
+  const fieldNote = passportFieldEditorNote(def, contentLocale);
   const inputId = `field-${def.key.replace(/\./g, '-')}`;
   const fieldAnchorId = `field-${def.key}`;
 
@@ -218,7 +219,9 @@ export function PassportFieldCard({
             <Label htmlFor={inputId} className="sr-only">
               {fieldLabel}
             </Label>
-            <p className="text-xs leading-relaxed text-muted-foreground">{fieldNote}</p>
+            {fieldNote ? (
+              <p className="text-xs leading-relaxed text-muted-foreground">{fieldNote}</p>
+            ) : null}
 
             {def.datatype === 'TEXT list' ? (
               <Textarea
@@ -250,6 +253,7 @@ export function PassportFieldCard({
                 fieldLabel={fieldLabel}
                 source={auditSource}
                 confidence={state.confidence}
+                contentLocale={contentLocale}
               />
             ) : null}
 

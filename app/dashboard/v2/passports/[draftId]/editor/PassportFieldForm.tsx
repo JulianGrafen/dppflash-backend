@@ -35,12 +35,12 @@ export function PassportFieldForm() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200/90 bg-white px-6 py-5 shadow-sm">
+      <div className="rounded-xl border border-border bg-card px-6 py-5 text-card-foreground shadow-sm">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {locale === 'de' ? 'Sektion' : 'Section'} {String(sectionIndex).padStart(2, '0')}
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-[#0c1929]">
+          <h2 className="mt-1 text-xl font-semibold text-foreground">
             {locale === 'en' ? sectionNavLabel(section.title) : section.title}
           </h2>
         </div>

@@ -8,8 +8,34 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { EnterMotion } from '@/components/ui/enter-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Clock, Database, ShieldCheck, Sparkles } from 'lucide-react';
+
 const DEMO_PASSWORD_HINT = 'Demo: mind. 8 Zeichen (z. B. demo-pass)';
+
+const REGISTER_VALUE_PROPS = [
+  {
+    icon: ShieldCheck,
+    title: 'Rechtssicher',
+    description: 'ESPR-konform und revisionssicher — Compliance-Nachweis für 15 Jahre.',
+  },
+  {
+    icon: Clock,
+    title: 'Schnell & einfach',
+    description: 'Digitalen Produktpass in 5 Minuten — ohne IT-Fachwissen.',
+  },
+  {
+    icon: Sparkles,
+    title: 'KI-gestützt',
+    description: 'Automatische Extraktion aus PDFs & Spezifikationen mit Review.',
+  },
+  {
+    icon: Database,
+    title: 'Langzeit-Hosting',
+    description: '15 Jahre sichere Speicherung — QR und Daten jederzeit abrufbar.',
+  },
+] as const;
 
 function validatePassword(password: string): string | null {
   if (!password.trim()) {
@@ -56,7 +82,7 @@ export default function DashboardV2LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen bg-[#eef1f6] lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+    <div className="grid min-h-screen bg-background text-foreground lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
       <section
         className="relative hidden flex-col bg-[#0c1929] px-10 py-12 text-white lg:flex"
         aria-label="DPP-Flash"
@@ -75,13 +101,16 @@ export default function DashboardV2LoginPage() {
             <V2BrandLogo href="/dashboard/v2" priority onDarkBackground />
           </div>
 
-          <Card className="border-slate-200/90 bg-white shadow-md ring-slate-200/80">
-            <CardHeader className="border-b border-slate-100 pb-4">
-              <CardTitle className="text-xl font-semibold text-[#0c1929]">
-                {mode === 'login' ? 'Willkommen zurück' : 'Konto anlegen'}
+          <EnterMotion durationMs={350}>
+          <Card variant="elevated" className="border-border bg-card ring-border/80">
+            <CardHeader className="border-b border-border pb-4">
+              <CardTitle className="text-xl font-semibold text-foreground">
+                {mode === 'login' ? 'Willkommen zurück' : 'Kostenlose Pilot-Phase starten'}
               </CardTitle>
-              <CardDescription className="text-slate-600">
-                Melden Sie sich mit Ihrer Firmen-E-Mail an. Freemail-Anbieter sind nicht zugelassen.
+              <CardDescription className="text-pretty leading-relaxed">
+                {mode === 'login'
+                  ? 'Melden Sie sich mit Ihrer Firmen-E-Mail an. Freemail-Anbieter sind nicht zugelassen.'
+                  : 'Testen Sie DPP-Flash unverbindlich — ESPR-konform, in 5 Minuten zum Produktpass-QR-Code, ohne IT-Fachwissen.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -92,11 +121,11 @@ export default function DashboardV2LoginPage() {
                   setError(null);
                 }}
               >
-                <TabsList className="mb-6 grid w-full grid-cols-2 bg-slate-100/80">
-                  <TabsTrigger value="login" className="cursor-pointer data-[state=active]:bg-white">
+                <TabsList className="mb-6 grid w-full grid-cols-2 bg-muted">
+                  <TabsTrigger value="login" className="cursor-pointer data-active:bg-card">
                     Anmelden
                   </TabsTrigger>
-                  <TabsTrigger value="register" className="cursor-pointer data-[state=active]:bg-white">
+                  <TabsTrigger value="register" className="cursor-pointer data-active:bg-card">
                     Registrieren
                   </TabsTrigger>
                 </TabsList>
@@ -113,6 +142,7 @@ export default function DashboardV2LoginPage() {
                     />
                   </TabsContent>
                   <TabsContent value="register" className="mt-0 space-y-4">
+                    <RegisterPilotHighlights />
                     <LoginFields
                       email={email}
                       password={password}
@@ -134,23 +164,67 @@ export default function DashboardV2LoginPage() {
                     className="w-full cursor-pointer"
                     disabled={submitting}
                   >
-                    {mode === 'login' ? 'Anmelden' : 'Konto anlegen & starten'}
+                    {mode === 'login' ? 'Anmelden' : 'Pilot-Phase starten'}
                   </Button>
-                  <p className="text-center text-xs text-slate-500">{DEMO_PASSWORD_HINT}</p>
+                  <p className="text-center text-xs text-muted-foreground">{DEMO_PASSWORD_HINT}</p>
                 </form>
               </Tabs>
             </CardContent>
           </Card>
+          </EnterMotion>
 
-          <p className="mt-6 text-center text-[11px] text-slate-500">
+          {mode === 'register' ? (
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              Made in Germany · DSGVO-konform · Daten bleiben in Deutschland
+            </p>
+          ) : null}
+
+          <p className="mt-6 text-center text-[11px] text-muted-foreground">
+            <a
+              href="https://dppflash.de/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              dppflash.de
+            </a>
+            {' · '}
             <span className="underline">Impressum</span>
             {' · '}
             <span className="underline">Datenschutz</span>
-            {' · '}
-            <span className="underline">AGB</span>
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+function RegisterPilotHighlights() {
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Warum DPP-Flash?
+      </p>
+      <ul className="space-y-3">
+        {REGISTER_VALUE_PROPS.map(({ icon: Icon, title, description }) => (
+          <li key={title} className="flex gap-3">
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+              aria-hidden
+            >
+              <Icon className="h-4 w-4" strokeWidth={2} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-snug text-foreground">{title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+        <span className="font-medium text-foreground">Fristen laufen:</span> Batteriepass ab Februar
+        2027 — ohne DPP fehlt der Konformitätsnachweis.
+      </p>
     </div>
   );
 }
@@ -181,7 +255,7 @@ function LoginFields({
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
           placeholder="name@ihre-firma.de"
-          className="h-10 bg-white"
+          className="h-10 bg-background"
         />
       </div>
       <div className="space-y-2">
@@ -193,7 +267,7 @@ function LoginFields({
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
           placeholder="••••••••"
-          className="h-10 bg-white"
+          className="h-10 bg-background"
         />
       </div>
     </>

@@ -3,22 +3,33 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, LogOut, Moon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, Moon, Settings } from 'lucide-react';
 import { useSession } from '@/app/dashboard/v2/context/SessionProvider';
 import { V2_DASHBOARD_NAV } from '@/app/dashboard/v2/lib/navItems';
 import { cn } from 'cn';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { V2BrandLogo } from '@/app/dashboard/v2/components/V2BrandLogo';
+import { useTheme } from '@/components/theme-provider';
+import { Switch } from '@/components/ui/switch';
 
 const SIDEBAR_COLLAPSED_KEY = 'dppflash_v2_sidebar_collapsed';
 
 export function V2Sidebar() {
   const pathname = usePathname() ?? '';
   const { session, logout } = useSession();
+  const { theme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     try {
@@ -48,7 +59,7 @@ export function V2Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden shrink-0 flex-col border-r border-slate-200/90 bg-white transition-[width] duration-200 ease-out md:flex',
+        'hidden shrink-0 flex-col border-r border-border bg-card text-card-foreground transition-[width] duration-200 ease-out md:flex',
         collapsed ? 'w-[4.5rem]' : 'w-64',
       )}
     >
@@ -78,7 +89,7 @@ export function V2Sidebar() {
 
       <nav className="flex flex-1 flex-col overflow-y-auto p-2" aria-label="Hauptnavigation">
         {!collapsed ? (
-          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Dashboard
           </p>
         ) : null}
@@ -87,11 +98,11 @@ export function V2Sidebar() {
             const active = item.match(pathname);
             const Icon = item.icon;
             const linkClassName = cn(
-              'flex cursor-pointer items-center rounded-lg text-sm font-medium transition-colors',
+              'flex cursor-pointer items-center rounded-lg text-sm font-medium transition-[background-color,color,transform] duration-150 motion-safe:active:scale-[0.98]',
               collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
               active
-                ? 'bg-primary/10 text-primary'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                ? 'bg-primary/10 text-primary shadow-sm'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             );
             const link = (
               <Link key={item.href} href={item.href} className={linkClassName}>
@@ -113,26 +124,31 @@ export function V2Sidebar() {
         </div>
       </nav>
 
-      <div className={cn('mt-auto border-t border-slate-200/80', collapsed ? 'p-2' : 'p-4')}>
+      <div className={cn('mt-auto border-t border-border', collapsed ? 'p-2' : 'p-4')}>
         <div
           className={cn(
-            'mb-3 flex items-center rounded-lg border border-slate-200/80',
-            collapsed ? 'justify-center px-2 py-2' : 'justify-between px-3 py-2',
+            'mb-3 flex items-center rounded-lg border border-border bg-muted/30',
+            collapsed ? 'justify-center px-2 py-2' : 'justify-between gap-2 px-3 py-2',
           )}
         >
-          {!collapsed ? <span className="text-xs text-slate-600">Dark Mode</span> : null}
-          <button
-            type="button"
-            className="cursor-pointer rounded-md p-1 text-slate-400"
-            aria-label="Dark Mode (Demo, inaktiv)"
-            title="Dark Mode"
-          >
-            <Moon className="h-4 w-4" />
-          </button>
+          {!collapsed ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Moon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Dark Mode
+            </span>
+          ) : null}
+          <Switch
+            size="sm"
+            checked={isDark}
+            onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+            aria-label={isDark ? 'Dark Mode aktiv' : 'Dark Mode aus'}
+            title={isDark ? 'Zu hellem Modus wechseln' : 'Zu Dark Mode wechseln'}
+            className="cursor-pointer"
+          />
         </div>
 
         {!collapsed ? (
-          <p className="mb-2 text-center text-[10px] text-slate-400">
+          <p className="mb-2 text-center text-[10px] text-muted-foreground">
             <span className="underline">Impressum</span>
             {' · '}
             <span className="underline">Datenschutz</span>
@@ -143,33 +159,50 @@ export function V2Sidebar() {
 
         <Separator className={cn('my-3', collapsed && 'my-2')} />
 
-        <div className={cn('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-3')}>
-          <Avatar className="h-10 w-10" title={displayName}>
-            <AvatarFallback className="bg-primary/15 text-sm font-semibold text-primary">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-900">{displayName}</p>
-              <p className="truncate text-xs text-slate-500">{session?.companyDomain ?? '—'}</p>
-            </div>
-          ) : null}
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size={collapsed ? 'icon' : 'sm'}
-          className={cn(
-            'mt-2 cursor-pointer text-slate-600 hover:text-slate-900',
-            collapsed ? 'mx-auto' : 'w-full justify-start px-0',
-          )}
-          onClick={logout}
-          aria-label="Abmelden"
-          title="Abmelden"
-        >
-          {collapsed ? <LogOut className="h-4 w-4" aria-hidden /> : 'Abmelden'}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              'flex w-full cursor-pointer items-center rounded-lg text-left outline-none transition-[background-color,box-shadow] duration-150 hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50',
+              collapsed ? 'justify-center p-1' : 'gap-3 p-1',
+            )}
+            aria-label="Kontomenü"
+          >
+            <Avatar className="h-10 w-10" title={displayName}>
+              <AvatarFallback className="bg-primary/15 text-sm font-semibold text-primary">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">{displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{session?.companyDomain ?? '—'}</p>
+              </div>
+            ) : null}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align={collapsed ? 'center' : 'start'} className="w-52">
+            <DropdownMenuLabel className="font-normal">
+              <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
+              <p className="truncate text-xs text-muted-foreground">{session?.email ?? '—'}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              render={<Link href="/dashboard/v2/einstellungen" />}
+            >
+              <Settings className="h-4 w-4" aria-hidden />
+              Einstellungen
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              className="cursor-pointer"
+              onClick={logout}
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              Abmelden
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   );

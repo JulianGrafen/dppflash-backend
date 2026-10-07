@@ -50,26 +50,26 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
   }
 
   if (!draft) {
-    return <p className="text-sm text-slate-500">Entwurf wird geladen…</p>;
+    return <p className="text-sm text-muted-foreground">Entwurf wird geladen…</p>;
   }
 
   const statusLabel = draft.status === 'published' ? 'Veröffentlicht' : 'Entwurf';
 
   return (
     <div className="-mx-2 min-h-[calc(100vh-6rem)] sm:-mx-4">
-      <header className="mb-4 flex flex-col gap-4 border-b border-slate-200/90 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+      <header className="mb-4 flex flex-col gap-4 border-b border-border bg-card px-4 py-4 text-card-foreground sm:flex-row sm:items-start sm:justify-between sm:px-6">
         <div className="flex min-w-0 flex-1 items-start gap-4">
           <PassportEditorProductImage passId={passId} productName={draft.productName} />
           <div className="min-w-0 space-y-2">
-          <nav className="text-xs text-slate-500" aria-label="Breadcrumb">
-            <Link href="/dashboard/v2/produktpaesse" className="hover:text-slate-800">
+          <nav className="text-xs text-muted-foreground" aria-label="Breadcrumb">
+            <Link href="/dashboard/v2/produktpaesse" className="hover:text-foreground">
               Workspace
             </Link>
             <span className="mx-1.5">›</span>
-            <span className="text-slate-700">Produktpässe</span>
+            <span className="text-foreground/80">Produktpässe</span>
           </nav>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-[#0c1929]">{draft.productName}</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">{draft.productName}</h1>
             <Badge variant="outline" className="gap-1 font-normal">
               {statusLabel}
               {!passportSummary.criticalOk ? (
@@ -78,7 +78,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
             </Badge>
           </div>
           <p
-            className="text-sm text-slate-500 tabular-nums"
+            className="text-sm text-muted-foreground tabular-nums"
             aria-label="Produktkennungen"
           >
             {formatSkuEanSubtitle(draft)}
@@ -110,7 +110,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
       </header>
       {publishFeedback ? (
         <p
-          className={`mx-4 mb-2 text-sm sm:mx-6 ${publishFeedback.startsWith('Veröffentlicht') ? 'text-emerald-800' : 'text-red-700'}`}
+          className={`mx-4 mb-2 text-sm sm:mx-6 ${publishFeedback.startsWith('Veröffentlicht') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}
           role="status"
         >
           {publishFeedback}

@@ -21,6 +21,7 @@ import {
   ensurePassportFieldsOnDraft,
   resolveDraftPublishPassId,
 } from '@/app/dashboard/v2/mock/passportFields';
+import { suggestedSupplierForPassportField } from '@/app/dashboard/v2/lib/passportSupplierHints';
 import { resolvePassportFieldSource } from '@/app/dashboard/v2/mock/passportFieldSource';
 import { loadDraft, upsertDraft } from '@/app/dashboard/v2/mock/storage';
 import type { DraftField, DraftPassport, PassportFieldValueState } from '@/app/dashboard/v2/mock/types';
@@ -36,19 +37,33 @@ type DraftContextValue = {
   confirmPassportField: (key: string) => void;
   confirmField: (path: string) => void;
   markSupplierPending: (path: string) => void;
+  markPassportSupplierPending: (passportFieldKey: string) => void;
+  markPassportSuppliersPending: (passportFieldKeys: readonly string[]) => void;
   publish: () => Promise<{ publicUrl: string } | null>;
   syncPreview: () => Promise<string | null>;
 };
 
 const DraftContext = createContext<DraftContextValue | null>(null);
 
-function persist(draft: DraftPassport): DraftPassport {
+function prepareDraft(draft: DraftPassport): DraftPassport {
   const passportFields = ensurePassportFieldsOnDraft(draft);
-  const updated = {
+  return {
     ...draft,
     passportFields,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function schedulePersist(draft: DraftPassport): void {
+  if (typeof window === 'undefined') {
+    upsertDraft(draft);
+    return;
+  }
+  window.requestIdleCallback(() => upsertDraft(draft), { timeout: 500 });
+}
+
+function persist(draft: DraftPassport): DraftPassport {
+  const updated = prepareDraft(draft);
   upsertDraft(updated);
   return updated;
 }
@@ -65,11 +80,14 @@ export function DraftProvider({
   const load = useCallback((id: string) => {
     const existing = loadDraft(id);
     if (existing) {
-      setDraft(persist(existing));
+      const prepared = prepareDraft(existing);
+      setDraft(prepared);
+      schedulePersist(prepared);
       return;
     }
-    const created = persist(createEmptyDraft(id, 'upload'));
+    const created = prepareDraft(createEmptyDraft(id, 'upload'));
     setDraft(created);
+    schedulePersist(created);
   }, []);
 
   useEffect(() => {
@@ -157,6 +175,58 @@ export function DraftProvider({
     });
   }, [updateField]);
 
+  const markPassportSupplierPending = useCallback((key: string) => {
+    setDraft((current) => {
+      if (!current?.passportFields?.[key]) {
+        return current;
+      }
+      const suggested = suggestedSupplierForPassportField(key);
+      const passportFields = { ...current.passportFields };
+      const prev = passportFields[key];
+      passportFields[key] = {
+        ...prev,
+        provenance: 'pending_supplier',
+        supplierSentAt: new Date().toISOString(),
+        supplierHint: prev.supplierHint ?? suggested.supplierHint,
+        supplierEmail: prev.supplierEmail ?? suggested.supplierEmail,
+      };
+      return persist({ ...current, passportFields });
+    });
+  }, []);
+
+  const markPassportSuppliersPending = useCallback((keys: readonly string[]) => {
+    if (keys.length === 0) {
+      return;
+    }
+    const sentAt = new Date().toISOString();
+    setDraft((current) => {
+      if (!current?.passportFields) {
+        return current;
+      }
+      const passportFields = { ...current.passportFields };
+      let changed = false;
+      for (const key of keys) {
+        const prev = passportFields[key];
+        if (!prev) {
+          continue;
+        }
+        const suggested = suggestedSupplierForPassportField(key);
+        passportFields[key] = {
+          ...prev,
+          provenance: 'pending_supplier',
+          supplierSentAt: sentAt,
+          supplierHint: prev.supplierHint ?? suggested.supplierHint,
+          supplierEmail: prev.supplierEmail ?? suggested.supplierEmail,
+        };
+        changed = true;
+      }
+      if (!changed) {
+        return current;
+      }
+      return persist({ ...current, passportFields });
+    });
+  }, []);
+
   const pushPassportToServer = useCallback(async (): Promise<{ publicUrl: string; passId: string } | null> => {
     if (!draft?.passportFields) {
       return null;
@@ -222,6 +292,8 @@ export function DraftProvider({
       confirmPassportField,
       confirmField,
       markSupplierPending,
+      markPassportSupplierPending,
+      markPassportSuppliersPending,
       publish,
       syncPreview,
     }),
@@ -236,6 +308,8 @@ export function DraftProvider({
       confirmPassportField,
       confirmField,
       markSupplierPending,
+      markPassportSupplierPending,
+      markPassportSuppliersPending,
       publish,
       syncPreview,
     ],

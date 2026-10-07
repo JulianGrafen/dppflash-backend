@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useDraft } from '@/app/dashboard/v2/context/DraftProvider';
 import { SupplierOutreachDialog } from '@/app/dashboard/v2/components/SupplierOutreachDialog';
 import { WizardLayout } from '../WizardLayout';
+import { legacyFieldToSupplierView } from '@/app/dashboard/v2/lib/supplierRequestView';
 import type { DraftField } from '@/app/dashboard/v2/mock/types';
 import { LinkButton } from '@/app/dashboard/v2/components/LinkButton';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ export default function GapsStepPage() {
   const { draft, markSupplierPending, replace } = useDraft();
   const params = useParams<{ draftId: string }>();
   const [outreachField, setOutreachField] = useState<DraftField | null>(null);
+  const outreachView = outreachField ? legacyFieldToSupplierView(outreachField) : null;
 
   if (!draft) {
     return null;
@@ -61,7 +63,7 @@ export default function GapsStepPage() {
       <SupplierOutreachDialog
         open={outreachField !== null}
         draftId={params.draftId}
-        field={outreachField}
+        field={outreachView}
         onClose={() => setOutreachField(null)}
         onSend={() => {
           if (outreachField) {

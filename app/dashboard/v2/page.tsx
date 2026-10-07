@@ -12,6 +12,7 @@ import { loadAllDrafts } from '@/app/dashboard/v2/mock/storage';
 import type { DraftPassport } from '@/app/dashboard/v2/mock/types';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EnterMotion, enterMotionDelay } from '@/components/ui/enter-motion';
 
 export default function DashboardV2HubPage() {
   const { session } = useSession();
@@ -34,19 +35,22 @@ export default function DashboardV2HubPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight text-[#0c1929]">Hallo {firstName}!</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">{subtitle}</p>
-      </header>
+      <EnterMotion>
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Hallo {firstName}!</h1>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">{subtitle}</p>
+        </header>
+      </EnterMotion>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <V2StatCard label="Aktive Produktpässe" value={stats.activePasses} />
-        <V2StatCard label="Offene Lücken" value={stats.openGaps} />
-        <V2StatCard label="Zu prüfen (KI)" value={stats.openReviews} />
+        <V2StatCard label="Aktive Produktpässe" value={stats.activePasses} delayMs={enterMotionDelay(0)} />
+        <V2StatCard label="Offene Lücken" value={stats.openGaps} delayMs={enterMotionDelay(1)} />
+        <V2StatCard label="Zu prüfen (KI)" value={stats.openReviews} delayMs={enterMotionDelay(2)} />
       </div>
 
       {integrationOpen ? (
-        <Card className="border-amber-200 bg-amber-50/50 shadow-sm">
+        <EnterMotion delayMs={enterMotionDelay(3)}>
+        <Card variant="elevated" className="border-amber-200 bg-amber-50/50 dark:border-amber-900/60 dark:bg-amber-950/30">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
             <p className="text-sm text-amber-950">
               Integrationen unvollständig — SAP, PIM und Datenimport im Onboarding abschließen.
@@ -56,9 +60,14 @@ export default function DashboardV2HubPage() {
             </LinkButton>
           </CardContent>
         </Card>
+        </EnterMotion>
       ) : null}
 
-      <Card className="border-sky-200 bg-gradient-to-br from-sky-50/80 to-white shadow-sm">
+      <EnterMotion delayMs={enterMotionDelay(4)}>
+      <Card
+        variant="elevated"
+        className="border-sky-200 bg-gradient-to-br from-sky-50/80 to-card dark:border-sky-900/50 dark:from-sky-950/40 dark:to-card"
+      >
         <CardHeader>
           <CardTitle className="text-lg">Schnellstart</CardTitle>
         </CardHeader>
@@ -112,6 +121,7 @@ export default function DashboardV2HubPage() {
           </div>
         </CardContent>
       </Card>
+      </EnterMotion>
     </div>
   );
 }

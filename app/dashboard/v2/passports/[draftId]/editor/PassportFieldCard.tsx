@@ -7,6 +7,7 @@ import { passportFieldLabel, passportFieldNote } from '@/app/domain/battery/pass
 import type { PassportFieldValueState } from '@/app/dashboard/v2/mock/types';
 import { passportFieldNeedsReview } from '@/app/dashboard/v2/mock/passportFields';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +17,6 @@ import type { EditorContentLocale } from './EditorContentLocaleContext';
 import {
   fieldSupportsLocalization,
   fieldValueForContentLocale,
-  localizedFieldMissingLocales,
   passportFieldHasValue,
 } from '@/app/dashboard/v2/mock/passportFieldLocalization';
 import { resolvePassportFieldSource } from '@/app/dashboard/v2/mock/passportFieldSource';
@@ -36,7 +36,7 @@ function FieldComplianceCheck({ compliant }: { readonly compliant: boolean }) {
   }
   return (
     <span
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80"
+      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800"
       title="Vollständig & compliant"
       aria-label="Compliant"
     >
@@ -52,13 +52,13 @@ function FieldStatusPills({
   surface,
   contentLocale,
 }: FieldStatusPillsProps & { contentLocale: EditorContentLocale }) {
-  const tierSurface = surface === 'expanded' ? 'bg-white' : 'bg-slate-50';
+  const tierSurface = surface === 'expanded' ? 'bg-card' : 'bg-muted/40';
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center justify-end gap-1.5">
       <span
         className={cn(
-          'rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-500',
+          'rounded border border-border px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground',
           tierSurface,
         )}
         title={def.accessTier}
@@ -71,13 +71,30 @@ function FieldStatusPills({
         </Badge>
       ) : null}
       {isAiSuggestion ? (
-        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-violet-700">
+        <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
           <Sparkles className="h-3 w-3" aria-hidden />
           {surface === 'expanded' ? `AI ${Math.round(state.confidence * 100)}%` : 'AI'}
         </span>
       ) : null}
     </div>
   );
+}
+
+function fieldCardSurfaceClass(
+  isBlocker: boolean,
+  isCompliant: boolean,
+  isAiSuggestion: boolean,
+): string {
+  if (isBlocker) {
+    return 'border-red-400 dark:border-red-500/70';
+  }
+  if (isCompliant) {
+    return 'border-emerald-200/90 bg-emerald-50/20 dark:border-emerald-800/60 dark:bg-emerald-950/20';
+  }
+  if (isAiSuggestion) {
+    return 'border-violet-200 bg-violet-50/30 dark:border-violet-800/50 dark:bg-violet-950/25';
+  }
+  return 'border-border bg-card';
 }
 
 type PassportFieldCardProps = {
@@ -99,13 +116,10 @@ export function PassportFieldCard({
   onUpdate,
   onConfirm,
 }: PassportFieldCardProps) {
-  const [hashExpanded, setHashExpanded] = useState(false);
   const [userExpanded, setUserExpanded] = useState(false);
   const needsReview = passportFieldNeedsReview(state);
   const isAiSuggestion = needsReview && state.provenance === 'ai';
-  const isLocalized = fieldSupportsLocalization(def);
   const isBlocker = state.mandatory && !passportFieldHasValue(state, def);
-  const missingLocales = localizedFieldMissingLocales(state, def);
   const isCompliant = passportFieldHasValue(state, def) && !passportFieldNeedsReview(state);
   const activeLocale = fieldSupportsLocalization(def) ? contentLocale : undefined;
   const displayValue = activeLocale
@@ -117,28 +131,27 @@ export function PassportFieldCard({
   const fieldAnchorId = `field-${def.key}`;
 
   useEffect(() => {
-    function syncHash() {
+    function syncFromHash() {
       const hash = window.location.hash.slice(1);
-      const isTarget = hash === fieldAnchorId;
-      setHashExpanded(isTarget);
-      if (!isTarget) {
+      if (hash === fieldAnchorId) {
+        setUserExpanded(true);
+        return;
+      }
+      if (hash.startsWith('field-')) {
         setUserExpanded(false);
       }
     }
-    syncHash();
-    window.addEventListener('hashchange', syncHash);
-    return () => window.removeEventListener('hashchange', syncHash);
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    return () => window.removeEventListener('hashchange', syncFromHash);
   }, [fieldAnchorId]);
 
-  const expanded = sectionDetailsOpen || hashExpanded || userExpanded;
+  const expanded = sectionDetailsOpen || userExpanded;
   const auditSource =
     state.source ?? resolvePassportFieldSource(def.key, state);
 
   function openField() {
     setUserExpanded(true);
-    if (window.location.hash.slice(1) !== fieldAnchorId) {
-      window.location.hash = fieldAnchorId;
-    }
   }
 
   function handleClose() {
@@ -147,164 +160,139 @@ export function PassportFieldCard({
       onCloseSectionDetails();
       return;
     }
-    if (hashExpanded) {
+    if (window.location.hash.slice(1) === fieldAnchorId) {
       const { pathname, search } = window.location;
       window.history.replaceState(null, '', `${pathname}${search}`);
-      setHashExpanded(false);
     }
   }
 
-  if (!expanded) {
-    return (
+  function handleOpenChange(open: boolean) {
+    if (open) {
+      openField();
+      return;
+    }
+    handleClose();
+  }
+
+  const surfaceClass = fieldCardSurfaceClass(isBlocker, isCompliant, isAiSuggestion);
+
+  return (
+    <Collapsible open={expanded} onOpenChange={handleOpenChange}>
       <article
         id={fieldAnchorId}
-        role="button"
-        tabIndex={0}
-        aria-expanded={false}
-        onClick={openField}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            openField();
-          }
-        }}
         className={cn(
-          'scroll-mt-28 cursor-pointer rounded-xl border px-4 py-3 transition-colors bg-white hover:bg-slate-50/90',
-          isBlocker
-            ? 'border-red-400'
-            : isCompliant
-              ? 'border-emerald-200/90 bg-emerald-50/20'
-              : isAiSuggestion
-                ? 'border-violet-200 bg-violet-50/30'
-                : 'border-slate-200/90',
+          'overflow-hidden rounded-xl border shadow-sm transition-[box-shadow,border-color] duration-200 motion-safe:hover:shadow-md',
+          surfaceClass,
+          expanded && 'bg-muted/20',
         )}
       >
-        <div className="flex items-center gap-3">
+        <CollapsibleTrigger
+          className={cn(
+            'flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left outline-none transition-colors duration-150',
+            'hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset',
+            !expanded && 'motion-safe:active:scale-[0.995]',
+          )}
+        >
           <FieldComplianceCheck compliant={isCompliant} />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{fieldLabel}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+            {fieldLabel}
+          </span>
           <FieldStatusPills
             def={def}
             state={state}
             isAiSuggestion={isAiSuggestion}
-            surface="collapsed"
+            surface={expanded ? 'expanded' : 'collapsed'}
             contentLocale={contentLocale}
           />
-        </div>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+              expanded && 'rotate-180',
+            )}
+            aria-hidden
+          />
+        </CollapsibleTrigger>
+
+        <CollapsibleContent className="border-t border-border/60">
+          <div className="space-y-3 px-4 py-4">
+            <Label htmlFor={inputId} className="sr-only">
+              {fieldLabel}
+            </Label>
+            <p className="text-xs leading-relaxed text-muted-foreground">{fieldNote}</p>
+
+            {def.datatype === 'TEXT list' ? (
+              <Textarea
+                id={inputId}
+                rows={3}
+                className="bg-background"
+                value={displayValue}
+                onChange={(e) => onUpdate(e.target.value, activeLocale)}
+              />
+            ) : (
+              <Input
+                id={inputId}
+                className="bg-background"
+                value={displayValue}
+                onChange={(e) => onUpdate(e.target.value, activeLocale)}
+              />
+            )}
+
+            {isBlocker ? (
+              <p className="text-xs font-medium text-red-700 dark:text-red-400">
+                {contentLocale === 'de'
+                  ? 'Pflichtfeld fehlt — Publish-Blocker.'
+                  : 'Mandatory field missing — blocks publish.'}
+              </p>
+            ) : null}
+
+            {auditSource ? (
+              <PassportFieldAuditTrail
+                fieldLabel={fieldLabel}
+                source={auditSource}
+                confidence={state.confidence}
+              />
+            ) : null}
+
+            {isAiSuggestion ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => {
+                    onConfirm();
+                    handleClose();
+                  }}
+                >
+                  Accept
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="cursor-pointer text-muted-foreground"
+                  onClick={() => onUpdate('', activeLocale)}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            ) : needsReview ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="cursor-pointer"
+                onClick={() => {
+                  onConfirm();
+                  handleClose();
+                }}
+              >
+                Bestätigen
+              </Button>
+            ) : null}
+          </div>
+        </CollapsibleContent>
       </article>
-    );
-  }
-
-  return (
-    <article
-      id={fieldAnchorId}
-      aria-expanded={true}
-      className={cn(
-        'scroll-mt-28 rounded-xl border p-4 transition-colors bg-slate-50/30',
-        isBlocker
-          ? 'border-red-400'
-          : isCompliant
-            ? 'border-emerald-200/90 bg-emerald-50/25'
-            : isAiSuggestion
-              ? 'border-violet-200 bg-violet-50/40'
-              : 'border-slate-200/90',
-      )}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <FieldComplianceCheck compliant={isCompliant} />
-        <Label htmlFor={inputId} className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
-          {fieldLabel}
-        </Label>
-        <FieldStatusPills
-          def={def}
-          state={state}
-          isAiSuggestion={isAiSuggestion}
-          surface="expanded"
-          contentLocale={contentLocale}
-        />
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="shrink-0 cursor-pointer gap-1 text-slate-600"
-          onClick={handleClose}
-        >
-          <ChevronDown className="h-4 w-4 rotate-180" aria-hidden />
-          Schließen
-        </Button>
-      </div>
-
-      <p className="mb-3 text-xs leading-relaxed text-slate-500">{fieldNote}</p>
-
-      {def.datatype === 'TEXT list' ? (
-        <Textarea
-          id={inputId}
-          rows={3}
-          className="bg-white"
-          value={displayValue}
-          onChange={(e) => onUpdate(e.target.value, activeLocale)}
-        />
-      ) : (
-        <Input
-          id={inputId}
-          className="bg-white"
-          value={displayValue}
-          onChange={(e) => onUpdate(e.target.value, activeLocale)}
-        />
-      )}
-
-      {isBlocker ? (
-        <p className="mt-2 text-xs font-medium text-red-700">
-          {isLocalized && missingLocales.length > 0
-            ? `Pflichtfeld — ${missingLocales.map((l) => l.toUpperCase()).join(' und ')} über Umschalter oben ausfüllen.`
-            : 'Pflichtfeld fehlt — Publish-Blocker.'}
-        </p>
-      ) : null}
-
-      {auditSource ? (
-        <PassportFieldAuditTrail
-          fieldLabel={fieldLabel}
-          source={auditSource}
-          confidence={state.confidence}
-        />
-      ) : null}
-
-      {isAiSuggestion ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            className="cursor-pointer"
-            onClick={() => {
-              onConfirm();
-              handleClose();
-            }}
-          >
-            Accept
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="cursor-pointer text-slate-600"
-            onClick={() => onUpdate('', activeLocale)}
-          >
-            Dismiss
-          </Button>
-        </div>
-      ) : needsReview ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="mt-3 cursor-pointer"
-          onClick={() => {
-            onConfirm();
-            handleClose();
-          }}
-        >
-          Bestätigen
-        </Button>
-      ) : null}
-    </article>
+    </Collapsible>
   );
 }

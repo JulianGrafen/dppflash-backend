@@ -4,7 +4,12 @@ export type DocumentStatus = 'queued' | 'processing' | 'done' | 'error';
 
 export type FieldProvenance = 'ai' | 'confirmed' | 'missing' | 'pending_supplier';
 
-export type PassportFieldProvenance = 'empty' | 'ai' | 'confirmed' | 'missing';
+export type PassportFieldProvenance =
+  | 'empty'
+  | 'ai'
+  | 'confirmed'
+  | 'missing'
+  | 'pending_supplier';
 
 export type PassportFieldSourceKind = 'pdf' | 'word' | 'excel' | 'image' | 'sap_s4' | 'api';
 
@@ -30,6 +35,10 @@ export type PassportFieldValueState = {
   confidence: number;
   mandatory: boolean;
   source?: PassportFieldSourceAttribution;
+  supplierHint?: string;
+  supplierEmail?: string;
+  /** ISO timestamp when supplier outreach was sent (mock). */
+  supplierSentAt?: string;
 };
 
 export type FieldBlock =

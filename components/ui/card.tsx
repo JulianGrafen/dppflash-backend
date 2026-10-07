@@ -1,19 +1,37 @@
 import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
+
+const cardVariants = cva(
+  "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+  {
+    variants: {
+      variant: {
+        default: "",
+        elevated:
+          "shadow-sm transition-[box-shadow,transform] duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md",
+        interactive:
+          "cursor-pointer shadow-sm transition-[box-shadow,transform,background-color] duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-md motion-safe:active:scale-[0.99]",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
 
 function Card({
   className,
   size = "default",
+  variant,
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> &
+  VariantProps<typeof cardVariants> & { size?: "default" | "sm" }) {
   return (
     <div
       data-slot="card"
       data-size={size}
-      className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground ring-1 ring-foreground/10 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
-      )}
+      className={cn(cardVariants({ variant }), className)}
       {...props}
     />
   )
@@ -99,4 +117,5 @@ export {
   CardAction,
   CardDescription,
   CardContent,
+  cardVariants,
 }

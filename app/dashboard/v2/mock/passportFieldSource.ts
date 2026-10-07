@@ -136,6 +136,9 @@ export function attachAuditSourcesToPassportFields<
 >(fields: Record<string, T>): Record<string, T> {
   const next: Record<string, T> = { ...fields };
   for (const [key, state] of Object.entries(next)) {
+    if (state.source) {
+      continue;
+    }
     const source = resolvePassportFieldSource(key, state);
     if (source) {
       next[key] = { ...state, source };

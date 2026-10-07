@@ -1,9 +1,9 @@
-import type { DraftField } from '@/app/dashboard/v2/mock/types';
+import type { SupplierRequestView } from '@/app/dashboard/v2/lib/supplierRequestView';
 import { cn } from 'cn';
 
 const STEPS = ['Nicht gesendet', 'Gesendet', 'Durchgeführt'] as const;
 
-export function supplierOutreachStepIndex(field: DraftField): number {
+export function supplierOutreachStepIndex(field: SupplierRequestView): number {
   if (field.provenance === 'confirmed') {
     return 2;
   }
@@ -17,53 +17,66 @@ export function SupplierRequestStatusBar({
   field,
   className,
 }: {
-  readonly field: DraftField;
+  readonly field: SupplierRequestView;
   readonly className?: string;
 }) {
   const activeIndex = supplierOutreachStepIndex(field);
 
   return (
-    <div className={cn('mt-3 max-w-md', className)} role="group" aria-label="Anfragestatus">
-      <div className="flex items-center">
+    <div className={cn('mt-3 w-full max-w-xl', className)} role="group" aria-label="Anfragestatus">
+      <ol className="grid grid-cols-3">
         {STEPS.map((label, index) => {
-          const done = index < activeIndex;
+          const complete = index < activeIndex;
           const active = index === activeIndex;
+          const isFirst = index === 0;
           const isLast = index === STEPS.length - 1;
+          const segmentBeforeComplete = index > 0 && activeIndex >= index;
+          const segmentAfterComplete = !isLast && activeIndex > index;
 
           return (
-            <div key={label} className={cn('flex items-center', !isLast && 'flex-1')}>
-              <div className="flex flex-col items-center gap-1.5">
+            <li key={label} className="flex min-w-0 flex-col items-center">
+              <div className="relative flex h-5 w-full items-center justify-center">
+                {!isFirst ? (
+                  <span
+                    className={cn(
+                      'absolute top-1/2 right-1/2 left-0 h-1 -translate-y-1/2 rounded-full',
+                      segmentBeforeComplete ? 'bg-primary' : 'bg-muted',
+                    )}
+                    aria-hidden
+                  />
+                ) : null}
                 <span
                   className={cn(
-                    'flex h-3 w-3 shrink-0 rounded-full border-2 transition-colors',
-                    (done || active) && 'border-primary bg-primary',
-                    !done && !active && 'border-slate-200 bg-white',
-                    active && 'ring-2 ring-primary/20',
+                    'relative z-10 box-border size-2.5 shrink-0 rounded-full border-2 border-background shadow-sm',
+                    (complete || active) && 'border-primary bg-primary',
+                    !complete && !active && 'border-muted-foreground/25 bg-muted',
+                    active && 'ring-2 ring-primary/30 ring-offset-2 ring-offset-card',
                   )}
                   aria-current={active ? 'step' : undefined}
                 />
-                <span
-                  className={cn(
-                    'max-w-[5.5rem] text-center text-[10px] font-medium leading-tight sm:max-w-none',
-                    active || done ? 'text-slate-800' : 'text-slate-400',
-                  )}
-                >
-                  {label}
-                </span>
+                {!isLast ? (
+                  <span
+                    className={cn(
+                      'absolute top-1/2 left-1/2 right-0 h-1 -translate-y-1/2 rounded-full',
+                      segmentAfterComplete ? 'bg-primary' : 'bg-muted',
+                    )}
+                    aria-hidden
+                  />
+                ) : null}
               </div>
-              {!isLast ? (
-                <div
-                  className={cn(
-                    'mx-1 mb-5 h-0.5 flex-1 min-w-[1rem] rounded-full',
-                    index < activeIndex ? 'bg-primary' : 'bg-slate-200',
-                  )}
-                  aria-hidden
-                />
-              ) : null}
-            </div>
+              <span
+                className={cn(
+                  'mt-2 w-full px-1 text-center text-[10px] font-medium leading-snug sm:text-[11px]',
+                  active && 'font-semibold text-primary',
+                  !active && (complete ? 'text-foreground' : 'text-muted-foreground'),
+                )}
+              >
+                {label}
+              </span>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }

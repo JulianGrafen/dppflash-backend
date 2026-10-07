@@ -46,31 +46,34 @@ export function PassportFieldCategoryPanel({
     return state && passportFieldHasValue(state, def);
   }).length;
 
+  const showDetailsToggle = fields.length > 4;
+  const bulkDetailsOpen = showDetailsToggle && detailsOpen;
+
   return (
     <div
       className={cn(
         'rounded-xl border shadow-sm',
         isTelemetry
-          ? 'border-sky-200/90 bg-gradient-to-b from-sky-50/50 to-white'
-          : 'border-slate-200/90 bg-white',
+          ? 'border-sky-300/50 bg-gradient-to-b from-sky-500/10 to-card dark:border-sky-800/50 dark:from-sky-950/40'
+          : 'border-border bg-card text-card-foreground',
       )}
     >
-      <header className="border-b border-slate-100/80 px-6 py-4">
+      <header className="border-b border-border/80 px-6 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             {isTelemetry ? (
               <div className="mb-2 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-100 text-sky-800">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-800 dark:text-sky-200">
                   <Activity className="h-4 w-4" aria-hidden />
                 </span>
-                <Badge variant="secondary" className="bg-sky-100 text-[10px] text-sky-900 hover:bg-sky-100">
+                <Badge variant="secondary" className="bg-sky-500/15 text-[10px] text-sky-900 dark:text-sky-100">
                   BMS · API
                 </Badge>
               </div>
             ) : null}
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{title}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{title}</p>
             {isTelemetry ? (
-              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                 {contentLocale === 'de'
                   ? 'Individuelle Laufzeitdaten — SoH, SoC, Zyklen, Temperaturen (Demo-Sync).'
                   : 'Individual runtime data — SoH, SoC, cycles, temperatures (demo sync).'}
@@ -78,26 +81,28 @@ export function PassportFieldCategoryPanel({
             ) : null}
           </div>
           {isTelemetry ? (
-            <p className="text-left text-xs tabular-nums text-slate-600">
-              <span className="font-semibold text-slate-800">{filledCount}</span>
-              <span className="text-slate-500"> / {fields.length} befüllt</span>
+            <p className="text-left text-xs tabular-nums text-muted-foreground">
+              <span className="font-semibold text-foreground">{filledCount}</span>
+              <span> / {fields.length} befüllt</span>
             </p>
           ) : null}
         </div>
-        <div className="mt-3 flex justify-center">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="min-w-[8.5rem] cursor-pointer"
-            onClick={onToggleDetails}
-          >
-            {detailsOpen ? 'Kompakt' : 'Details'}
-          </Button>
-        </div>
+        {showDetailsToggle ? (
+          <div className="mt-3 flex justify-center">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="min-w-[8.5rem] cursor-pointer"
+              onClick={onToggleDetails}
+            >
+              {detailsOpen ? 'Kompakt' : 'Details'}
+            </Button>
+          </div>
+        ) : null}
       </header>
 
-      <div className="space-y-3 p-6">
+      <div className="space-y-3 p-6 [overflow-anchor:none]">
         {fields.map((def) => {
           const state = fieldStates[def.key];
           if (!state) {
@@ -110,7 +115,7 @@ export function PassportFieldCategoryPanel({
               def={def}
               state={state}
               contentLocale={contentLocale}
-              sectionDetailsOpen={detailsOpen}
+              sectionDetailsOpen={bulkDetailsOpen}
               onCloseSectionDetails={onCloseDetails}
               onUpdate={(value, locale) => onUpdate(def.key, value, locale)}
               onConfirm={() => onConfirm(def.key)}

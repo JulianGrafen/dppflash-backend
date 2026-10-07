@@ -66,7 +66,7 @@ export function EditorLocaleSwitcher({ className }: { readonly className?: strin
   return (
     <div
       className={cn(
-        'inline-flex rounded-lg border border-slate-200/90 bg-slate-50 p-0.5',
+        'inline-flex rounded-lg border border-border bg-muted/50 p-0.5',
         className,
       )}
       role="group"
@@ -80,8 +80,8 @@ export function EditorLocaleSwitcher({ className }: { readonly className?: strin
           className={cn(
             'min-w-[2.75rem] cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors',
             locale === lang
-              ? 'bg-white text-[#0c1929] shadow-sm ring-1 ring-slate-200/80'
-              : 'text-slate-600 hover:text-slate-900',
+              ? 'bg-card text-foreground shadow-sm ring-1 ring-border'
+              : 'text-muted-foreground hover:text-foreground',
           )}
           aria-pressed={locale === lang}
         >

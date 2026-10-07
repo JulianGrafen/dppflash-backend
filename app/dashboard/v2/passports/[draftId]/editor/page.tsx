@@ -5,30 +5,33 @@ import { EditorContentLocaleProvider } from './EditorContentLocaleContext';
 import { PassportEditorShell } from './PassportEditorShell';
 import { PassportFieldForm } from './PassportFieldForm';
 import { PassportReadinessRail } from './PassportReadinessRail';
+import { editorStickyAside, v2GridShell, v2Panel } from '@/app/dashboard/v2/lib/surfaceClasses';
 import { PassportSectionNav } from './PassportSectionNav';
 
 function EditorBody() {
   return (
     <EditorContentLocaleProvider>
     <PassportEditorShell>
-      <div className="grid gap-0 rounded-xl border border-slate-200/90 bg-[#f4f5f7] lg:grid-cols-[minmax(240px,280px)_1fr_minmax(260px,300px)]">
-        <aside
-          className="hidden border-r border-slate-200/90 bg-white lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto"
-        >
-          <PassportSectionNav />
+      <div
+        className={`grid gap-0 ${v2GridShell} lg:grid-cols-[minmax(240px,280px)_1fr_minmax(260px,300px)]`}
+      >
+        <aside className={`border-r ${v2Panel} ${editorStickyAside}`}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+            <PassportSectionNav />
+          </div>
         </aside>
 
         <div className="min-w-0 space-y-4 p-4 lg:p-5">
-          <div className="rounded-xl border border-slate-200/90 bg-white p-3 lg:hidden">
+          <div className={`rounded-xl border p-3 lg:hidden ${v2Panel}`}>
             <PassportSectionNav />
           </div>
           <PassportFieldForm />
         </div>
 
-        <aside
-          className="hidden border-l border-slate-200/90 p-4 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100vh-11rem)] lg:self-start lg:overflow-y-auto"
-        >
-          <PassportReadinessRail />
+        <aside className={`border-l border-border ${editorStickyAside}`}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+            <PassportReadinessRail layout="dock" />
+          </div>
         </aside>
       </div>
 
@@ -42,7 +45,7 @@ function EditorBody() {
 
 export default function PassportEditorPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-slate-500">Editor wird geladen…</p>}>
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Editor wird geladen…</p>}>
       <EditorBody />
     </Suspense>
   );

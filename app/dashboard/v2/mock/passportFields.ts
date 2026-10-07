@@ -57,6 +57,10 @@ export function ensurePassportFieldsOnDraft(
   },
 ): Record<string, PassportFieldValueState> {
   if (draft.passportFields && Object.keys(draft.passportFields).length >= 100) {
+    const legacyWithValues = draft.fields.some((f) => f.value?.trim());
+    if (!legacyWithValues) {
+      return draft.passportFields;
+    }
     return attachAuditSourcesToPassportFields(
       migrateLegacyDraftFields(draft.passportFields, draft.fields),
     );
@@ -90,7 +94,12 @@ export function resolveDraftPublishPassId(draft: DraftPassport): string {
 }
 
 export function passportFieldNeedsReview(state: PassportFieldValueState): boolean {
-  if (state.provenance === 'confirmed' || state.provenance === 'empty' || state.provenance === 'missing') {
+  if (
+    state.provenance === 'confirmed' ||
+    state.provenance === 'empty' ||
+    state.provenance === 'missing' ||
+    state.provenance === 'pending_supplier'
+  ) {
     return false;
   }
   return state.confidence < REVIEW_THRESHOLD;

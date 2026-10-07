@@ -5,26 +5,17 @@ import { V2SectionShell } from '@/app/dashboard/v2/components/V2SectionShell';
 import { SupplierOutreachDialog } from '@/app/dashboard/v2/components/SupplierOutreachDialog';
 import { SupplierRequestDetailDialog } from '@/app/dashboard/v2/components/SupplierRequestDetailDialog';
 import { SupplierRequestStatusBar } from '@/app/dashboard/v2/components/SupplierRequestStatusBar';
-import { loadAllDrafts, patchDraftField } from '@/app/dashboard/v2/mock/storage';
-import type { DraftField } from '@/app/dashboard/v2/mock/types';
+import { loadSupplierRows, type SupplierRow } from '@/app/dashboard/v2/lib/loadSupplierRows';
+import { patchDraftField, patchDraftPassportField } from '@/app/dashboard/v2/mock/storage';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EnterMotion, enterMotionDelay } from '@/components/ui/enter-motion';
 import { cn } from 'cn';
-
-type SupplierRow = { draftId: string; productName: string; field: DraftField };
-
-function loadSupplierRows(): SupplierRow[] {
-  return loadAllDrafts().flatMap((d) =>
-    d.fields
-      .filter((f) => f.supplierHint || f.provenance === 'pending_supplier')
-      .map((field) => ({ draftId: d.id, productName: d.productName, field })),
-  );
-}
 
 export default function LieferantenPage() {
   const [rows, setRows] = useState<SupplierRow[]>([]);
   const [selected, setSelected] = useState<SupplierRow | null>(null);
-  const [resendField, setResendField] = useState<SupplierRow | null>(null);
+  const [resendRow, setResendRow] = useState<SupplierRow | null>(null);
 
   const refresh = useCallback(() => {
     setRows(loadSupplierRows());
@@ -35,14 +26,22 @@ export default function LieferantenPage() {
   }, [refresh]);
 
   function handleResendConfirm() {
-    if (!resendField) {
+    if (!resendRow) {
       return;
     }
-    patchDraftField(resendField.draftId, resendField.field.path, {
-      provenance: 'pending_supplier',
-      supplierSentAt: new Date().toISOString(),
-    });
-    setResendField(null);
+    const sentAt = new Date().toISOString();
+    if (resendRow.kind === 'passport') {
+      patchDraftPassportField(resendRow.draftId, resendRow.view.path, {
+        provenance: 'pending_supplier',
+        supplierSentAt: sentAt,
+      });
+    } else {
+      patchDraftField(resendRow.draftId, resendRow.view.path, {
+        provenance: 'pending_supplier',
+        supplierSentAt: sentAt,
+      });
+    }
+    setResendRow(null);
     setSelected(null);
     refresh();
   }
@@ -52,30 +51,35 @@ export default function LieferantenPage() {
       title="Lieferanten"
       description="Offene Datenanfragen und vorgeschlagene Lieferantenkontakte."
     >
-      <Card className="border-slate-200/90 shadow-sm">
-        <CardContent className="divide-y divide-slate-100 p-0">
+      <EnterMotion>
+      <Card variant="elevated" className="border-border">
+        <CardContent className="divide-y divide-border p-0">
           {rows.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-slate-500">
-              Keine Lieferantenanfragen — Lücken im Wizard mit „Lieferanten anfragen“ öffnen.
+            <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+              Keine Lieferantenanfragen — im Editor bei Blockern „Lieferantenanfrage stellen“ oder im
+              Wizard Lücken mit „Lieferanten anfragen“ öffnen.
             </p>
           ) : (
-            rows.map((row) => {
+            rows.map((row, index) => {
               const isActive =
-                selected?.draftId === row.draftId && selected?.field.path === row.field.path;
+                selected?.draftId === row.draftId &&
+                selected?.view.path === row.view.path &&
+                selected?.kind === row.kind;
               return (
-                <div
-                  key={`${row.draftId}-${row.field.path}`}
+                <EnterMotion
+                  key={`${row.kind}-${row.draftId}-${row.view.path}`}
+                  delayMs={enterMotionDelay(index, 40)}
                   className={cn(
-                    'flex items-start justify-between gap-4 px-6 py-4 transition-colors',
-                    isActive && 'bg-slate-50',
+                    'flex items-start justify-between gap-4 px-6 py-4 transition-colors duration-150',
+                    isActive && 'bg-muted/40',
                   )}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-900">{row.field.supplierHint ?? 'Lieferant'}</p>
-                    <p className="text-sm text-slate-600">
-                      {row.productName} · {row.field.label}
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="font-medium text-foreground">{row.view.supplierHint ?? 'Lieferant'}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {row.productName} · {row.view.label}
                     </p>
-                    <SupplierRequestStatusBar field={row.field} />
+                    <SupplierRequestStatusBar field={row.view} />
                   </div>
                   <Button
                     type="button"
@@ -86,31 +90,32 @@ export default function LieferantenPage() {
                   >
                     Details
                   </Button>
-                </div>
+                </EnterMotion>
               );
             })
           )}
         </CardContent>
       </Card>
+      </EnterMotion>
 
       <SupplierRequestDetailDialog
         open={selected !== null}
         productName={selected?.productName ?? ''}
         draftId={selected?.draftId ?? ''}
-        field={selected?.field ?? null}
+        field={selected?.view ?? null}
         onClose={() => setSelected(null)}
         onResend={() => {
           if (selected) {
-            setResendField(selected);
+            setResendRow(selected);
           }
         }}
       />
 
       <SupplierOutreachDialog
-        open={resendField !== null}
-        draftId={resendField?.draftId ?? ''}
-        field={resendField?.field ?? null}
-        onClose={() => setResendField(null)}
+        open={resendRow !== null}
+        draftId={resendRow?.draftId ?? ''}
+        field={resendRow?.view ?? null}
+        onClose={() => setResendRow(null)}
         onSend={handleResendConfirm}
       />
     </V2SectionShell>

@@ -1,6 +1,7 @@
+import { isDiscardableStubDraft } from '@/app/dashboard/v2/lib/discardableStubDraft';
 import { tenantIdFromDomain } from '@/app/dashboard/v2/lib/tenantId';
 import { createDemoReady100Draft, DEMO_READY_100_DRAFT_ID } from './demoReady100Passport';
-import type { DraftField, DraftPassport } from './types';
+import type { DraftField, DraftPassport, PassportFieldValueState } from './types';
 
 const DRAFTS_KEY = 'dppflash_v2_drafts';
 const SESSION_KEY = 'dppflash_v2_session';
@@ -91,6 +92,22 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
+function readDraftsRaw(): DraftPassport[] {
+  if (!canUseStorage()) {
+    return [];
+  }
+  try {
+    const raw = localStorage.getItem(DRAFTS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw) as DraftPassport[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function ensureBuiltinDemoDrafts(drafts: DraftPassport[]): DraftPassport[] {
   if (drafts.some((d) => d.id === DEMO_READY_100_DRAFT_ID)) {
     return drafts;
@@ -101,21 +118,17 @@ function ensureBuiltinDemoDrafts(drafts: DraftPassport[]): DraftPassport[] {
   return next;
 }
 
+function pruneDiscardableStubDrafts(drafts: DraftPassport[]): DraftPassport[] {
+  const next = drafts.filter((d) => !isDiscardableStubDraft(d));
+  if (next.length !== drafts.length) {
+    saveAllDrafts(next);
+  }
+  return next;
+}
+
 export function loadAllDrafts(): DraftPassport[] {
-  if (!canUseStorage()) {
-    return [];
-  }
-  let drafts: DraftPassport[] = [];
-  try {
-    const raw = localStorage.getItem(DRAFTS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as DraftPassport[];
-      drafts = Array.isArray(parsed) ? parsed : [];
-    }
-  } catch {
-    drafts = [];
-  }
-  return ensureBuiltinDemoDrafts(drafts);
+  const withDemo = ensureBuiltinDemoDrafts(readDraftsRaw());
+  return pruneDiscardableStubDrafts(withDemo);
 }
 
 export function saveAllDrafts(drafts: DraftPassport[]): void {
@@ -126,11 +139,11 @@ export function saveAllDrafts(drafts: DraftPassport[]): void {
 }
 
 export function loadDraft(id: string): DraftPassport | null {
-  return loadAllDrafts().find((d) => d.id === id) ?? null;
+  return readDraftsRaw().find((d) => d.id === id) ?? null;
 }
 
 export function upsertDraft(draft: DraftPassport): void {
-  const drafts = loadAllDrafts().filter((d) => d.id !== draft.id);
+  const drafts = readDraftsRaw().filter((d) => d.id !== draft.id);
   drafts.unshift(draft);
   saveAllDrafts(drafts);
 }
@@ -143,7 +156,29 @@ export function seedDemoReady100Draft(): DraftPassport {
 }
 
 export function deleteDraft(id: string): void {
-  saveAllDrafts(loadAllDrafts().filter((d) => d.id !== id));
+  saveAllDrafts(readDraftsRaw().filter((d) => d.id !== id));
+}
+
+export function patchDraftPassportField(
+  draftId: string,
+  fieldKey: string,
+  patch: Partial<PassportFieldValueState>,
+): DraftPassport | null {
+  const draft = loadDraft(draftId);
+  if (!draft?.passportFields?.[fieldKey]) {
+    return null;
+  }
+  const passportFields = {
+    ...draft.passportFields,
+    [fieldKey]: { ...draft.passportFields[fieldKey], ...patch },
+  };
+  const updated: DraftPassport = {
+    ...draft,
+    passportFields,
+    updatedAt: new Date().toISOString(),
+  };
+  upsertDraft(updated);
+  return updated;
 }
 
 export function patchDraftField(

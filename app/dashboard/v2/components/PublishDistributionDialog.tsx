@@ -17,7 +17,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -155,10 +154,6 @@ export function PublishDistributionDialog({
       <DialogContent className="max-h-[min(90dvh,44rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Veröffentlichung &amp; Schnittstellen</DialogTitle>
-          <DialogDescription>
-            Demo-Übermittlung an EU-Register, Zoll und Public Resolver. Keine Live-Anbindung an
-            Kommission oder ATLAS.
-          </DialogDescription>
         </DialogHeader>
 
         {phase === 'checks' ? (
@@ -203,30 +198,23 @@ export function PublishDistributionDialog({
                 </ProgressTrack>
               </Progress>
             </div>
-            <ul className="space-y-4">
+            <ul className="space-y-3">
               {PUBLISH_CHANNELS.map((channel) => {
                 const state = channelState[channel.id];
-                const pct = channelProgress[channel.id];
                 return (
-                  <li key={channel.id} className="space-y-2 rounded-lg border border-slate-200/90 p-3">
+                  <li key={channel.id} className="rounded-lg border border-slate-200/90 p-3">
                     <div className="flex items-start gap-2">
                       {statusIcon(state)}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900">{channel.title}</p>
                         <p className="text-xs text-slate-500">{channel.subtitle}</p>
+                        <ul className="mt-2 text-[11px] text-slate-500">
+                          {channel.payloadHints.map((hint) => (
+                            <li key={hint}>· {hint}</li>
+                          ))}
+                        </ul>
                       </div>
-                      <span className="shrink-0 text-xs tabular-nums text-slate-500">{pct} %</span>
                     </div>
-                    <Progress value={pct} className="w-full">
-                      <ProgressTrack className="h-1.5">
-                        <ProgressIndicator />
-                      </ProgressTrack>
-                    </Progress>
-                    <ul className="text-[11px] text-slate-500">
-                      {channel.payloadHints.map((hint) => (
-                        <li key={hint}>· {hint}</li>
-                      ))}
-                    </ul>
                   </li>
                 );
               })}

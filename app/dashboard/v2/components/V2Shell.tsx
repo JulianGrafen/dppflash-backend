@@ -14,10 +14,10 @@ export function V2Shell({ children }: { readonly children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#eef1f6]">
+    <div className="flex min-h-screen bg-background text-foreground">
       <V2Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center border-b border-slate-200/80 bg-white px-4 md:hidden">
+        <header className="flex h-14 items-center border-b border-border bg-card px-4 md:hidden">
           <V2BrandLogo />
         </header>
         <main className="flex-1 p-5 sm:p-8">{children}</main>

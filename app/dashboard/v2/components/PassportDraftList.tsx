@@ -39,8 +39,8 @@ export function PassportDraftList({ showPublished = false, newPassCta = true }: 
 
   return (
     <div className="space-y-6">
-      <Card className="border-slate-200/90 shadow-sm">
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+      <Card variant="elevated" className="border-border">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-lg">Produktpässe</CardTitle>
             {activeDrafts.length > 0 ? (
@@ -57,14 +57,14 @@ export function PassportDraftList({ showPublished = false, newPassCta = true }: 
         </CardHeader>
         <CardContent className="p-0">
           {activeDrafts.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-slate-500">
+            <div className="px-6 py-10 text-center text-sm text-muted-foreground">
               Noch keine Entwürfe.{' '}
               <Link href="/dashboard/v2/passports/new" className="font-medium text-primary underline">
                 Jetzt starten
               </Link>
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {activeDrafts.map((draft) => {
                 const summary = computePassportCompleteness(ensurePassportFieldsOnDraft(draft));
                 const isNew =
@@ -76,19 +76,29 @@ export function PassportDraftList({ showPublished = false, newPassCta = true }: 
                     className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-slate-900">{draft.productName}</p>
-                        {isNew ? (
-                          <Badge className="bg-primary/15 text-[11px] text-primary hover:bg-primary/15">
-                            NEU
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        <span className="min-w-0 font-semibold leading-5 text-foreground">
+                          {draft.productName}
+                        </span>
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          {isNew ? (
+                            <Badge
+                              className="h-5 shrink-0 bg-primary/15 text-[11px] text-primary hover:bg-primary/15"
+                            >
+                              NEU
+                            </Badge>
+                          ) : null}
+                          {draft.id === DEMO_READY_100_DRAFT_ID ? (
+                            <Badge className="h-5 shrink-0 bg-sky-100 text-sky-900 hover:bg-sky-100">
+                              Demo 100 %
+                            </Badge>
+                          ) : null}
+                          <Badge variant="secondary" className="h-5 shrink-0">
+                            {statusLabel(draft.status)}
                           </Badge>
-                        ) : null}
-                        {draft.id === DEMO_READY_100_DRAFT_ID ? (
-                          <Badge className="bg-sky-100 text-sky-900 hover:bg-sky-100">Demo 100 %</Badge>
-                        ) : null}
-                        <Badge variant="secondary">{statusLabel(draft.status)}</Badge>
+                        </span>
                       </div>
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-muted-foreground">
                         Vollständigkeit {summary.completenessPercent} % · Aktualisiert:{' '}
                         {formatDraftDate(draft.updatedAt)}
                       </p>
@@ -113,7 +123,7 @@ export function PassportDraftList({ showPublished = false, newPassCta = true }: 
             <CardTitle className="text-lg">Veröffentlicht</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 p-0 pt-0">
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-border">
               {published.map((draft) => (
                 <li key={draft.id}>
                   <Link

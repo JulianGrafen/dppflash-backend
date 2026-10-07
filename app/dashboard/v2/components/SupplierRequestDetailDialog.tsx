@@ -1,6 +1,6 @@
 'use client';
 
-import type { DraftField } from '@/app/dashboard/v2/mock/types';
+import type { SupplierRequestView } from '@/app/dashboard/v2/lib/supplierRequestView';
 import { SupplierRequestStatusBar } from '@/app/dashboard/v2/components/SupplierRequestStatusBar';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +32,7 @@ type SupplierRequestDetailDialogProps = {
   readonly open: boolean;
   readonly productName: string;
   readonly draftId: string;
-  readonly field: DraftField | null;
+  readonly field: SupplierRequestView | null;
   readonly onClose: () => void;
   readonly onResend: () => void;
 };

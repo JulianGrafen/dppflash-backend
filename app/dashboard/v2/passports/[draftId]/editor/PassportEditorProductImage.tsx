@@ -28,7 +28,7 @@ export function PassportEditorProductImage({
     <section
       aria-label="Produktbild"
       className={cn(
-        'relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50 shadow-sm sm:h-24 sm:w-24',
+        'relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40 shadow-sm sm:h-24 sm:w-24',
         className,
       )}
     >

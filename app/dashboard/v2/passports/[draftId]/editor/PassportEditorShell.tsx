@@ -104,7 +104,7 @@ export function PassportEditorShell({ children }: PassportEditorShellProps) {
             disabled={busy || !passportSummary.criticalOk}
             onClick={openPublishDialog}
           >
-            {draft.status === 'published' ? 'Erneut veröffentlichen' : 'Publish'}
+            {draft.status === 'published' ? 'Erneut freigeben' : 'Freigeben'}
           </Button>
         </div>
       </header>
